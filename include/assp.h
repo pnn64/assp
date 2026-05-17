@@ -12,6 +12,10 @@ extern "C" {
 #define ASSP_BREAKDOWN_DETAILED 0
 #define ASSP_BREAKDOWN_PARTIAL 1
 #define ASSP_BREAKDOWN_SIMPLIFIED 2
+#define ASSP_STREAM_BREAKDOWN_DETAILED 0
+#define ASSP_STREAM_BREAKDOWN_PARTIAL 1
+#define ASSP_STREAM_BREAKDOWN_SIMPLE 2
+#define ASSP_STREAM_BREAKDOWN_TOTAL 3
 
 typedef struct assp_note_stats {
     uint64_t rows;
@@ -114,6 +118,13 @@ size_t assp_format_stream_tokens(
     const assp_stream_token *tokens,
     size_t len,
     uint32_t mode,
+    uint8_t *out,
+    size_t out_cap
+);
+size_t assp_format_stream_segments(
+    const assp_stream_segment *segments,
+    size_t len,
+    uint32_t level,
     uint8_t *out,
     size_t out_cap
 );

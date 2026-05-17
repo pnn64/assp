@@ -9,6 +9,10 @@ pub const STREAM_TOKEN_RUN32: u32 = 32;
 pub const BREAKDOWN_DETAILED: u32 = 0;
 pub const BREAKDOWN_PARTIAL: u32 = 1;
 pub const BREAKDOWN_SIMPLIFIED: u32 = 2;
+pub const STREAM_BREAKDOWN_DETAILED: u32 = 0;
+pub const STREAM_BREAKDOWN_PARTIAL: u32 = 1;
+pub const STREAM_BREAKDOWN_SIMPLE: u32 = 2;
+pub const STREAM_BREAKDOWN_TOTAL: u32 = 3;
 
 #[repr(C)]
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -127,6 +131,13 @@ unsafe extern "C" {
         out: *mut u8,
         out_cap: usize,
     ) -> usize;
+    fn assp_format_stream_segments(
+        segments: *const StreamSegment,
+        len: usize,
+        level: u32,
+        out: *mut u8,
+        out_cap: usize,
+    ) -> usize;
     fn assp_count_note_stats_4(data: *const u8, len: usize, out: *mut NoteStats) -> c_int;
 }
 
@@ -239,6 +250,32 @@ pub fn format_stream_tokens(tokens: &[StreamToken], mode: u32) -> Vec<u8> {
                 tokens.as_ptr(),
                 tokens.len(),
                 mode,
+                out.as_mut_ptr(),
+                out.len(),
+            )
+        };
+    }
+    out
+}
+
+#[must_use]
+pub fn format_stream_segments(segments: &[StreamSegment], level: u32) -> Vec<u8> {
+    let count = unsafe {
+        assp_format_stream_segments(
+            segments.as_ptr(),
+            segments.len(),
+            level,
+            std::ptr::null_mut(),
+            0,
+        )
+    };
+    let mut out = vec![0; count];
+    if count != 0 {
+        unsafe {
+            assp_format_stream_segments(
+                segments.as_ptr(),
+                segments.len(),
+                level,
                 out.as_mut_ptr(),
                 out.len(),
             )

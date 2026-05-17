@@ -5,6 +5,7 @@ global assp_stream_counts_from_densities
 global assp_stream_segments_from_densities
 global assp_stream_tokens_from_densities
 global assp_format_stream_tokens
+global assp_format_stream_segments
 
 %macro ASSP_DENSITY_KIND 0
     cmp eax, 16
@@ -736,4 +737,263 @@ append_byte:
     mov [rbx + r13], al
 .count:
     inc r13
+    ret
+
+; rcx = assp_stream_segment segments, rdx = segment count,
+; r8d = stream breakdown level, r9 = optional output bytes,
+; stack arg 5 = output cap. rax = total bytes required/written.
+assp_format_stream_segments:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+
+    mov r12, [rsp + 96]
+    sub rsp, 32
+
+    test rcx, rcx
+    jz .maybe_empty
+    jmp .validate
+
+.maybe_empty:
+    test rdx, rdx
+    jnz .zero
+
+.validate:
+    cmp r8d, ASSP_STREAM_BREAKDOWN_TOTAL
+    ja .zero
+
+    mov rsi, rcx
+    mov rdi, rdx
+    mov r15d, r8d
+    mov rbx, r9
+    xor r13d, r13d
+    xor r14d, r14d
+    mov qword [rsp], 0
+    mov qword [rsp + 8], 0
+    mov qword [rsp + 16], 0
+    mov qword [rsp + 24], 0
+
+    test rdi, rdi
+    jz .no_streams
+
+.segment_loop:
+    cmp r14, rdi
+    jae .finish
+
+    lea r10, [r14 + r14 * 2]
+    shl r10, 3
+    mov rax, [rsi + r10 + ASSP_STREAM_SEGMENT_END]
+    sub rax, [rsi + r10 + ASSP_STREAM_SEGMENT_START]
+    mov [rsp + 24], rax
+
+    cmp qword [rsi + r10 + ASSP_STREAM_SEGMENT_IS_BREAK], 0
+    jne .break_segment
+
+    cmp r15d, ASSP_STREAM_BREAKDOWN_SIMPLE
+    je .stream_sum
+    cmp r15d, ASSP_STREAM_BREAKDOWN_TOTAL
+    je .stream_sum
+
+    test r14, r14
+    jz .stream_write_size
+    lea r10, [r14 - 1]
+    lea r10, [r10 + r10 * 2]
+    shl r10, 3
+    cmp qword [rsi + r10 + ASSP_STREAM_SEGMENT_IS_BREAK], 0
+    jne .stream_write_size
+    mov al, '-'
+    call append_byte
+
+.stream_write_size:
+    mov rax, [rsp + 24]
+    call append_u64
+    inc r14
+    jmp .segment_loop
+
+.stream_sum:
+    test r14, r14
+    jz .stream_add_size
+    lea r10, [r14 - 1]
+    lea r10, [r10 + r10 * 2]
+    shl r10, 3
+    cmp qword [rsi + r10 + ASSP_STREAM_SEGMENT_IS_BREAK], 0
+    jne .stream_add_size
+    mov qword [rsp + 16], ASSP_TRUE
+    cmp r15d, ASSP_STREAM_BREAKDOWN_SIMPLE
+    jne .stream_add_size
+    inc qword [rsp]
+
+.stream_add_size:
+    mov rax, [rsp + 24]
+    add [rsp], rax
+    inc r14
+    jmp .segment_loop
+
+.break_segment:
+    test r14, r14
+    jz .break_done
+    lea rax, [r14 + 1]
+    cmp rax, rdi
+    jae .break_done
+
+    cmp r15d, ASSP_STREAM_BREAKDOWN_DETAILED
+    jne .break_not_detailed
+    mov al, ' '
+    call append_byte
+    mov al, '('
+    call append_byte
+    mov rax, [rsp + 24]
+    call append_u64
+    mov al, ')'
+    call append_byte
+    mov al, ' '
+    call append_byte
+    jmp .break_done
+
+.break_not_detailed:
+    cmp r15d, ASSP_STREAM_BREAKDOWN_TOTAL
+    jne .break_symbol
+    mov rax, [rsp]
+    add [rsp + 8], rax
+    jmp .break_clear
+
+.break_symbol:
+    cmp r15d, ASSP_STREAM_BREAKDOWN_SIMPLE
+    jne .break_emit_symbol
+    cmp qword [rsp], 0
+    je .break_emit_symbol
+    mov rax, [rsp]
+    call append_u64
+    cmp qword [rsp + 16], 0
+    je .break_emit_symbol
+    mov al, '*'
+    call append_byte
+
+.break_emit_symbol:
+    mov rax, [rsp + 24]
+    cmp rax, 4
+    jbe .break_dash
+    cmp rax, 31
+    jbe .break_slash
+
+    mov al, ' '
+    call append_byte
+    mov al, '|'
+    call append_byte
+    mov al, ' '
+    call append_byte
+    jmp .break_clear
+
+.break_slash:
+    mov al, '/'
+    call append_byte
+    jmp .break_clear
+
+.break_dash:
+    mov al, '-'
+    call append_byte
+
+.break_clear:
+    mov qword [rsp], 0
+    mov qword [rsp + 16], 0
+
+.break_done:
+    inc r14
+    jmp .segment_loop
+
+.finish:
+    cmp qword [rsp], 0
+    je .finish_level
+    cmp r15d, ASSP_STREAM_BREAKDOWN_SIMPLE
+    jne .finish_total
+    mov rax, [rsp]
+    call append_u64
+    cmp qword [rsp + 16], 0
+    je .finish_level
+    mov al, '*'
+    call append_byte
+    jmp .finish_level
+
+.finish_total:
+    cmp r15d, ASSP_STREAM_BREAKDOWN_TOTAL
+    jne .finish_level
+    mov rax, [rsp]
+    add [rsp + 8], rax
+
+.finish_level:
+    cmp r15d, ASSP_STREAM_BREAKDOWN_TOTAL
+    jne .finish_non_total
+    mov rax, [rsp + 8]
+    call append_u64
+    call append_total_suffix
+    jmp .done
+
+.finish_non_total:
+    test r13, r13
+    jnz .done
+
+.no_streams:
+    call append_no_streams
+    jmp .done
+
+.done:
+    mov rax, r13
+    jmp .pop_done
+
+.zero:
+    xor eax, eax
+
+.pop_done:
+    add rsp, 32
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
+append_no_streams:
+    mov al, 'N'
+    call append_byte
+    mov al, 'o'
+    call append_byte
+    mov al, ' '
+    call append_byte
+    mov al, 'S'
+    call append_byte
+    mov al, 't'
+    call append_byte
+    mov al, 'r'
+    call append_byte
+    mov al, 'e'
+    call append_byte
+    mov al, 'a'
+    call append_byte
+    mov al, 'm'
+    call append_byte
+    mov al, 's'
+    call append_byte
+    mov al, '!'
+    call append_byte
+    ret
+
+append_total_suffix:
+    mov al, ' '
+    call append_byte
+    mov al, 'T'
+    call append_byte
+    mov al, 'o'
+    call append_byte
+    mov al, 't'
+    call append_byte
+    mov al, 'a'
+    call append_byte
+    mov al, 'l'
+    call append_byte
     ret
