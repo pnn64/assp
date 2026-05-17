@@ -1,11 +1,11 @@
 default rel
-%include "asmssp.inc"
+%include "assp.inc"
 
-global asmssp_version
+global assp_version
 
 section .text
 
-asmssp_version:
-    mov eax, ASMSSP_VERSION
+assp_version:
+    mov eax, ASSP_VERSION
     ret
 

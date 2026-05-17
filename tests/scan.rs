@@ -1,4 +1,4 @@
-use asmssp::{find_byte, version};
+use assp::{find_byte, version};
 
 #[test]
 fn version_is_initial_project_version() {

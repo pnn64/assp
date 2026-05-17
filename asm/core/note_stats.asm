@@ -1,12 +1,12 @@
 default rel
-%include "asmssp.inc"
+%include "assp.inc"
 
-global asmssp_count_note_stats_4
+global assp_count_note_stats_4
 
 section .text
 
 %macro bump_arrow 1
-    inc qword [rbx + ASMSSP_NOTE_STATS_ARROWS]
+    inc qword [rbx + ASSP_NOTE_STATS_ARROWS]
     inc qword [rbx + %1]
     inc r13d
 %endmacro
@@ -41,13 +41,13 @@ section .text
 
 %%hold:
     bump_arrow %2
-    inc qword [rbx + ASMSSP_NOTE_STATS_HOLDS]
+    inc qword [rbx + ASSP_NOTE_STATS_HOLDS]
     inc r14d
     jmp %%done
 
 %%roll:
     bump_arrow %2
-    inc qword [rbx + ASMSSP_NOTE_STATS_ROLLS]
+    inc qword [rbx + ASSP_NOTE_STATS_ROLLS]
     inc r14d
     jmp %%done
 
@@ -56,15 +56,15 @@ section .text
     jmp %%done
 
 %%mine:
-    inc qword [rbx + ASMSSP_NOTE_STATS_MINES]
+    inc qword [rbx + ASSP_NOTE_STATS_MINES]
     jmp %%done
 
 %%lift:
-    inc qword [rbx + ASMSSP_NOTE_STATS_LIFTS]
+    inc qword [rbx + ASSP_NOTE_STATS_LIFTS]
     jmp %%done
 
 %%fake:
-    inc qword [rbx + ASMSSP_NOTE_STATS_FAKES]
+    inc qword [rbx + ASSP_NOTE_STATS_FAKES]
 
 %%done:
 %endmacro
@@ -81,9 +81,9 @@ section .text
     je .malformed_row
 %endmacro
 
-; rcx = note-data bytes, rdx = byte length, r8 = out asmssp_note_stats.
+; rcx = note-data bytes, rdx = byte length, r8 = out assp_note_stats.
 ; eax = 1 on success, 0 on invalid pointers.
-asmssp_count_note_stats_4:
+assp_count_note_stats_4:
     push rbx
     push rsi
     push rdi
@@ -102,7 +102,7 @@ asmssp_count_note_stats_4:
 .zero_only:
     mov rbx, r8
     xor eax, eax
-    mov r9d, ASMSSP_NOTE_STATS_SIZE / 8
+    mov r9d, ASSP_NOTE_STATS_SIZE / 8
     mov r10, rbx
 
 .zero:
@@ -158,26 +158,26 @@ asmssp_count_note_stats_4:
     xor r14d, r14d
     xor r15d, r15d
 
-    count_lane 0, ASMSSP_NOTE_STATS_LEFT
-    count_lane 1, ASMSSP_NOTE_STATS_DOWN
-    count_lane 2, ASMSSP_NOTE_STATS_UP
-    count_lane 3, ASMSSP_NOTE_STATS_RIGHT
+    count_lane 0, ASSP_NOTE_STATS_LEFT
+    count_lane 1, ASSP_NOTE_STATS_DOWN
+    count_lane 2, ASSP_NOTE_STATS_UP
+    count_lane 3, ASSP_NOTE_STATS_RIGHT
 
-    inc qword [rbx + ASMSSP_NOTE_STATS_ROWS]
+    inc qword [rbx + ASSP_NOTE_STATS_ROWS]
     test r13d, r13d
     jz .row_no_step
 
-    inc qword [rbx + ASMSSP_NOTE_STATS_STEPS]
+    inc qword [rbx + ASSP_NOTE_STATS_STEPS]
     cmp r13d, 2
     jb .check_hand
-    inc qword [rbx + ASMSSP_NOTE_STATS_JUMPS]
+    inc qword [rbx + ASSP_NOTE_STATS_JUMPS]
 
 .check_hand:
     mov eax, r12d
     add eax, r13d
     cmp eax, 3
     jb .update_active
-    inc qword [rbx + ASMSSP_NOTE_STATS_HANDS]
+    inc qword [rbx + ASSP_NOTE_STATS_HANDS]
 
 .update_active:
     mov eax, r12d
@@ -201,7 +201,7 @@ asmssp_count_note_stats_4:
     jmp .skip_line
 
 .malformed_row:
-    inc qword [rbx + ASMSSP_NOTE_STATS_MALFORMED_ROWS]
+    inc qword [rbx + ASSP_NOTE_STATS_MALFORMED_ROWS]
     jmp .skip_line
 
 .consume_one:
@@ -218,7 +218,7 @@ asmssp_count_note_stats_4:
     jmp .line_loop
 
 .success:
-    mov eax, ASMSSP_TRUE
+    mov eax, ASSP_TRUE
     jmp .done
 
 .fail:

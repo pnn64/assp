@@ -1,12 +1,12 @@
 [package]
-name = "asmssp"
+name = "assp"
 version = "0.1.0"
 edition = "2024"
 build = "build.rs"
 publish = false
 
 [lib]
-name = "asmssp"
+name = "assp"
 path = "src/lib.rs"
 
 [dependencies]

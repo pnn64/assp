@@ -1,0 +1,76 @@
+#ifndef ASSP_H
+#define ASSP_H
+
+#include <stddef.h>
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#define ASSP_NOT_FOUND ((size_t)-1)
+
+typedef struct assp_note_stats {
+    uint64_t rows;
+    uint64_t steps;
+    uint64_t arrows;
+    uint64_t jumps;
+    uint64_t hands;
+    uint64_t holds;
+    uint64_t rolls;
+    uint64_t mines;
+    uint64_t lifts;
+    uint64_t fakes;
+    uint64_t left;
+    uint64_t down;
+    uint64_t up;
+    uint64_t right;
+    uint64_t malformed_rows;
+} assp_note_stats;
+
+typedef struct assp_chart_ref {
+    const uint8_t *note_data;
+    size_t note_data_len;
+    size_t index;
+} assp_chart_ref;
+
+typedef struct assp_chart_info {
+    const uint8_t *note_data;
+    size_t note_data_len;
+    size_t index;
+    const uint8_t *step_type;
+    size_t step_type_len;
+    const uint8_t *description;
+    size_t description_len;
+    const uint8_t *difficulty;
+    size_t difficulty_len;
+    const uint8_t *meter;
+    size_t meter_len;
+} assp_chart_info;
+
+uint32_t assp_version(void);
+size_t assp_find_byte(const uint8_t *data, size_t len, uint32_t byte);
+size_t assp_count_note_charts(const uint8_t *data, size_t len);
+int32_t assp_find_notes_by_index(
+    const uint8_t *data,
+    size_t len,
+    size_t index,
+    assp_chart_ref *out
+);
+int32_t assp_find_chart_by_index(
+    const uint8_t *data,
+    size_t len,
+    size_t index,
+    assp_chart_info *out
+);
+int32_t assp_count_note_stats_4(
+    const uint8_t *data,
+    size_t len,
+    assp_note_stats *out
+);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif

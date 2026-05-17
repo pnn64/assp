@@ -1,9 +1,9 @@
 default rel
-%include "asmssp.inc"
+%include "assp.inc"
 
-global asmssp_count_note_charts
-global asmssp_find_notes_by_index
-global asmssp_find_chart_by_index
+global assp_count_note_charts
+global assp_find_notes_by_index
+global assp_find_chart_by_index
 
 section .text
 
@@ -22,7 +22,7 @@ section .text
     jne %%no
     cmp byte [%1 + 6], ':'
     jne %%no
-    mov eax, ASMSSP_TRUE
+    mov eax, ASSP_TRUE
     jmp %%done
 %%no:
     xor eax, eax
@@ -50,7 +50,7 @@ section .text
     jne %%no
     cmp byte [%1 + 9], ':'
     jne %%no
-    mov eax, ASMSSP_TRUE
+    mov eax, ASSP_TRUE
     jmp %%done
 %%no:
     xor eax, eax
@@ -76,7 +76,7 @@ section .text
 
 ; rcx = simfile bytes, rdx = len.
 ; rax = number of #NOTES: tags.
-asmssp_count_note_charts:
+assp_count_note_charts:
     test rcx, rcx
     jz .zero
     cmp rdx, 7
@@ -110,9 +110,9 @@ asmssp_count_note_charts:
     xor eax, eax
     ret
 
-; rcx = simfile bytes, rdx = len, r8 = chart index, r9 = out asmssp_chart_ref.
+; rcx = simfile bytes, rdx = len, r8 = chart index, r9 = out assp_chart_ref.
 ; eax = 1 when found, 0 otherwise.
-asmssp_find_notes_by_index:
+assp_find_notes_by_index:
     test rcx, rcx
     jz .fail
     test r9, r9
@@ -120,9 +120,9 @@ asmssp_find_notes_by_index:
     cmp rdx, 7
     jb .fail
 
-    mov qword [r9 + ASMSSP_CHART_REF_NOTES_PTR], 0
-    mov qword [r9 + ASMSSP_CHART_REF_NOTES_LEN], 0
-    mov [r9 + ASMSSP_CHART_REF_INDEX], r8
+    mov qword [r9 + ASSP_CHART_REF_NOTES_PTR], 0
+    mov qword [r9 + ASSP_CHART_REF_NOTES_LEN], 0
+    mov [r9 + ASSP_CHART_REF_INDEX], r8
 
     mov r10, rcx
     lea r11, [rcx + rdx]
@@ -161,19 +161,19 @@ asmssp_find_notes_by_index:
 
 .store:
     inc rdx
-    mov [r9 + ASMSSP_CHART_REF_NOTES_PTR], rax
+    mov [r9 + ASSP_CHART_REF_NOTES_PTR], rax
     sub rdx, rax
-    mov [r9 + ASMSSP_CHART_REF_NOTES_LEN], rdx
-    mov eax, ASMSSP_TRUE
+    mov [r9 + ASSP_CHART_REF_NOTES_LEN], rdx
+    mov eax, ASSP_TRUE
     ret
 
 .fail:
     xor eax, eax
     ret
 
-; rcx = simfile bytes, rdx = len, r8 = chart index, r9 = out asmssp_chart_info.
+; rcx = simfile bytes, rdx = len, r8 = chart index, r9 = out assp_chart_info.
 ; eax = 1 when found, 0 otherwise.
-asmssp_find_chart_by_index:
+assp_find_chart_by_index:
     push rbx
     push rsi
     push rdi
@@ -191,7 +191,7 @@ asmssp_find_chart_by_index:
 
     mov rbx, r9
     xor eax, eax
-    mov r10d, ASMSSP_CHART_INFO_SIZE / 8
+    mov r10d, ASSP_CHART_INFO_SIZE / 8
     mov r11, rbx
 
 .zero:
@@ -200,7 +200,7 @@ asmssp_find_chart_by_index:
     dec r10d
     jnz .zero
 
-    mov [rbx + ASMSSP_CHART_INFO_INDEX], r8
+    mov [rbx + ASSP_CHART_INFO_INDEX], r8
     mov rsi, rcx
     mov rdi, rcx
     lea r12, [rcx + rdx]
@@ -252,15 +252,15 @@ asmssp_find_chart_by_index:
 
 .store_notes:
     inc rdx
-    mov [rbx + ASMSSP_CHART_INFO_NOTES_PTR], rax
+    mov [rbx + ASSP_CHART_INFO_NOTES_PTR], rax
     sub rdx, rax
-    mov [rbx + ASMSSP_CHART_INFO_NOTES_LEN], rdx
+    mov [rbx + ASSP_CHART_INFO_NOTES_LEN], rdx
 
     mov r10, r15
     mov r11, rdi
     call parse_chart_meta
 
-    mov eax, ASMSSP_TRUE
+    mov eax, ASSP_TRUE
     jmp .done
 
 .fail:
@@ -276,7 +276,7 @@ asmssp_find_chart_by_index:
     pop rbx
     ret
 
-; r10 = metadata scan start, r11 = metadata end, rbx = asmssp_chart_info.
+; r10 = metadata scan start, r11 = metadata end, rbx = assp_chart_info.
 parse_chart_meta:
 .meta_loop:
     cmp r10, r11
@@ -311,7 +311,7 @@ parse_chart_meta:
     jne .check_difficulty
     cmp byte [r10 + 12], ':'
     jne .check_difficulty
-    store_tag 13, ASMSSP_CHART_INFO_DESC_PTR, ASMSSP_CHART_INFO_DESC_LEN
+    store_tag 13, ASSP_CHART_INFO_DESC_PTR, ASSP_CHART_INFO_DESC_LEN
 
 .check_difficulty:
     lea rax, [r10 + 12]
@@ -339,7 +339,7 @@ parse_chart_meta:
     jne .check_step_type
     cmp byte [r10 + 11], ':'
     jne .check_step_type
-    store_tag 12, ASMSSP_CHART_INFO_DIFFICULTY_PTR, ASMSSP_CHART_INFO_DIFFICULTY_LEN
+    store_tag 12, ASSP_CHART_INFO_DIFFICULTY_PTR, ASSP_CHART_INFO_DIFFICULTY_LEN
 
 .check_step_type:
     lea rax, [r10 + 11]
@@ -365,7 +365,7 @@ parse_chart_meta:
     jne .check_meter
     cmp byte [r10 + 10], ':'
     jne .check_meter
-    store_tag 11, ASMSSP_CHART_INFO_STEP_TYPE_PTR, ASMSSP_CHART_INFO_STEP_TYPE_LEN
+    store_tag 11, ASSP_CHART_INFO_STEP_TYPE_PTR, ASSP_CHART_INFO_STEP_TYPE_LEN
 
 .check_meter:
     lea rax, [r10 + 7]
@@ -383,7 +383,7 @@ parse_chart_meta:
     jne .meta_next
     cmp byte [r10 + 6], ':'
     jne .meta_next
-    store_tag 7, ASMSSP_CHART_INFO_METER_PTR, ASMSSP_CHART_INFO_METER_LEN
+    store_tag 7, ASSP_CHART_INFO_METER_PTR, ASSP_CHART_INFO_METER_LEN
 
 .meta_next:
     inc r10

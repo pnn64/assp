@@ -1,6 +1,6 @@
-# asmssp
+# assp
 
-`asmssp` is the assembly port of `rssp`, the Rust StepMania simfile parser.
+`assp` is the assembly port of `rssp`, the Rust StepMania simfile parser.
 
 The runnable program is standalone NASM x86-64 assembly. The optional Rust
 crate in this directory is only a parity-test harness for calling core assembly
@@ -12,19 +12,19 @@ Rust code.
 - NASM x86-64 source lives under `asm/`.
 - `asm/app/main.asm` owns the standalone executable entrypoint.
 - `asm/core/` owns parser and chart-analysis routines.
-- Shared ABI constants live in `include/asmssp.inc`.
-- C callers can use `include/asmssp.h`.
+- Shared ABI constants live in `include/assp.inc`.
+- C callers can use `include/assp.h`.
 - Optional Rust tests call core assembly functions through `src/abi.rs`.
 
 The first implemented pieces are:
 
-- `asmssp_version`
-- `asmssp_find_byte`
-- `asmssp_count_note_charts`
-- `asmssp_find_chart_by_index`
-- `asmssp_count_note_stats_4`
+- `assp_version`
+- `assp_find_byte`
+- `assp_count_note_charts`
+- `assp_find_chart_by_index`
+- `assp_count_note_stats_4`
 
-`asmssp_count_note_stats_4` is an initial 4-panel note-data counter. It counts
+`assp_count_note_stats_4` is an initial 4-panel note-data counter. It counts
 tap arrows, holds, rolls, mines, lifts, fakes, steps, jumps, hands, and per-lane
 arrow totals from a note-data byte slice. It does not yet do RSSP's full
 measure minimization or phantom-hold correction.
@@ -45,37 +45,37 @@ Build the standalone assembly executable:
 From the repository root, the same script can be run as:
 
 ```powershell
-.\asmssp\build.ps1
+.\assp\build.ps1
 ```
 
 The executable is written to:
 
 ```text
-asmssp\target\asmssp.exe
+assp\target\assp.exe
 ```
 
 Run the local Camellia fixture:
 
 ```powershell
-.\asmssp\build.ps1 -RunFixture
+.\assp\build.ps1 -RunFixture
 ```
 
 List the local Camellia fixture chart indexes:
 
 ```powershell
-.\asmssp\build.ps1 -RunFixture -ListCharts
+.\assp\build.ps1 -RunFixture -ListCharts
 ```
 
 Run a specific chart, where Camellia has chart indexes `0..4`:
 
 ```powershell
-.\asmssp\build.ps1 -RunFixture -Chart 4
+.\assp\build.ps1 -RunFixture -Chart 4
 ```
 
 Run the built executable directly against any `.sm` or `.ssc` file:
 
 ```powershell
-.\asmssp\target\asmssp.exe .\asmssp\fixtures\camellia_mix.ssc 4
+.\assp\target\assp.exe .\assp\fixtures\camellia_mix.ssc 4
 ```
 
 The standalone executable currently scans SSC files for chart metadata and

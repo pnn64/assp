@@ -10,7 +10,7 @@ $ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $target = Join-Path $root "target"
-$exe = Join-Path $target "asmssp.exe"
+$exe = Join-Path $target "assp.exe"
 $include = (Join-Path $root "include") + [System.IO.Path]::DirectorySeparatorChar
 
 if (!(Get-Command nasm -ErrorAction SilentlyContinue)) {

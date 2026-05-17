@@ -1,4 +1,4 @@
-use asmssp::{NoteStats, count_note_stats_4};
+use assp::{NoteStats, count_note_stats_4};
 use rssp_core::stats::minimize_chart_and_count_with_lanes;
 
 fn assert_stats_match_rssp(data: &[u8]) {

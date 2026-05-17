@@ -1,5 +1,5 @@
 default rel
-%include "asmssp.inc"
+%include "assp.inc"
 %include "win64.inc"
 
 extern CloseHandle
@@ -11,9 +11,9 @@ extern GetStdHandle
 extern ReadFile
 extern WriteFile
 
-extern asmssp_count_note_stats_4
-extern asmssp_count_note_charts
-extern asmssp_find_chart_by_index
+extern assp_count_note_stats_4
+extern assp_count_note_charts
+extern assp_find_chart_by_index
 
 global start
 
@@ -42,14 +42,14 @@ start:
     mov rdx, [file_len]
     mov r8, [chart_index]
     lea r9, [chart_info]
-    call asmssp_find_chart_by_index
+    call assp_find_chart_by_index
     test eax, eax
     jz fail_notes
 
-    mov rcx, [chart_info + ASMSSP_CHART_INFO_NOTES_PTR]
-    mov rdx, [chart_info + ASMSSP_CHART_INFO_NOTES_LEN]
+    mov rcx, [chart_info + ASSP_CHART_INFO_NOTES_PTR]
+    mov rdx, [chart_info + ASSP_CHART_INFO_NOTES_LEN]
     lea r8, [note_stats]
-    call asmssp_count_note_stats_4
+    call assp_count_note_stats_4
     test eax, eax
     jz fail_stats
 
@@ -259,7 +259,7 @@ read_file:
     jne .fail
 
     mov [file_len], rax
-    mov eax, ASMSSP_TRUE
+    mov eax, ASSP_TRUE
     jmp .done
 
 .close_fail:
@@ -291,7 +291,7 @@ print_chart_list:
 
     lea rcx, [file_buffer]
     mov rdx, [file_len]
-    call asmssp_count_note_charts
+    call assp_count_note_charts
     mov [chart_count], rax
 
     lea rcx, [label_charts]
@@ -306,7 +306,7 @@ print_chart_list:
     mov rdx, [file_len]
     mov r8, r12
     lea r9, [chart_info]
-    call asmssp_find_chart_by_index
+    call assp_find_chart_by_index
     test eax, eax
     jz .done
     call print_chart_line
@@ -334,65 +334,65 @@ print_report:
     mov rdx, [chart_index]
     call print_field
     lea rcx, [label_step_type]
-    mov rdx, [chart_info + ASMSSP_CHART_INFO_STEP_TYPE_PTR]
-    mov r8, [chart_info + ASMSSP_CHART_INFO_STEP_TYPE_LEN]
+    mov rdx, [chart_info + ASSP_CHART_INFO_STEP_TYPE_PTR]
+    mov r8, [chart_info + ASSP_CHART_INFO_STEP_TYPE_LEN]
     call print_slice_field
     lea rcx, [label_difficulty]
-    mov rdx, [chart_info + ASMSSP_CHART_INFO_DIFFICULTY_PTR]
-    mov r8, [chart_info + ASMSSP_CHART_INFO_DIFFICULTY_LEN]
+    mov rdx, [chart_info + ASSP_CHART_INFO_DIFFICULTY_PTR]
+    mov r8, [chart_info + ASSP_CHART_INFO_DIFFICULTY_LEN]
     call print_slice_field
     lea rcx, [label_meter]
-    mov rdx, [chart_info + ASMSSP_CHART_INFO_METER_PTR]
-    mov r8, [chart_info + ASMSSP_CHART_INFO_METER_LEN]
+    mov rdx, [chart_info + ASSP_CHART_INFO_METER_PTR]
+    mov r8, [chart_info + ASSP_CHART_INFO_METER_LEN]
     call print_slice_field
     lea rcx, [label_description]
-    mov rdx, [chart_info + ASMSSP_CHART_INFO_DESC_PTR]
-    mov r8, [chart_info + ASMSSP_CHART_INFO_DESC_LEN]
+    mov rdx, [chart_info + ASSP_CHART_INFO_DESC_PTR]
+    mov r8, [chart_info + ASSP_CHART_INFO_DESC_LEN]
     call print_slice_field
     lea rcx, [label_rows]
-    mov rdx, [note_stats + ASMSSP_NOTE_STATS_ROWS]
+    mov rdx, [note_stats + ASSP_NOTE_STATS_ROWS]
     call print_field
     lea rcx, [label_steps]
-    mov rdx, [note_stats + ASMSSP_NOTE_STATS_STEPS]
+    mov rdx, [note_stats + ASSP_NOTE_STATS_STEPS]
     call print_field
     lea rcx, [label_arrows]
-    mov rdx, [note_stats + ASMSSP_NOTE_STATS_ARROWS]
+    mov rdx, [note_stats + ASSP_NOTE_STATS_ARROWS]
     call print_field
     lea rcx, [label_jumps]
-    mov rdx, [note_stats + ASMSSP_NOTE_STATS_JUMPS]
+    mov rdx, [note_stats + ASSP_NOTE_STATS_JUMPS]
     call print_field
     lea rcx, [label_hands]
-    mov rdx, [note_stats + ASMSSP_NOTE_STATS_HANDS]
+    mov rdx, [note_stats + ASSP_NOTE_STATS_HANDS]
     call print_field
     lea rcx, [label_holds]
-    mov rdx, [note_stats + ASMSSP_NOTE_STATS_HOLDS]
+    mov rdx, [note_stats + ASSP_NOTE_STATS_HOLDS]
     call print_field
     lea rcx, [label_rolls]
-    mov rdx, [note_stats + ASMSSP_NOTE_STATS_ROLLS]
+    mov rdx, [note_stats + ASSP_NOTE_STATS_ROLLS]
     call print_field
     lea rcx, [label_mines]
-    mov rdx, [note_stats + ASMSSP_NOTE_STATS_MINES]
+    mov rdx, [note_stats + ASSP_NOTE_STATS_MINES]
     call print_field
     lea rcx, [label_lifts]
-    mov rdx, [note_stats + ASMSSP_NOTE_STATS_LIFTS]
+    mov rdx, [note_stats + ASSP_NOTE_STATS_LIFTS]
     call print_field
     lea rcx, [label_fakes]
-    mov rdx, [note_stats + ASMSSP_NOTE_STATS_FAKES]
+    mov rdx, [note_stats + ASSP_NOTE_STATS_FAKES]
     call print_field
     lea rcx, [label_left]
-    mov rdx, [note_stats + ASMSSP_NOTE_STATS_LEFT]
+    mov rdx, [note_stats + ASSP_NOTE_STATS_LEFT]
     call print_field
     lea rcx, [label_down]
-    mov rdx, [note_stats + ASMSSP_NOTE_STATS_DOWN]
+    mov rdx, [note_stats + ASSP_NOTE_STATS_DOWN]
     call print_field
     lea rcx, [label_up]
-    mov rdx, [note_stats + ASMSSP_NOTE_STATS_UP]
+    mov rdx, [note_stats + ASSP_NOTE_STATS_UP]
     call print_field
     lea rcx, [label_right]
-    mov rdx, [note_stats + ASMSSP_NOTE_STATS_RIGHT]
+    mov rdx, [note_stats + ASSP_NOTE_STATS_RIGHT]
     call print_field
     lea rcx, [label_bad_rows]
-    mov rdx, [note_stats + ASMSSP_NOTE_STATS_MALFORMED_ROWS]
+    mov rdx, [note_stats + ASSP_NOTE_STATS_MALFORMED_ROWS]
     call print_field
 
     add rsp, 40
@@ -402,27 +402,27 @@ print_chart_line:
     sub rsp, 40
     lea rcx, [label_chart]
     call print_z
-    mov rcx, [chart_info + ASMSSP_CHART_INFO_INDEX]
+    mov rcx, [chart_info + ASSP_CHART_INFO_INDEX]
     call print_u64
     lea rcx, [space]
     call print_z
-    mov rcx, [chart_info + ASMSSP_CHART_INFO_STEP_TYPE_PTR]
-    mov rdx, [chart_info + ASMSSP_CHART_INFO_STEP_TYPE_LEN]
+    mov rcx, [chart_info + ASSP_CHART_INFO_STEP_TYPE_PTR]
+    mov rdx, [chart_info + ASSP_CHART_INFO_STEP_TYPE_LEN]
     call print_raw
     lea rcx, [space]
     call print_z
-    mov rcx, [chart_info + ASMSSP_CHART_INFO_DIFFICULTY_PTR]
-    mov rdx, [chart_info + ASMSSP_CHART_INFO_DIFFICULTY_LEN]
+    mov rcx, [chart_info + ASSP_CHART_INFO_DIFFICULTY_PTR]
+    mov rdx, [chart_info + ASSP_CHART_INFO_DIFFICULTY_LEN]
     call print_raw
     lea rcx, [space]
     call print_z
-    mov rcx, [chart_info + ASMSSP_CHART_INFO_METER_PTR]
-    mov rdx, [chart_info + ASMSSP_CHART_INFO_METER_LEN]
+    mov rcx, [chart_info + ASSP_CHART_INFO_METER_PTR]
+    mov rdx, [chart_info + ASSP_CHART_INFO_METER_LEN]
     call print_raw
     lea rcx, [space]
     call print_z
-    mov rcx, [chart_info + ASMSSP_CHART_INFO_DESC_PTR]
-    mov rdx, [chart_info + ASMSSP_CHART_INFO_DESC_LEN]
+    mov rcx, [chart_info + ASSP_CHART_INFO_DESC_PTR]
+    mov rdx, [chart_info + ASSP_CHART_INFO_DESC_LEN]
     call print_raw
     lea rcx, [newline]
     call print_z
@@ -512,7 +512,7 @@ print_raw:
 section .data
 
 default_fixture db "fixtures\camellia_mix.ssc", 0
-msg_header db "asmssp standalone", 13, 10, 0
+msg_header db "assp standalone", 13, 10, 0
 msg_read_fail db "failed to read input file", 13, 10, 0
 msg_notes_fail db "failed to find selected #NOTES chart", 13, 10, 0
 msg_stats_fail db "assembly note stat counter failed", 13, 10, 0
@@ -553,7 +553,7 @@ file_handle resq 1
 file_size resq 1
 file_len resq 1
 file_bytes_read resd 1
-chart_info resb ASMSSP_CHART_INFO_SIZE
-note_stats resb ASMSSP_NOTE_STATS_SIZE
+chart_info resb ASSP_CHART_INFO_SIZE
+note_stats resb ASSP_NOTE_STATS_SIZE
 num_buffer resb 32
 file_buffer resb FILE_BUFFER_CAP

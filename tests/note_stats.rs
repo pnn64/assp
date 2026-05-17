@@ -1,4 +1,4 @@
-use asmssp::{NoteStats, count_note_stats_4};
+use assp::{NoteStats, count_note_stats_4};
 
 #[test]
 fn counts_basic_4_panel_note_rows() {

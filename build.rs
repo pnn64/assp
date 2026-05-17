@@ -7,7 +7,7 @@ fn main() {
     let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
     let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
     if target_arch != "x86_64" || target_env != "msvc" {
-        panic!("asmssp currently supports only x86_64-pc-windows-msvc");
+        panic!("assp currently supports only x86_64-pc-windows-msvc");
     }
 
     let manifest = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
@@ -19,11 +19,11 @@ fn main() {
     println!("cargo:rerun-if-changed={}", include_dir.display());
     println!(
         "cargo:rerun-if-changed={}",
-        include_dir.join("asmssp.inc").display()
+        include_dir.join("assp.inc").display()
     );
     println!(
         "cargo:rerun-if-changed={}",
-        include_dir.join("asmssp.h").display()
+        include_dir.join("assp.h").display()
     );
 
     let mut asm_files = Vec::new();

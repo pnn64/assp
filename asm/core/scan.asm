@@ -1,13 +1,13 @@
 default rel
-%include "asmssp.inc"
+%include "assp.inc"
 
-global asmssp_find_byte
+global assp_find_byte
 
 section .text
 
 ; rcx = data, rdx = len, r8d = byte.
-; rax = byte index, or ASMSSP_NOT_FOUND.
-asmssp_find_byte:
+; rax = byte index, or ASSP_NOT_FOUND.
+assp_find_byte:
     test rdx, rdx
     jz .not_found
     test rcx, rcx
@@ -23,7 +23,7 @@ asmssp_find_byte:
     jb .loop
 
 .not_found:
-    mov rax, ASMSSP_NOT_FOUND
+    mov rax, ASSP_NOT_FOUND
 
 .done:
     ret

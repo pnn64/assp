@@ -1,4 +1,4 @@
-use asmssp::{count_note_charts, find_chart_by_index, find_notes_by_index};
+use assp::{count_note_charts, find_chart_by_index, find_notes_by_index};
 
 #[test]
 fn counts_notes_tags() {
