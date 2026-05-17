@@ -1,4 +1,6 @@
-use assp::{find_chart_by_index, minimize_chart_4, minimize_measure_4};
+use assp::{
+    find_chart_by_index, minimize_chart_4, minimize_chart_8, minimize_measure_4, minimize_measure_8,
+};
 use rssp_core::stats::{minimize_chart_for_hash, minimize_measure};
 
 fn assert_measure_minimize_match(rows: &[[u8; 4]]) {
@@ -9,9 +11,24 @@ fn assert_measure_minimize_match(rows: &[[u8; 4]]) {
     assert_eq!(asm, rust);
 }
 
+fn assert_measure_minimize_match_8(rows: &[[u8; 8]]) {
+    let asm = minimize_measure_8(rows);
+    let mut rust = rows.to_vec();
+    minimize_measure(&mut rust);
+
+    assert_eq!(asm, rust);
+}
+
 fn assert_chart_minimize_match(data: &[u8]) {
     let asm = minimize_chart_4(data).unwrap();
     let rust = minimize_chart_for_hash(data, 4);
+
+    assert_eq!(asm, rust);
+}
+
+fn assert_chart_minimize_match_8(data: &[u8]) {
+    let asm = minimize_chart_8(data).unwrap();
+    let rust = minimize_chart_for_hash(data, 8);
 
     assert_eq!(asm, rust);
 }
@@ -59,6 +76,17 @@ fn rows(bytes: &[u8]) -> Vec<[u8; 4]> {
         .collect()
 }
 
+fn rows_8(bytes: &[u8]) -> Vec<[u8; 8]> {
+    bytes
+        .chunks_exact(8)
+        .map(|chunk| {
+            [
+                chunk[0], chunk[1], chunk[2], chunk[3], chunk[4], chunk[5], chunk[6], chunk[7],
+            ]
+        })
+        .collect()
+}
+
 #[test]
 fn synthetic_measure_minimization_matches_rssp_core() {
     assert_measure_minimize_match(&[]);
@@ -66,6 +94,20 @@ fn synthetic_measure_minimization_matches_rssp_core() {
     assert_measure_minimize_match(&rows(b"1000000000000000"));
     assert_measure_minimize_match(&rows(b"10000000000000000000000000000000"));
     assert_measure_minimize_match(&rows(b"10000000010000000010000000010000"));
+}
+
+#[test]
+fn synthetic_8_panel_measure_minimization_matches_rssp_core() {
+    assert_measure_minimize_match_8(&[]);
+    assert_measure_minimize_match_8(&rows_8(b"10000000"));
+    assert_measure_minimize_match_8(&rows_8(b"10000000000000000100000000000000"));
+    assert_measure_minimize_match_8(&rows_8(b"10000000000000000000000000000000"));
+    assert_measure_minimize_match_8(&rows_8(
+        b"1000000000000000000000000000000000000000000000000000000000000000",
+    ));
+    assert_measure_minimize_match_8(&rows_8(
+        b"1000000000000000001000000000000000010000000000000000000100000000",
+    ));
 }
 
 #[test]
@@ -92,6 +134,36 @@ fn synthetic_chart_minimization_matches_rssp_core() {
 0000
 0000
 0000
+;
+",
+    );
+}
+
+#[test]
+fn synthetic_8_panel_chart_minimization_matches_rssp_core() {
+    assert_chart_minimize_match_8(b"");
+    assert_chart_minimize_match_8(b"10000000\n;");
+    assert_chart_minimize_match_8(
+        b"
+10000000
+00000000
+01000000
+00000000
+,
+00000000
+00100000
+00000000
+00000001
+;
+",
+    );
+    assert_chart_minimize_match_8(
+        b"
+// ignored
+10000000
+00000000
+00000000
+00000000
 ;
 ",
     );

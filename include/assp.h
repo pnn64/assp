@@ -219,6 +219,12 @@ size_t assp_measure_densities_4(
     uint32_t *out,
     size_t out_cap
 );
+size_t assp_measure_densities_8(
+    const uint8_t *data,
+    size_t len,
+    uint32_t *out,
+    size_t out_cap
+);
 size_t assp_last_beat_milli_4(
     const uint8_t *data,
     size_t len
@@ -229,7 +235,21 @@ size_t assp_minimize_measure_4(
     uint8_t *out,
     size_t out_cap
 );
+size_t assp_minimize_measure_8(
+    const uint8_t *rows,
+    size_t row_count,
+    uint8_t *out,
+    size_t out_cap
+);
 size_t assp_minimize_chart_4(
+    const uint8_t *data,
+    size_t len,
+    uint8_t *out,
+    size_t out_cap,
+    uint8_t *row_scratch,
+    size_t row_scratch_cap
+);
+size_t assp_minimize_chart_8(
     const uint8_t *data,
     size_t len,
     uint8_t *out,

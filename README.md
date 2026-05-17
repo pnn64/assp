@@ -40,8 +40,11 @@ The first implemented pieces are:
 - `assp_measure_nps_milli_with_events`
 - `assp_last_beat_milli_4`
 - `assp_measure_densities_4`
+- `assp_measure_densities_8`
 - `assp_minimize_measure_4`
+- `assp_minimize_measure_8`
 - `assp_minimize_chart_4`
+- `assp_minimize_chart_8`
 - `assp_sha1_short_hex2`
 - `assp_chart_hash_pair`
 - `assp_stream_counts_from_densities`
@@ -73,10 +76,13 @@ stats for 4-panel charts with no holds or rolls; the standalone report uses it
 when that fast path applies.
 `assp_measure_densities_4` counts per-measure step-row densities and matches
 RSSP's density output for the bundled SM and SSC fixtures.
-`assp_minimize_measure_4` applies RSSP's per-measure row reduction for 4-panel
-charts, which is the first piece of the minimized-note/hash pipeline.
-`assp_minimize_chart_4` emits RSSP-style minimized 4-panel note data using
-caller-provided scratch storage.
+`assp_measure_densities_8` provides the same density primitive for 8-panel
+chart data.
+`assp_minimize_measure_4` and `assp_minimize_measure_8` apply RSSP's
+per-measure row reduction for 4-panel and 8-panel charts, which is the first
+piece of the minimized-note/hash pipeline.
+`assp_minimize_chart_4` and `assp_minimize_chart_8` emit RSSP-style minimized
+note data using caller-provided scratch storage.
 `assp_sha1_short_hex2` computes RSSP's short lowercase SHA1 hex string for two
 concatenated byte slices, used by chart hashing.
 `assp_chart_hash_pair` writes RSSP's normal and BPM-neutral short SHA1 hashes
@@ -186,10 +192,10 @@ The standalone executable currently scans SSC files for chart metadata and
 description. SM `#NOTES:` / `#NOTES2:` blocks are also split into their five
 metadata fields before chart rows are passed to the stat counter. The standalone
 report path currently supports `dance-single` charts; `dance-double` lane
-resolution exists in core but 8-lane analysis routines are not wired into the
-executable yet. Chart reports include RSSP-style chart hashes, normalized hash
-BPMs, peak NPS in thousandths, density-derived stream counts, fixed-point
-duration metrics with
+resolution and core 8-lane minimization/density primitives exist, but full
+8-lane report generation is not wired into the executable yet. Chart reports
+include RSSP-style chart hashes, normalized hash BPMs, peak NPS in thousandths,
+density-derived stream counts, fixed-point duration metrics with
 stops/delays/warps, token breakdowns, segment breakdowns, offset adjustment, and
 note stats with nonfake mine and timing-fake counts.
 

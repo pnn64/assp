@@ -217,13 +217,33 @@ unsafe extern "C" {
         out: *mut u32,
         out_cap: usize,
     ) -> usize;
+    fn assp_measure_densities_8(
+        data: *const u8,
+        len: usize,
+        out: *mut u32,
+        out_cap: usize,
+    ) -> usize;
     fn assp_minimize_measure_4(
         rows: *const u8,
         row_count: usize,
         out: *mut u8,
         out_cap: usize,
     ) -> usize;
+    fn assp_minimize_measure_8(
+        rows: *const u8,
+        row_count: usize,
+        out: *mut u8,
+        out_cap: usize,
+    ) -> usize;
     fn assp_minimize_chart_4(
+        data: *const u8,
+        len: usize,
+        out: *mut u8,
+        out_cap: usize,
+        row_scratch: *mut u8,
+        row_scratch_cap: usize,
+    ) -> usize;
+    fn assp_minimize_chart_8(
         data: *const u8,
         len: usize,
         out: *mut u8,
@@ -615,6 +635,17 @@ pub fn measure_densities_4(data: &[u8]) -> Vec<u32> {
 }
 
 #[must_use]
+pub fn measure_densities_8(data: &[u8]) -> Vec<u32> {
+    let count =
+        unsafe { assp_measure_densities_8(data.as_ptr(), data.len(), std::ptr::null_mut(), 0) };
+    let mut out = vec![0; count];
+    if count != 0 {
+        unsafe { assp_measure_densities_8(data.as_ptr(), data.len(), out.as_mut_ptr(), out.len()) };
+    }
+    out
+}
+
+#[must_use]
 pub fn minimize_measure_4(rows: &[[u8; 4]]) -> Vec<[u8; 4]> {
     let count = unsafe {
         assp_minimize_measure_4(
@@ -628,6 +659,30 @@ pub fn minimize_measure_4(rows: &[[u8; 4]]) -> Vec<[u8; 4]> {
     if count != 0 {
         unsafe {
             assp_minimize_measure_4(
+                rows.as_ptr().cast::<u8>(),
+                rows.len(),
+                out.as_mut_ptr().cast::<u8>(),
+                out.len(),
+            )
+        };
+    }
+    out
+}
+
+#[must_use]
+pub fn minimize_measure_8(rows: &[[u8; 8]]) -> Vec<[u8; 8]> {
+    let count = unsafe {
+        assp_minimize_measure_8(
+            rows.as_ptr().cast::<u8>(),
+            rows.len(),
+            std::ptr::null_mut(),
+            0,
+        )
+    };
+    let mut out = vec![[0; 8]; count];
+    if count != 0 {
+        unsafe {
+            assp_minimize_measure_8(
                 rows.as_ptr().cast::<u8>(),
                 rows.len(),
                 out.as_mut_ptr().cast::<u8>(),
@@ -658,6 +713,37 @@ pub fn minimize_chart_4(data: &[u8]) -> Option<Vec<u8>> {
     let mut out = vec![0; count];
     let count = unsafe {
         assp_minimize_chart_4(
+            data.as_ptr(),
+            data.len(),
+            out.as_mut_ptr(),
+            out.len(),
+            scratch.as_mut_ptr().cast::<u8>(),
+            scratch.len(),
+        )
+    };
+    (count != NOT_FOUND).then_some(out)
+}
+
+#[must_use]
+pub fn minimize_chart_8(data: &[u8]) -> Option<Vec<u8>> {
+    let mut scratch = vec![[0; 8]; data.len() / 8 + 1];
+    let count = unsafe {
+        assp_minimize_chart_8(
+            data.as_ptr(),
+            data.len(),
+            std::ptr::null_mut(),
+            0,
+            scratch.as_mut_ptr().cast::<u8>(),
+            scratch.len(),
+        )
+    };
+    if count == NOT_FOUND {
+        return None;
+    }
+
+    let mut out = vec![0; count];
+    let count = unsafe {
+        assp_minimize_chart_8(
             data.as_ptr(),
             data.len(),
             out.as_mut_ptr(),
