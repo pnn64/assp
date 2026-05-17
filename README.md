@@ -22,6 +22,9 @@ The first implemented pieces are:
 - `assp_find_byte`
 - `assp_count_note_charts`
 - `assp_find_chart_by_index`
+- `assp_find_global_bpms`
+- `assp_find_chart_bpms_by_index`
+- `assp_normalize_float_digits`
 - `assp_measure_densities_4`
 - `assp_minimize_measure_4`
 - `assp_minimize_chart_4`
@@ -48,6 +51,9 @@ caller-provided scratch storage.
 concatenated byte slices, used by chart hashing.
 `assp_chart_hash_pair` writes RSSP's normal and BPM-neutral short SHA1 hashes
 for minimized chart data.
+`assp_find_global_bpms` and `assp_find_chart_bpms_by_index` select the raw BPM
+tag used for chart hashing, and `assp_normalize_float_digits` converts timing
+maps to RSSP's three-decimal hash input format.
 `assp_stream_counts_from_densities` classifies 16th/20th/24th/32nd stream
 measures, SN breaks, and total break measures from those densities.
 `assp_stream_segments_from_densities` emits stream and break ranges from the
@@ -112,8 +118,9 @@ The standalone executable currently scans SSC files for chart metadata and
 `#NOTES:` tags. The second argument is a zero-based chart index, or `list` to
 print chart indexes with step type, difficulty, meter, and description.
 SM `#NOTES:` blocks are also split into their five metadata fields before chart
-rows are passed to the stat counter. Chart reports include density-derived
-stream counts, token breakdowns, segment breakdowns, and note stats.
+rows are passed to the stat counter. Chart reports include RSSP-style chart
+hashes, normalized hash BPMs, density-derived stream counts, token breakdowns,
+segment breakdowns, and note stats.
 
 Run the optional Rust parity tests:
 
@@ -129,5 +136,5 @@ standalone executable build path.
 1. Lock down byte scanners and row classifiers.
 2. Bring over RSSP's chart minimization and stat counting.
 3. Add `.sm` / `.ssc` section extraction.
-4. Add hash generation and compare against RSSP hash tests.
-5. Expand into timing, NPS, stream breakdown, and pattern parity.
+4. Expand timing extraction beyond BPM tags.
+5. Add NPS, duration, and pattern parity.

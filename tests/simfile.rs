@@ -1,4 +1,7 @@
-use assp::{count_note_charts, find_chart_by_index, find_notes_by_index};
+use assp::{
+    count_note_charts, find_bpms_for_chart, find_chart_bpms_by_index, find_chart_by_index,
+    find_global_bpms, find_notes_by_index,
+};
 
 #[test]
 fn counts_notes_tags() {
@@ -79,6 +82,64 @@ fn finds_sm_chart_metadata_and_note_rows() {
         slice(data, chart.note_data, chart.note_data_len),
         b"\n0001\n0000\n;"
     );
+}
+
+#[test]
+fn finds_global_bpms() {
+    let data = b"#TITLE:X;#BPMS:0.000=140.000,64.000=175.000;#NOTES:0000\n;";
+    let bpms = find_global_bpms(data).unwrap();
+
+    assert_eq!(
+        slice(data, bpms.data, bpms.len),
+        b"0.000=140.000,64.000=175.000"
+    );
+}
+
+#[test]
+fn finds_chart_local_bpms() {
+    let data = b"#BPMS:0.000=140.000;
+#NOTEDATA:;
+#STEPSTYPE:dance-single;
+#BPMS:0.000=175.000;
+#NOTES:
+1000
+;";
+    let bpms = find_chart_bpms_by_index(data, 0).unwrap();
+
+    assert_eq!(slice(data, bpms.data, bpms.len), b"0.000=175.000");
+}
+
+#[test]
+fn falls_back_to_global_bpms_for_sm_chart() {
+    let data = b"#TITLE:X;
+#BPMS:0.000=140.000;
+#NOTES:
+     dance-single:
+     1sts?:
+     Beginner:
+     1:
+     0,0,0,0,0:
+0001
+;";
+    assert!(find_chart_bpms_by_index(data, 0).is_none());
+
+    let bpms = find_bpms_for_chart(data, 0).unwrap();
+    assert_eq!(slice(data, bpms.data, bpms.len), b"0.000=140.000");
+}
+
+#[test]
+fn fixture_bpms_selection_matches_expected_scope() {
+    let ssc = include_bytes!("../fixtures/camellia_mix.ssc");
+    let sm = include_bytes!("../fixtures/200000_step_challenge.sm");
+
+    let ssc_local = find_chart_bpms_by_index(ssc, 4).unwrap();
+    assert_eq!(
+        slice(ssc, ssc_local.data, ssc_local.len),
+        b"0.000000=175.000000"
+    );
+
+    let sm_bpms = find_bpms_for_chart(sm, 4).unwrap();
+    assert_eq!(slice(sm, sm_bpms.data, sm_bpms.len), b"0.000=140.000");
 }
 
 fn slice(data: &[u8], ptr: *const u8, len: usize) -> &[u8] {

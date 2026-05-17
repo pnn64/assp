@@ -1,4 +1,7 @@
-use assp::{chart_hash_pair, find_chart_by_index, minimize_chart_4, sha1_short_hex2};
+use assp::{
+    chart_hash_pair, find_bpms_for_chart, find_chart_by_index, minimize_chart_4,
+    normalize_float_digits, sha1_short_hex2,
+};
 use rssp_core::hash::{compute_chart_hash, compute_chart_hash_pair};
 
 fn assert_short_hash_match(first: &[u8], second: &str) {
@@ -17,6 +20,25 @@ fn assert_hash_pair_match(chart_data: &[u8], bpms: &str) {
 
     assert_eq!(asm_hash, rust_hash);
     assert_eq!(asm_neutral, rust_neutral);
+}
+
+fn slice_from<'a>(data: &'a [u8], ptr: *const u8, len: usize) -> &'a [u8] {
+    let start = ptr as usize - data.as_ptr() as usize;
+    &data[start..start + len]
+}
+
+fn assert_fixture_hash_pipeline(data: &[u8], index: usize) {
+    let chart = find_chart_by_index(data, index).unwrap();
+    let chart_start = chart.note_data as usize - data.as_ptr() as usize;
+    let notes = &data[chart_start..chart_start + chart.note_data_len];
+    let minimized = minimize_chart_4(notes).unwrap();
+
+    let bpms = find_bpms_for_chart(data, index).unwrap();
+    let raw_bpms = slice_from(data, bpms.data, bpms.len);
+    let normalized = normalize_float_digits(raw_bpms).unwrap();
+    let normalized = std::str::from_utf8(&normalized).unwrap();
+
+    assert_hash_pair_match(&minimized, normalized);
 }
 
 #[test]
@@ -71,4 +93,10 @@ fn sm_fixture_hash_input_matches_rssp_core() {
 
     assert_short_hash_match(&minimized, "0.000=120.000");
     assert_hash_pair_match(&minimized, "0.000=120.000");
+}
+
+#[test]
+fn fixture_hash_pipeline_matches_rssp_core() {
+    assert_fixture_hash_pipeline(include_bytes!("../fixtures/camellia_mix.ssc"), 4);
+    assert_fixture_hash_pipeline(include_bytes!("../fixtures/200000_step_challenge.sm"), 4);
 }
