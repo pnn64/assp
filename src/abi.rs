@@ -115,6 +115,7 @@ unsafe extern "C" {
     fn assp_version() -> u32;
     fn assp_find_byte(data: *const u8, len: usize, byte: u32) -> usize;
     fn assp_count_note_charts(data: *const u8, len: usize) -> usize;
+    fn assp_supported_step_type_lanes(data: *const u8, len: usize) -> usize;
     fn assp_find_notes_by_index(
         data: *const u8,
         len: usize,
@@ -323,6 +324,15 @@ pub fn find_byte(data: &[u8], byte: u8) -> Option<usize> {
 #[must_use]
 pub fn count_note_charts(data: &[u8]) -> usize {
     unsafe { assp_count_note_charts(data.as_ptr(), data.len()) }
+}
+
+#[must_use]
+pub fn supported_step_type_lanes(data: &[u8]) -> Option<usize> {
+    match unsafe { assp_supported_step_type_lanes(data.as_ptr(), data.len()) } {
+        4 => Some(4),
+        8 => Some(8),
+        _ => None,
+    }
 }
 
 #[must_use]

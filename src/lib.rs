@@ -15,5 +15,5 @@ pub use abi::{
     measure_densities_4, measure_nps_milli_from_bpms, measure_nps_milli_with_events,
     minimize_chart_4, minimize_measure_4, normalize_float_digits, parse_bpm_map, parse_offset_ms,
     sha1_short_hex2, stream_counts_from_densities, stream_segments_from_densities,
-    stream_tokens_from_densities, version,
+    stream_tokens_from_densities, supported_step_type_lanes, version,
 };

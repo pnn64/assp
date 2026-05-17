@@ -18,6 +18,7 @@ extern assp_count_timing_fakes_4
 extern assp_count_timing_note_stats_no_holds_4
 extern assp_count_note_charts
 extern assp_chart_owns_timing_by_index
+extern assp_supported_step_type_lanes
 extern assp_find_chart_bpms_by_index
 extern assp_find_chart_by_index
 extern assp_find_chart_timing_tags_by_index
@@ -77,6 +78,12 @@ start:
     call assp_find_chart_by_index
     test eax, eax
     jz fail_notes
+
+    mov rcx, [chart_info + ASSP_CHART_INFO_STEP_TYPE_PTR]
+    mov rdx, [chart_info + ASSP_CHART_INFO_STEP_TYPE_LEN]
+    call assp_supported_step_type_lanes
+    cmp rax, 4
+    jne fail_lanes
 
     call prepare_hash
     test eax, eax
@@ -181,6 +188,12 @@ fail_read:
 
 fail_notes:
     lea rcx, [msg_notes_fail]
+    call print_z
+    mov ecx, 1
+    call ExitProcess
+
+fail_lanes:
+    lea rcx, [msg_lanes_fail]
     call print_z
     mov ecx, 1
     call ExitProcess
@@ -1320,6 +1333,7 @@ tag_offset_end:
 msg_header db "assp standalone", 13, 10, 0
 msg_read_fail db "failed to read input file", 13, 10, 0
 msg_notes_fail db "failed to find selected #NOTES chart", 13, 10, 0
+msg_lanes_fail db "unsupported step type; standalone currently supports dance-single only", 13, 10, 0
 msg_stats_fail db "assembly note stat counter failed", 13, 10, 0
 msg_density_fail db "chart has too many measures for the density buffer", 13, 10, 0
 msg_hash_fail db "assembly hash pipeline failed", 13, 10, 0

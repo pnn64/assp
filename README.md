@@ -21,6 +21,7 @@ The first implemented pieces are:
 - `assp_version`
 - `assp_find_byte`
 - `assp_count_note_charts`
+- `assp_supported_step_type_lanes`
 - `assp_find_chart_by_index`
 - `assp_find_global_bpms`
 - `assp_find_chart_bpms_by_index`
@@ -59,6 +60,9 @@ arrow totals from a note-data byte slice. The standalone report feeds this
 counter with `assp_minimize_chart_4` output so note stats are based on
 RSSP-style minimized rows; phantom hold/roll starts are corrected with RSSP's
 matching-end rule.
+`assp_supported_step_type_lanes` resolves RSSP-supported StepMania step types:
+`dance-single` / `dance_single` to 4 lanes, and `dance-double` /
+`dance_double` to 8 lanes.
 `assp_count_mines_nonfake_4` minimizes 4-panel note data by measure, then
 counts mine rows outside parsed warp and fake timing ranges.
 `assp_count_timing_fakes_4` minimizes 4-panel note data by measure, then
@@ -180,9 +184,12 @@ The standalone executable currently scans SSC files for chart metadata and
 `#NOTES:` / `#NOTES2:` tags. The second argument is a zero-based chart index, or
 `list` to print chart indexes with step type, difficulty, meter, and
 description. SM `#NOTES:` / `#NOTES2:` blocks are also split into their five
-metadata fields before chart rows are passed to the stat counter. Chart reports
-include RSSP-style chart hashes, normalized hash BPMs, peak NPS in thousandths,
-density-derived stream counts, fixed-point duration metrics with
+metadata fields before chart rows are passed to the stat counter. The standalone
+report path currently supports `dance-single` charts; `dance-double` lane
+resolution exists in core but 8-lane analysis routines are not wired into the
+executable yet. Chart reports include RSSP-style chart hashes, normalized hash
+BPMs, peak NPS in thousandths, density-derived stream counts, fixed-point
+duration metrics with
 stops/delays/warps, token breakdowns, segment breakdowns, offset adjustment, and
 note stats with nonfake mine and timing-fake counts.
 

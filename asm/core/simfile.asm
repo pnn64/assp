@@ -11,6 +11,7 @@ global assp_find_chart_tag_by_index
 global assp_find_global_timing_tags
 global assp_find_chart_timing_tags_by_index
 global assp_chart_owns_timing_by_index
+global assp_supported_step_type_lanes
 
 section .text
 
@@ -180,6 +181,73 @@ assp_count_note_charts:
 
 .zero:
     xor eax, eax
+    ret
+
+; rcx = step type bytes, rdx = len.
+; rax = supported lane count: 4 for dance-single, 8 for dance-double, 0 otherwise.
+assp_supported_step_type_lanes:
+    test rcx, rcx
+    jz .zero
+
+    mov r10, rcx
+    lea r11, [rcx + rdx]
+
+.trim_left:
+    cmp r10, r11
+    jae .zero
+    cmp byte [r10], ' '
+    ja .trim_right
+    inc r10
+    jmp .trim_left
+
+.trim_right:
+    cmp r11, r10
+    jbe .zero
+    cmp byte [r11 - 1], ' '
+    ja .match
+    dec r11
+    jmp .trim_right
+
+.match:
+    mov rax, r11
+    sub rax, r10
+    cmp rax, tag_dance_single_dash_end - tag_dance_single_dash
+    jne .zero
+
+    lea r12, [tag_dance_single_dash]
+    mov r13, tag_dance_single_dash_end - tag_dance_single_dash
+    call match_tag_at
+    test eax, eax
+    jnz .single
+
+    lea r12, [tag_dance_single_under]
+    mov r13, tag_dance_single_under_end - tag_dance_single_under
+    call match_tag_at
+    test eax, eax
+    jnz .single
+
+    lea r12, [tag_dance_double_dash]
+    mov r13, tag_dance_double_dash_end - tag_dance_double_dash
+    call match_tag_at
+    test eax, eax
+    jnz .double
+
+    lea r12, [tag_dance_double_under]
+    mov r13, tag_dance_double_under_end - tag_dance_double_under
+    call match_tag_at
+    test eax, eax
+    jnz .double
+
+.zero:
+    xor eax, eax
+    ret
+
+.single:
+    mov eax, 4
+    ret
+
+.double:
+    mov eax, 8
     ret
 
 ; rcx = simfile bytes, rdx = len, r8 = out assp_byte_slice.
@@ -1185,3 +1253,11 @@ tag_step_type db "#STEPSTYPE:"
 tag_step_type_end:
 tag_meter db "#METER:"
 tag_meter_end:
+tag_dance_single_dash db "dance-single"
+tag_dance_single_dash_end:
+tag_dance_single_under db "dance_single"
+tag_dance_single_under_end:
+tag_dance_double_dash db "dance-double"
+tag_dance_double_dash_end:
+tag_dance_double_under db "dance_double"
+tag_dance_double_under_end:

@@ -2,13 +2,23 @@ use assp::{
     chart_owns_timing_by_index, count_note_charts, find_bpms_for_chart, find_chart_bpms_by_index,
     find_chart_by_index, find_chart_tag_by_index, find_chart_timing_tags_by_index,
     find_global_bpms, find_global_tag, find_global_timing_tags, find_notes_by_index,
-    find_tag_for_chart,
+    find_tag_for_chart, supported_step_type_lanes,
 };
 
 #[test]
 fn counts_notes_tags() {
     let data = b"#TITLE:X;#NOTES:0000\n;#NOTES2:1000\n;#NOTES:0100\n;";
     assert_eq!(count_note_charts(data), 3);
+}
+
+#[test]
+fn resolves_supported_step_type_lanes() {
+    assert_eq!(supported_step_type_lanes(b"dance-single"), Some(4));
+    assert_eq!(supported_step_type_lanes(b" dance_single\r\n"), Some(4));
+    assert_eq!(supported_step_type_lanes(b"DANCE-DOUBLE"), Some(8));
+    assert_eq!(supported_step_type_lanes(b"dance_double"), Some(8));
+    assert_eq!(supported_step_type_lanes(b"pump-single"), None);
+    assert_eq!(supported_step_type_lanes(b""), None);
 }
 
 #[test]
