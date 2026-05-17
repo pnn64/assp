@@ -176,6 +176,10 @@ int32_t assp_bpm_display_range(
     int64_t *out_min_bpm,
     int64_t *out_max_bpm
 );
+int64_t assp_bpm_average_centi(
+    const assp_bpm_segment *segments,
+    size_t len
+);
 int64_t assp_bpm_at_beat_milli(
     const assp_bpm_segment *segments,
     size_t len,

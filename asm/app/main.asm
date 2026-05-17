@@ -32,6 +32,7 @@ extern assp_find_chart_tag_by_index
 extern assp_find_global_bpms
 extern assp_find_global_tag
 extern assp_find_global_timing_tags
+extern assp_bpm_average_centi
 extern assp_bpm_display_range
 extern assp_elapsed_ms_bpm_only
 extern assp_elapsed_ms_with_events
@@ -851,7 +852,15 @@ prepare_bpm_range:
     lea r8, [min_bpm]
     lea r9, [max_bpm]
     call assp_bpm_display_range
+    test eax, eax
+    jz .done
 
+    lea rcx, [bpm_segment_buffer]
+    mov rdx, [bpm_segment_count]
+    call assp_bpm_average_centi
+    mov [average_bpm_centi], rax
+
+.done:
     add rsp, 40
     ret
 
@@ -1154,6 +1163,9 @@ print_report:
     lea rcx, [label_max_bpm]
     mov rdx, [max_bpm]
     call print_field
+    lea rcx, [label_average_bpm]
+    mov rdx, [average_bpm_centi]
+    call print_fixed2_field
     lea rcx, [label_measures]
     mov rdx, [measure_count]
     call print_field
@@ -1306,6 +1318,43 @@ print_field:
     lea rcx, [newline]
     call print_z
     add rsp, 56
+    ret
+
+print_fixed2_field:
+    sub rsp, 72
+    mov [rsp + 32], rdx
+    call print_z
+
+    mov rax, [rsp + 32]
+    test rax, rax
+    jge .positive
+    neg rax
+    mov [rsp + 32], rax
+    lea rcx, [minus]
+    call print_z
+    mov rax, [rsp + 32]
+
+.positive:
+    xor edx, edx
+    mov r9d, 100
+    div r9
+    mov [rsp + 40], rdx
+    mov rcx, rax
+    call print_u64
+    lea rcx, [dot]
+    call print_z
+    mov rax, [rsp + 40]
+    cmp rax, 10
+    jae .fraction
+    lea rcx, [zero_digit]
+    call print_z
+
+.fraction:
+    mov rcx, [rsp + 40]
+    call print_u64
+    lea rcx, [newline]
+    call print_z
+    add rsp, 72
     ret
 
 print_slice_field:
@@ -1468,6 +1517,7 @@ label_bpm_neutral_hash db "bpm_neutral_hash: ", 0
 label_hash_bpms db "hash_bpms: ", 0
 label_min_bpm db "min_bpm: ", 0
 label_max_bpm db "max_bpm: ", 0
+label_average_bpm db "average_bpm: ", 0
 label_measures db "measures: ", 0
 label_peak_nps_milli db "peak_nps_milli: ", 0
 label_last_beat_milli db "last_beat_milli: ", 0
@@ -1505,6 +1555,9 @@ label_up db "up: ", 0
 label_right db "right: ", 0
 label_bad_rows db "malformed_rows: ", 0
 space db " ", 0
+minus db "-", 0
+dot db ".", 0
+zero_digit db "0", 0
 newline db 13, 10, 0
 
 section .bss
@@ -1544,6 +1597,7 @@ last_beat_milli resq 1
 offset_ms resq 1
 min_bpm resq 1
 max_bpm resq 1
+average_bpm_centi resq 1
 mines_nonfake resq 1
 timing_fakes resq 1
 chart_has_own_timing resq 1

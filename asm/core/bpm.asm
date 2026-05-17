@@ -5,6 +5,7 @@ global assp_normalize_float_digits
 global assp_parse_bpm_map
 global assp_parse_offset_ms
 global assp_bpm_display_range
+global assp_bpm_average_centi
 global assp_bpm_at_beat_milli
 global assp_elapsed_ms_bpm_only
 global assp_elapsed_ms_with_events
@@ -336,6 +337,96 @@ clamp_round_bpm_milli:
     xor edx, edx
     mov r12d, 1000
     div r12
+    ret
+
+; rcx = BPM segments, rdx = count. rax = RSSP average display BPM * 100.
+assp_bpm_average_centi:
+    push rbx
+    push rsi
+    push r12
+
+    test rdx, rdx
+    jz .zero
+    test rcx, rcx
+    jz .zero
+
+    xor r8d, r8d
+    xor r9d, r9d
+    xor r10d, r10d
+.display_loop:
+    cmp r8, rdx
+    jae .display_done
+    mov r11, r8
+    shl r11, 4
+    mov rax, [rcx + r11 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    cmp rax, 0
+    jle .display_next
+    cmp rax, 10000000
+    jge .display_next
+    add r10, rax
+    inc r9
+.display_next:
+    inc r8
+    jmp .display_loop
+
+.display_done:
+    test r9, r9
+    jnz .average
+
+    xor r8d, r8d
+    xor r10d, r10d
+.fallback_loop:
+    cmp r8, rdx
+    jae .fallback_done
+    mov r11, r8
+    shl r11, 4
+    add r10, [rcx + r11 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    inc r8
+    jmp .fallback_loop
+
+.fallback_done:
+    mov r9, rdx
+
+.average:
+    mov rax, r10
+    mov rbx, r9
+    imul rbx, rbx, 10
+    call round_signed_div_ties_even
+    jmp .done
+
+.zero:
+    xor eax, eax
+
+.done:
+    pop r12
+    pop rsi
+    pop rbx
+    ret
+
+; rax = signed numerator, rbx = positive denominator. rax = rounded quotient.
+round_signed_div_ties_even:
+    xor r10d, r10d
+    test rax, rax
+    jge .positive
+    neg rax
+    mov r10d, 1
+.positive:
+    xor edx, edx
+    div rbx
+    mov r11, rdx
+    shl r11, 1
+    cmp r11, rbx
+    jb .apply_sign
+    ja .round_up
+    test al, 1
+    jz .apply_sign
+.round_up:
+    inc rax
+.apply_sign:
+    test r10d, r10d
+    jz .done
+    neg rax
+.done:
     ret
 
 ; rcx = assp_bpm_segment ptr, rdx = segment count, r8 = beat_milli.

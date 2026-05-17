@@ -177,6 +177,7 @@ unsafe extern "C" {
         out_min_bpm: *mut i64,
         out_max_bpm: *mut i64,
     ) -> c_int;
+    fn assp_bpm_average_centi(segments: *const BpmSegment, len: usize) -> i64;
     fn assp_bpm_at_beat_milli(segments: *const BpmSegment, len: usize, beat_milli: i64) -> i64;
     fn assp_elapsed_ms_bpm_only(
         segments: *const BpmSegment,
@@ -562,6 +563,11 @@ pub fn bpm_display_range(segments: &[BpmSegment]) -> Option<(i64, i64)> {
         )
     };
     (ok != 0).then_some((min_bpm, max_bpm))
+}
+
+#[must_use]
+pub fn bpm_average_centi(segments: &[BpmSegment]) -> i64 {
+    unsafe { assp_bpm_average_centi(segments.as_ptr(), segments.len()) }
 }
 
 #[must_use]
