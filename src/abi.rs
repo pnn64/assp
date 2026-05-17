@@ -211,6 +211,7 @@ unsafe extern "C" {
         out_cap: usize,
     ) -> usize;
     fn assp_last_beat_milli_4(data: *const u8, len: usize) -> usize;
+    fn assp_last_beat_milli_8(data: *const u8, len: usize) -> usize;
     fn assp_measure_densities_4(
         data: *const u8,
         len: usize,
@@ -621,6 +622,12 @@ pub fn measure_nps_milli_with_events(
 #[must_use]
 pub fn last_beat_milli_4(data: &[u8]) -> Option<usize> {
     let beat = unsafe { assp_last_beat_milli_4(data.as_ptr(), data.len()) };
+    (beat != NOT_FOUND).then_some(beat)
+}
+
+#[must_use]
+pub fn last_beat_milli_8(data: &[u8]) -> Option<usize> {
+    let beat = unsafe { assp_last_beat_milli_8(data.as_ptr(), data.len()) };
     (beat != NOT_FOUND).then_some(beat)
 }
 

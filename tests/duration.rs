@@ -1,7 +1,7 @@
 use assp::{
     ByteSlice, TimingTags, elapsed_ms_bpm_only, elapsed_ms_with_events, find_bpms_for_chart,
     find_chart_by_index, find_chart_timing_tags_by_index, find_global_timing_tags,
-    last_beat_milli_4, parse_bpm_map, parse_offset_ms,
+    last_beat_milli_4, last_beat_milli_8, parse_bpm_map, parse_offset_ms,
 };
 use rssp_core::{bpm, parse::parse_offset_seconds};
 
@@ -32,8 +32,8 @@ fn has_timing_tags(tags: TimingTags) -> bool {
     .any(|ptr| !ptr.is_null())
 }
 
-fn rust_last_beat_milli(data: &[u8]) -> usize {
-    (bpm::compute_last_beat(data, 4) * 1000.0).round() as usize
+fn rust_last_beat_milli(data: &[u8], lanes: usize) -> usize {
+    (bpm::compute_last_beat(data, lanes) * 1000.0).round() as usize
 }
 
 fn rust_elapsed_ms(bpms: &[u8], target_beat_milli: i64) -> i64 {
@@ -115,8 +115,31 @@ fn computes_last_beat_like_rssp_core() {
 000M
 ;";
 
-    assert_eq!(last_beat_milli_4(data).unwrap(), rust_last_beat_milli(data));
+    assert_eq!(
+        last_beat_milli_4(data).unwrap(),
+        rust_last_beat_milli(data, 4)
+    );
     assert_eq!(last_beat_milli_4(b"0000\n0000\n;").unwrap(), 0);
+}
+
+#[test]
+fn computes_8_panel_last_beat_like_rssp_core() {
+    let data = b"
+10000000
+00000000
+00000001
+00000000
+,
+00000000
+00110000
+0000000M
+;";
+
+    assert_eq!(
+        last_beat_milli_8(data).unwrap(),
+        rust_last_beat_milli(data, 8)
+    );
+    assert_eq!(last_beat_milli_8(b"00000000\n00000000\n;").unwrap(), 0);
 }
 
 #[test]
@@ -177,7 +200,7 @@ fn fixture_bpm_only_duration_matches_rssp_core() {
         let chart = find_chart_by_index(simfile, 4).unwrap();
         let note_data = slice_from(simfile, chart.note_data, chart.note_data_len);
         let last_beat = last_beat_milli_4(note_data).unwrap();
-        assert_eq!(last_beat, rust_last_beat_milli(note_data));
+        assert_eq!(last_beat, rust_last_beat_milli(note_data, 4));
 
         let bpms = find_bpms_for_chart(simfile, 4).unwrap();
         let bpms = slice_from(simfile, bpms.data, bpms.len);

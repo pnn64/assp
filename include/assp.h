@@ -229,6 +229,10 @@ size_t assp_last_beat_milli_4(
     const uint8_t *data,
     size_t len
 );
+size_t assp_last_beat_milli_8(
+    const uint8_t *data,
+    size_t len
+);
 size_t assp_minimize_measure_4(
     const uint8_t *rows,
     size_t row_count,

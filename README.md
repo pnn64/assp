@@ -39,6 +39,7 @@ The first implemented pieces are:
 - `assp_measure_nps_milli_from_bpms`
 - `assp_measure_nps_milli_with_events`
 - `assp_last_beat_milli_4`
+- `assp_last_beat_milli_8`
 - `assp_measure_densities_4`
 - `assp_measure_densities_8`
 - `assp_minimize_measure_4`
@@ -108,8 +109,9 @@ duration adjustment.
 first fixed-point NPS path from parsed BPM maps and per-measure densities.
 `assp_measure_nps_milli_with_events` computes measure NPS from elapsed
 measure durations when stops, delays, or warps are present.
-`assp_last_beat_milli_4` finds the last object beat for 4-panel note data, and
-`assp_elapsed_ms_bpm_only` computes BPM-only elapsed time in milliseconds.
+`assp_last_beat_milli_4` and `assp_last_beat_milli_8` find the last object beat
+for 4-panel and 8-panel note data, and `assp_elapsed_ms_bpm_only` computes
+BPM-only elapsed time in milliseconds.
 `assp_elapsed_ms_with_events` extends that fixed-point duration path with RSSP's
 BPM, stop, delay, and warp event ordering.
 The standalone timing path applies RSSP's chart-local timing ownership rule:
