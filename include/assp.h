@@ -9,6 +9,9 @@ extern "C" {
 #endif
 
 #define ASSP_NOT_FOUND ((size_t)-1)
+#define ASSP_BREAKDOWN_DETAILED 0
+#define ASSP_BREAKDOWN_PARTIAL 1
+#define ASSP_BREAKDOWN_SIMPLIFIED 2
 
 typedef struct assp_note_stats {
     uint64_t rows;
@@ -105,6 +108,13 @@ size_t assp_stream_tokens_from_densities(
     const uint32_t *densities,
     size_t len,
     assp_stream_token *out,
+    size_t out_cap
+);
+size_t assp_format_stream_tokens(
+    const assp_stream_token *tokens,
+    size_t len,
+    uint32_t mode,
+    uint8_t *out,
     size_t out_cap
 );
 int32_t assp_count_note_stats_4(

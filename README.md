@@ -26,6 +26,7 @@ The first implemented pieces are:
 - `assp_stream_counts_from_densities`
 - `assp_stream_segments_from_densities`
 - `assp_stream_tokens_from_densities`
+- `assp_format_stream_tokens`
 - `assp_count_note_stats_4`
 
 `assp_count_note_stats_4` is an initial 4-panel note-data counter. It counts
@@ -40,6 +41,8 @@ measures, SN breaks, and total break measures from those densities.
 same measure densities.
 `assp_stream_tokens_from_densities` compresses RSSP's active stream range into
 break/run tokens for later breakdown formatting.
+`assp_format_stream_tokens` formats those tokens into RSSP-style detailed,
+partial, or simplified breakdown text using caller-owned output storage.
 
 ## Build And Test
 

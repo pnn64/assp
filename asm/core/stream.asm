@@ -4,6 +4,7 @@ default rel
 global assp_stream_counts_from_densities
 global assp_stream_segments_from_densities
 global assp_stream_tokens_from_densities
+global assp_format_stream_tokens
 
 %macro ASSP_DENSITY_KIND 0
     cmp eax, 16
@@ -419,6 +420,320 @@ store_token:
     mov [rbx + r8 + ASSP_STREAM_TOKEN_KIND], eax
     mov dword [rbx + r8 + 4], 0
     mov [rbx + r8 + ASSP_STREAM_TOKEN_LEN], rdx
+.count:
+    inc r13
+    ret
+
+; rcx = assp_stream_token tokens, rdx = token count, r8d = breakdown mode,
+; r9 = optional output bytes, stack arg 5 = output cap.
+; rax = total bytes required/written, not including a nul terminator.
+assp_format_stream_tokens:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+
+    mov r12, [rsp + 96]
+
+    test rcx, rcx
+    jz .maybe_empty
+    jmp .validate
+
+.maybe_empty:
+    test rdx, rdx
+    jnz .zero
+
+.validate:
+    cmp r8d, ASSP_BREAKDOWN_SIMPLIFIED
+    ja .zero
+
+    mov rsi, rcx
+    mov rdi, rdx
+    mov r15d, r8d
+    mov rbx, r9
+    xor r13d, r13d
+    xor r14d, r14d
+
+.token_loop:
+    cmp r14, rdi
+    jae .done
+
+    mov r10, r14
+    shl r10, 4
+    mov eax, [rsi + r10 + ASSP_STREAM_TOKEN_KIND]
+    test eax, eax
+    jz .break_token
+
+    mov r8d, eax
+    call merge_run_tokens
+    mov r14, rdx
+    mov r10, rax
+    mov r11d, ecx
+
+    test r13, r13
+    jz .write_run
+    mov al, ' '
+    call append_byte
+
+.write_run:
+    call write_run_token
+    jmp .token_loop
+
+.break_token:
+    mov r8, [rsi + r10 + ASSP_STREAM_TOKEN_LEN]
+    call format_break_token
+    inc r14
+    jmp .token_loop
+
+.done:
+    mov rax, r13
+    jmp .pop_done
+
+.zero:
+    xor eax, eax
+
+.pop_done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
+; input: r14 = start index, r8d = run kind.
+; output: rax = merged length, ecx = star flag, rdx = next token index.
+merge_run_tokens:
+    mov r10, r14
+    shl r10, 4
+    mov rax, [rsi + r10 + ASSP_STREAM_TOKEN_LEN]
+    xor ecx, ecx
+    lea r9, [r14 + 1]
+
+.loop:
+    lea r10, [r9 + 1]
+    cmp r10, rdi
+    jae .done
+
+    mov r10, r9
+    shl r10, 4
+    cmp dword [rsi + r10 + ASSP_STREAM_TOKEN_KIND], ASSP_STREAM_TOKEN_BREAK
+    jne .done
+    mov r11, [rsi + r10 + ASSP_STREAM_TOKEN_LEN]
+
+    xor edx, edx
+    cmp r15d, ASSP_BREAKDOWN_PARTIAL
+    jne .not_partial
+    mov edx, 1
+    jmp .check_threshold
+
+.not_partial:
+    cmp r15d, ASSP_BREAKDOWN_SIMPLIFIED
+    jne .check_threshold
+    mov edx, 4
+
+.check_threshold:
+    cmp r11, rdx
+    ja .done
+
+    lea r10, [r9 + 1]
+    shl r10, 4
+    mov edx, [rsi + r10 + ASSP_STREAM_TOKEN_KIND]
+    test edx, edx
+    jz .done
+    cmp edx, r8d
+    jne .different_run
+
+    add rax, r11
+    add rax, [rsi + r10 + ASSP_STREAM_TOKEN_LEN]
+    mov ecx, ASSP_TRUE
+    add r9, 2
+    jmp .loop
+
+.different_run:
+    cmp r15d, ASSP_BREAKDOWN_SIMPLIFIED
+    jne .skip_break
+    cmp r11, 1
+    jbe .skip_break
+    cmp r11, 4
+    ja .skip_break
+    add rax, r11
+    mov ecx, ASSP_TRUE
+
+.skip_break:
+    inc r9
+
+.done:
+    mov rdx, r9
+    ret
+
+; input: r8d = run kind, r10 = length, r11d = star flag.
+write_run_token:
+    cmp r8d, ASSP_STREAM_TOKEN_RUN20
+    jne .prefix24
+    mov al, '~'
+    call append_byte
+    jmp .number
+
+.prefix24:
+    cmp r8d, ASSP_STREAM_TOKEN_RUN24
+    jne .prefix32
+    mov al, '\'
+    call append_byte
+    jmp .number
+
+.prefix32:
+    cmp r8d, ASSP_STREAM_TOKEN_RUN32
+    jne .number
+    mov al, '='
+    call append_byte
+
+.number:
+    push r8
+    push r11
+    mov rax, r10
+    call append_u64
+    pop r11
+    pop r8
+
+    cmp r8d, ASSP_STREAM_TOKEN_RUN20
+    jne .suffix24
+    mov al, '~'
+    call append_byte
+    jmp .star
+
+.suffix24:
+    cmp r8d, ASSP_STREAM_TOKEN_RUN24
+    jne .suffix32
+    mov al, '\'
+    call append_byte
+    jmp .star
+
+.suffix32:
+    cmp r8d, ASSP_STREAM_TOKEN_RUN32
+    jne .star
+    mov al, '='
+    call append_byte
+
+.star:
+    test r11d, r11d
+    jz .done
+    mov al, '*'
+    call append_byte
+
+.done:
+    ret
+
+; input: r8 = break length.
+format_break_token:
+    cmp r15d, ASSP_BREAKDOWN_DETAILED
+    jne .partial
+    cmp r8, 1
+    jbe .done
+    test r13, r13
+    jz .detail_open
+    mov al, ' '
+    call append_byte
+
+.detail_open:
+    mov al, '('
+    call append_byte
+    mov rax, r8
+    call append_u64
+    mov al, ')'
+    call append_byte
+    jmp .done
+
+.partial:
+    cmp r15d, ASSP_BREAKDOWN_PARTIAL
+    jne .simplified
+    cmp r8, 1
+    jbe .done
+    cmp r8, 4
+    jbe .dash
+    cmp r8, 32
+    jbe .slash
+    jmp .bar
+
+.simplified:
+    cmp r8, 4
+    jbe .done
+    cmp r8, 32
+    jbe .slash
+
+.bar:
+    mov al, '|'
+    jmp .symbol
+
+.slash:
+    mov al, '/'
+    jmp .symbol
+
+.dash:
+    mov al, '-'
+
+.symbol:
+    test r13, r13
+    jz .emit_symbol
+    push rax
+    mov al, ' '
+    call append_byte
+    pop rax
+
+.emit_symbol:
+    call append_byte
+
+.done:
+    ret
+
+; input: rax = unsigned integer.
+append_u64:
+    sub rsp, 32
+    lea r10, [rsp + 32]
+    xor r8d, r8d
+    mov r11d, 10
+
+    test rax, rax
+    jnz .loop
+    dec r10
+    mov byte [r10], '0'
+    mov r8d, 1
+    jmp .emit
+
+.loop:
+    xor edx, edx
+    div r11
+    add dl, '0'
+    dec r10
+    mov [r10], dl
+    inc r8
+    test rax, rax
+    jnz .loop
+
+.emit:
+    test r8, r8
+    jz .done
+    mov al, [r10]
+    call append_byte
+    inc r10
+    dec r8
+    jmp .emit
+
+.done:
+    add rsp, 32
+    ret
+
+; input: al = byte.
+append_byte:
+    test rbx, rbx
+    jz .count
+    cmp r13, r12
+    jae .count
+    mov [rbx + r13], al
 .count:
     inc r13
     ret
