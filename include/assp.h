@@ -148,6 +148,11 @@ int32_t assp_find_chart_timing_tags_by_index(
     size_t index,
     assp_timing_tags *out
 );
+int32_t assp_chart_owns_timing_by_index(
+    const uint8_t *data,
+    size_t len,
+    size_t index
+);
 size_t assp_normalize_float_digits(
     const uint8_t *data,
     size_t len,

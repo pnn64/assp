@@ -156,6 +156,7 @@ unsafe extern "C" {
         index: usize,
         out: *mut TimingTags,
     ) -> c_int;
+    fn assp_chart_owns_timing_by_index(data: *const u8, len: usize, index: usize) -> c_int;
     fn assp_normalize_float_digits(
         data: *const u8,
         len: usize,
@@ -407,6 +408,11 @@ pub fn find_chart_timing_tags_by_index(data: &[u8], index: usize) -> Option<Timi
         assp_find_chart_timing_tags_by_index(data.as_ptr(), data.len(), index, &mut tags)
     };
     (ok != 0).then_some(tags)
+}
+
+#[must_use]
+pub fn chart_owns_timing_by_index(data: &[u8], index: usize) -> bool {
+    unsafe { assp_chart_owns_timing_by_index(data.as_ptr(), data.len(), index) != 0 }
 }
 
 #[must_use]

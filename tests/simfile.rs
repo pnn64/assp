@@ -1,7 +1,8 @@
 use assp::{
-    count_note_charts, find_bpms_for_chart, find_chart_bpms_by_index, find_chart_by_index,
-    find_chart_tag_by_index, find_chart_timing_tags_by_index, find_global_bpms, find_global_tag,
-    find_global_timing_tags, find_notes_by_index, find_tag_for_chart,
+    chart_owns_timing_by_index, count_note_charts, find_bpms_for_chart, find_chart_bpms_by_index,
+    find_chart_by_index, find_chart_tag_by_index, find_chart_timing_tags_by_index,
+    find_global_bpms, find_global_tag, find_global_timing_tags, find_notes_by_index,
+    find_tag_for_chart,
 };
 
 #[test]
@@ -246,6 +247,37 @@ fn finds_chart_metadata_timing_ownership_tag() {
     let labels = find_chart_tag_by_index(data, 0, b"#LABELS:").unwrap();
 
     assert_eq!(slice(data, labels.data, labels.len), b"0.000=local");
+}
+
+#[test]
+fn detects_chart_owned_timing_tags() {
+    let data = include_bytes!("../fixtures/chart_own_metadata_timing.ssc");
+    assert!(chart_owns_timing_by_index(data, 0));
+
+    let offset = b"#NOTEDATA:;
+#STEPSTYPE:dance-single;
+#OFFSET:0.125;
+#NOTES:
+1000
+;";
+    assert!(chart_owns_timing_by_index(offset, 0));
+
+    let freezes = b"#NOTEDATA:;
+#STEPSTYPE:dance-single;
+#FREEZES:16.000=0.250;
+#NOTES:
+1000
+;";
+    assert!(chart_owns_timing_by_index(freezes, 0));
+
+    let global_only = b"#BPMS:0.000=140.000;
+#NOTEDATA:;
+#STEPSTYPE:dance-single;
+#NOTES:
+1000
+;";
+    assert!(!chart_owns_timing_by_index(global_only, 0));
+    assert!(!chart_owns_timing_by_index(global_only, 1));
 }
 
 #[test]

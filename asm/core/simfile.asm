@@ -10,6 +10,7 @@ global assp_find_global_tag
 global assp_find_chart_tag_by_index
 global assp_find_global_timing_tags
 global assp_find_chart_timing_tags_by_index
+global assp_chart_owns_timing_by_index
 
 section .text
 
@@ -20,6 +21,16 @@ section .text
     mov r13, %2
     lea rbx, [r15 + %3]
     call find_tag_in_range
+%endmacro
+
+%macro owns_timing_tag 2
+    mov r10, rsi
+    mov r11, rdi
+    lea r12, [%1]
+    mov r13, %2
+    call tag_exists_in_range
+    test eax, eax
+    jnz .yes
 %endmacro
 
 %macro is_notes_tag 1
@@ -562,6 +573,79 @@ assp_find_chart_timing_tags_by_index:
     pop rbx
     ret
 
+; rcx = simfile bytes, rdx = len, r8 = chart index.
+; eax = 1 when the selected SSC chart has chart-owned timing, 0 otherwise.
+assp_chart_owns_timing_by_index:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+
+    test rcx, rcx
+    jz .fail
+    cmp rdx, 8
+    jb .fail
+
+    mov rdi, rcx
+    lea rsi, [rcx + rdx]
+    mov r13, r8
+    xor r14d, r14d
+    xor r15d, r15d
+
+.scan:
+    lea rax, [rdi + 10]
+    cmp rax, rsi
+    ja .fail
+
+    is_notedata_tag rdi
+    test eax, eax
+    jz .check_notes
+    mov r15, rdi
+    add rdi, 10
+    jmp .scan
+
+.check_notes:
+    lea rax, [rdi + 8]
+    cmp rax, rsi
+    ja .fail
+    is_notes_tag rdi
+    test eax, eax
+    jz .next
+
+    cmp r14, r13
+    je .found_chart
+    inc r14
+    add rdi, rax
+    jmp .scan
+
+.next:
+    inc rdi
+    jmp .scan
+
+.found_chart:
+    test r15, r15
+    jz .fail
+    mov r10, r15
+    mov r11, rdi
+    call range_owns_timing
+    jmp .done
+
+.fail:
+    xor eax, eax
+
+.done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
 ; rcx = simfile bytes, rdx = len, r8 = chart index, r9 = out assp_chart_ref.
 ; eax = 1 when found, 0 otherwise.
 assp_find_notes_by_index:
@@ -834,6 +918,60 @@ match_tag_at:
     xor eax, eax
     ret
 
+; r10 = scan start, r11 = scan end, r12 = tag ptr, r13 = tag len.
+; eax = 1 when the exact tag exists in the range, 0 otherwise.
+tag_exists_in_range:
+    test r12, r12
+    jz .no
+    test r13, r13
+    jz .no
+
+.scan:
+    lea rax, [r10 + r13]
+    cmp rax, r11
+    ja .no
+
+    call match_tag_at
+    test eax, eax
+    jnz .yes
+    inc r10
+    jmp .scan
+
+.yes:
+    mov eax, ASSP_TRUE
+    ret
+
+.no:
+    xor eax, eax
+    ret
+
+; r10 = metadata scan start, r11 = metadata end.
+; eax = 1 when the chart has any RSSP chart-owned timing tag.
+range_owns_timing:
+    mov rsi, r10
+    mov rdi, r11
+
+    owns_timing_tag tag_bpms, tag_bpms_end - tag_bpms
+    owns_timing_tag tag_stops, tag_stops_end - tag_stops
+    owns_timing_tag tag_freezes, tag_freezes_end - tag_freezes
+    owns_timing_tag tag_delays, tag_delays_end - tag_delays
+    owns_timing_tag tag_warps, tag_warps_end - tag_warps
+    owns_timing_tag tag_speeds, tag_speeds_end - tag_speeds
+    owns_timing_tag tag_scrolls, tag_scrolls_end - tag_scrolls
+    owns_timing_tag tag_fakes, tag_fakes_end - tag_fakes
+    owns_timing_tag tag_offset, tag_offset_end - tag_offset
+    owns_timing_tag tag_time_signatures, tag_time_signatures_end - tag_time_signatures
+    owns_timing_tag tag_labels, tag_labels_end - tag_labels
+    owns_timing_tag tag_tickcounts, tag_tickcounts_end - tag_tickcounts
+    owns_timing_tag tag_combos, tag_combos_end - tag_combos
+
+    xor eax, eax
+    ret
+
+.yes:
+    mov eax, ASSP_TRUE
+    ret
+
 ; rbx = assp_timing_tags.
 zero_timing_tags:
     xor eax, eax
@@ -1079,3 +1217,13 @@ tag_scrolls db "#SCROLLS:"
 tag_scrolls_end:
 tag_fakes db "#FAKES:"
 tag_fakes_end:
+tag_offset db "#OFFSET:"
+tag_offset_end:
+tag_time_signatures db "#TIMESIGNATURES:"
+tag_time_signatures_end:
+tag_labels db "#LABELS:"
+tag_labels_end:
+tag_tickcounts db "#TICKCOUNTS:"
+tag_tickcounts_end:
+tag_combos db "#COMBOS:"
+tag_combos_end:
