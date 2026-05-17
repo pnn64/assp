@@ -1,6 +1,11 @@
 use std::ffi::c_int;
 
 pub const NOT_FOUND: usize = usize::MAX;
+pub const STREAM_TOKEN_BREAK: u32 = 0;
+pub const STREAM_TOKEN_RUN16: u32 = 16;
+pub const STREAM_TOKEN_RUN20: u32 = 20;
+pub const STREAM_TOKEN_RUN24: u32 = 24;
+pub const STREAM_TOKEN_RUN32: u32 = 32;
 
 #[repr(C)]
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -65,6 +70,14 @@ pub struct StreamSegment {
     pub is_break: u64,
 }
 
+#[repr(C)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct StreamToken {
+    pub kind: u32,
+    pub _padding: u32,
+    pub len: usize,
+}
+
 unsafe extern "C" {
     fn assp_version() -> u32;
     fn assp_find_byte(data: *const u8, len: usize, byte: u32) -> usize;
@@ -96,6 +109,12 @@ unsafe extern "C" {
         densities: *const u32,
         len: usize,
         out: *mut StreamSegment,
+        out_cap: usize,
+    ) -> usize;
+    fn assp_stream_tokens_from_densities(
+        densities: *const u32,
+        len: usize,
+        out: *mut StreamToken,
         out_cap: usize,
     ) -> usize;
     fn assp_count_note_stats_4(data: *const u8, len: usize, out: *mut NoteStats) -> c_int;
@@ -175,6 +194,30 @@ pub fn stream_segments_from_densities(densities: &[u32]) -> Vec<StreamSegment> {
 }
 
 #[must_use]
+pub fn stream_tokens_from_densities(densities: &[u32]) -> Vec<StreamToken> {
+    let count = unsafe {
+        assp_stream_tokens_from_densities(
+            densities.as_ptr(),
+            densities.len(),
+            std::ptr::null_mut(),
+            0,
+        )
+    };
+    let mut out = vec![StreamToken::default(); count];
+    if count != 0 {
+        unsafe {
+            assp_stream_tokens_from_densities(
+                densities.as_ptr(),
+                densities.len(),
+                out.as_mut_ptr(),
+                out.len(),
+            )
+        };
+    }
+    out
+}
+
+#[must_use]
 pub fn count_note_stats_4(data: &[u8]) -> Option<NoteStats> {
     let mut stats = NoteStats::default();
     let ok = unsafe { assp_count_note_stats_4(data.as_ptr(), data.len(), &mut stats) };
@@ -213,5 +256,11 @@ mod tests {
     fn stream_segment_layout_is_c_abi() {
         assert_eq!(std::mem::size_of::<super::StreamSegment>(), 24);
         assert_eq!(std::mem::align_of::<super::StreamSegment>(), 8);
+    }
+
+    #[test]
+    fn stream_token_layout_is_c_abi() {
+        assert_eq!(std::mem::size_of::<super::StreamToken>(), 16);
+        assert_eq!(std::mem::align_of::<super::StreamToken>(), 8);
     }
 }

@@ -63,6 +63,12 @@ typedef struct assp_stream_segment {
     uint64_t is_break;
 } assp_stream_segment;
 
+typedef struct assp_stream_token {
+    uint32_t kind;
+    uint32_t _padding;
+    size_t len;
+} assp_stream_token;
+
 uint32_t assp_version(void);
 size_t assp_find_byte(const uint8_t *data, size_t len, uint32_t byte);
 size_t assp_count_note_charts(const uint8_t *data, size_t len);
@@ -93,6 +99,12 @@ size_t assp_stream_segments_from_densities(
     const uint32_t *densities,
     size_t len,
     assp_stream_segment *out,
+    size_t out_cap
+);
+size_t assp_stream_tokens_from_densities(
+    const uint32_t *densities,
+    size_t len,
+    assp_stream_token *out,
     size_t out_cap
 );
 int32_t assp_count_note_stats_4(

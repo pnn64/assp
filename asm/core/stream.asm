@@ -3,6 +3,32 @@ default rel
 
 global assp_stream_counts_from_densities
 global assp_stream_segments_from_densities
+global assp_stream_tokens_from_densities
+
+%macro ASSP_DENSITY_KIND 0
+    cmp eax, 16
+    jb %%break
+    cmp eax, 20
+    jb %%run16
+    cmp eax, 24
+    jb %%run20
+    cmp eax, 32
+    jb %%run24
+    mov eax, ASSP_STREAM_TOKEN_RUN32
+    jmp %%done
+%%run24:
+    mov eax, ASSP_STREAM_TOKEN_RUN24
+    jmp %%done
+%%run20:
+    mov eax, ASSP_STREAM_TOKEN_RUN20
+    jmp %%done
+%%run16:
+    mov eax, ASSP_STREAM_TOKEN_RUN16
+    jmp %%done
+%%break:
+    mov eax, ASSP_STREAM_TOKEN_BREAK
+%%done:
+%endmacro
 
 section .text
 
@@ -295,6 +321,104 @@ store_segment:
     mov [rbx + r10 + ASSP_STREAM_SEGMENT_START], rax
     mov [rbx + r10 + ASSP_STREAM_SEGMENT_END], rdx
     mov [rbx + r10 + ASSP_STREAM_SEGMENT_IS_BREAK], rcx
+.count:
+    inc r13
+    ret
+
+; rcx = u32 densities, rdx = density count, r8 = optional output tokens,
+; r9 = output cap. rax = total token count in RSSP's active stream range.
+assp_stream_tokens_from_densities:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+
+    test rcx, rcx
+    jz .zero
+
+    mov rsi, rcx
+    mov rdi, rdx
+    mov rbx, r8
+    mov r12, r9
+    xor r13d, r13d
+
+    test rdi, rdi
+    jz .done
+
+    xor r14d, r14d
+.find_first:
+    cmp r14, rdi
+    jae .done
+    cmp dword [rsi + r14 * 4], 16
+    jae .first_found
+    inc r14
+    jmp .find_first
+
+.first_found:
+    mov r15, rdi
+    dec r15
+.find_last:
+    cmp dword [rsi + r15 * 4], 16
+    jae .load_token
+    dec r15
+    jmp .find_last
+
+.load_token:
+    mov eax, [rsi + r14 * 4]
+    ASSP_DENSITY_KIND
+    mov r11d, eax
+    mov r9, 1
+
+.extend_token:
+    cmp r14, r15
+    jae .emit_token
+    lea r10, [r14 + 1]
+    mov eax, [rsi + r10 * 4]
+    ASSP_DENSITY_KIND
+    cmp eax, r11d
+    jne .emit_token
+    inc r14
+    inc r9
+    jmp .extend_token
+
+.emit_token:
+    mov eax, r11d
+    mov rdx, r9
+    call store_token
+    inc r14
+    cmp r14, r15
+    jbe .load_token
+
+.done:
+    mov rax, r13
+    jmp .pop_done
+
+.zero:
+    xor eax, eax
+
+.pop_done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
+store_token:
+    test rbx, rbx
+    jz .count
+    cmp r13, r12
+    jae .count
+    mov r8, r13
+    shl r8, 4
+    mov [rbx + r8 + ASSP_STREAM_TOKEN_KIND], eax
+    mov dword [rbx + r8 + 4], 0
+    mov [rbx + r8 + ASSP_STREAM_TOKEN_LEN], rdx
 .count:
     inc r13
     ret
