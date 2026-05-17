@@ -1,6 +1,6 @@
 use assp::{
     bpm_at_beat_milli, find_bpms_for_chart, find_chart_by_index, measure_densities_4,
-    measure_nps_milli_from_bpms, parse_bpm_map,
+    measure_nps_milli_from_bpms, measure_nps_milli_with_events, parse_bpm_map,
 };
 use rssp_core::{bpm, nps};
 
@@ -26,6 +26,61 @@ fn assert_nps_match(densities: &[u32], bpms: &[u8]) {
     assert_eq!(asm, rust_nps_milli(densities, bpms));
 }
 
+fn rust_nps_milli_with_events(
+    densities: &[u32],
+    bpms: &[u8],
+    stops: &[u8],
+    delays: &[u8],
+    warps: &[u8],
+) -> Vec<u32> {
+    let bpms = bpm::parse_bpm_map(std::str::from_utf8(bpms).unwrap());
+    let stops = bpm::parse_bpm_map(std::str::from_utf8(stops).unwrap());
+    let delays = bpm::parse_bpm_map(std::str::from_utf8(delays).unwrap());
+    let warps = bpm::parse_bpm_map(std::str::from_utf8(warps).unwrap());
+    let mut start = bpm::get_elapsed_time(0.0, &bpms, &stops, &delays, &warps);
+
+    densities
+        .iter()
+        .enumerate()
+        .map(|(i, &d)| {
+            let end = bpm::get_elapsed_time((i as f64 + 1.0) * 4.0, &bpms, &stops, &delays, &warps);
+            let dur = end - start;
+            start = end;
+            if d == 0 || dur <= 0.12 {
+                0
+            } else {
+                (d as f64 / dur * 1000.0).round() as u32
+            }
+        })
+        .collect()
+}
+
+fn assert_event_nps_match(
+    densities: &[u32],
+    bpms: &[u8],
+    stops: &[u8],
+    delays: &[u8],
+    warps: &[u8],
+) {
+    let parsed_bpms = parse_bpm_map(bpms).unwrap();
+    let parsed_stops = parse_bpm_map(stops).unwrap();
+    let parsed_delays = parse_bpm_map(delays).unwrap();
+    let parsed_warps = parse_bpm_map(warps).unwrap();
+    let asm = measure_nps_milli_with_events(
+        densities,
+        &parsed_bpms,
+        &parsed_stops,
+        &parsed_delays,
+        &parsed_warps,
+    )
+    .unwrap();
+
+    assert_eq!(
+        asm,
+        rust_nps_milli_with_events(densities, bpms, stops, delays, warps)
+    );
+}
+
 #[test]
 fn selects_bpm_at_measure_beats() {
     let bpms = parse_bpm_map(b"8=240,4=120").unwrap();
@@ -41,6 +96,13 @@ fn computes_measure_nps_like_rssp_core() {
     assert_nps_match(&[], b"0=120");
     assert_nps_match(&[0, 16, 20, 24, 32, 8], b"0=120,8=240,16=10001,20=175");
     assert_nps_match(&[16, 16], b"");
+}
+
+#[test]
+fn computes_measure_nps_with_timing_events() {
+    assert_event_nps_match(&[16, 16], b"0=60", b"2=1", b"", b"");
+    assert_event_nps_match(&[16, 16], b"0=60", b"", b"2=1", b"");
+    assert_event_nps_match(&[16, 16], b"0=60", b"", b"", b"0=4");
 }
 
 #[test]

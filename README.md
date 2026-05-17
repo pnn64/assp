@@ -35,6 +35,7 @@ The first implemented pieces are:
 - `assp_elapsed_ms_bpm_only`
 - `assp_elapsed_ms_with_events`
 - `assp_measure_nps_milli_from_bpms`
+- `assp_measure_nps_milli_with_events`
 - `assp_last_beat_milli_4`
 - `assp_measure_densities_4`
 - `assp_minimize_measure_4`
@@ -75,6 +76,8 @@ beat/BPM pairs, with both fields stored as signed thousandths.
 duration adjustment.
 `assp_bpm_at_beat_milli` and `assp_measure_nps_milli_from_bpms` provide the
 first fixed-point NPS path from parsed BPM maps and per-measure densities.
+`assp_measure_nps_milli_with_events` computes measure NPS from elapsed
+measure durations when stops, delays, or warps are present.
 `assp_last_beat_milli_4` finds the last object beat for 4-panel note data, and
 `assp_elapsed_ms_bpm_only` computes BPM-only elapsed time in milliseconds.
 `assp_elapsed_ms_with_events` extends that fixed-point duration path with RSSP's
