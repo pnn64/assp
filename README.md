@@ -153,6 +153,12 @@ Run the built executable directly against any `.sm` or `.ssc` file:
 .\assp\target\assp.exe .\assp\fixtures\camellia_mix.ssc 4
 ```
 
+Run the timing-fake fixture:
+
+```powershell
+.\assp\target\assp.exe .\assp\fixtures\timing_fakes.ssc 0
+```
+
 The standalone executable currently scans SSC files for chart metadata and
 `#NOTES:` / `#NOTES2:` tags. The second argument is a zero-based chart index, or
 `list` to print chart indexes with step type, difficulty, meter, and

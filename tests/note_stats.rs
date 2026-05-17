@@ -1,8 +1,25 @@
 use assp::{
-    NoteStats, count_mines_nonfake_4, count_note_stats_4, count_note_stats_minimized_4,
-    count_timing_fakes_4, parse_bpm_map,
+    ByteSlice, NoteStats, count_mines_nonfake_4, count_note_stats_4, count_note_stats_minimized_4,
+    count_timing_fakes_4, find_chart_by_index, find_chart_timing_tags_by_index, parse_bpm_map,
 };
-use rssp_core::bpm;
+use rssp_core::{
+    bpm,
+    stats::compute_timing_aware_stats,
+    timing::{TimingFormat, timing_data_from_chart_data},
+};
+
+fn slice_from<'a>(data: &'a [u8], ptr: *const u8, len: usize) -> &'a [u8] {
+    let start = ptr as usize - data.as_ptr() as usize;
+    &data[start..start + len]
+}
+
+fn tag_str(data: &[u8], slice: ByteSlice) -> Option<&str> {
+    if slice.data.is_null() {
+        None
+    } else {
+        std::str::from_utf8(slice_from(data, slice.data, slice.len)).ok()
+    }
+}
 
 #[test]
 fn counts_basic_4_panel_note_rows() {
@@ -155,4 +172,41 @@ F000
 
     assert_eq!(count_timing_fakes_4(data, &[], &[]), Some(2));
     assert_eq!(count_timing_fakes_4(data, &warps, &fakes), Some(4));
+}
+
+#[test]
+fn fixture_timing_fakes_match_rssp_core() {
+    let simfile = include_bytes!("../fixtures/timing_fakes.ssc");
+    let chart = find_chart_by_index(simfile, 0).unwrap();
+    let notes = slice_from(simfile, chart.note_data, chart.note_data_len);
+    let tags = find_chart_timing_tags_by_index(simfile, 0).unwrap();
+
+    let warps = parse_bpm_map(tag_str(simfile, tags.warps).unwrap().as_bytes()).unwrap();
+    let fakes = parse_bpm_map(tag_str(simfile, tags.fakes).unwrap().as_bytes()).unwrap();
+    let asm = count_timing_fakes_4(notes, &warps, &fakes).unwrap();
+
+    let timing = timing_data_from_chart_data(
+        0.0,
+        0.0,
+        tag_str(simfile, tags.bpms),
+        "0=120",
+        tag_str(simfile, tags.stops),
+        "",
+        tag_str(simfile, tags.delays),
+        "",
+        tag_str(simfile, tags.warps),
+        "",
+        tag_str(simfile, tags.speeds),
+        "",
+        tag_str(simfile, tags.scrolls),
+        "",
+        tag_str(simfile, tags.fakes),
+        "",
+        TimingFormat::Ssc,
+        false,
+    );
+    let rust = compute_timing_aware_stats(notes, 4, &timing);
+
+    assert_eq!(asm, u64::from(rust.fakes));
+    assert_eq!(asm, 4);
 }
