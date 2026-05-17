@@ -1,0 +1,17 @@
+[package]
+name = "asmssp"
+version = "0.1.0"
+edition = "2024"
+build = "build.rs"
+publish = false
+
+[lib]
+name = "asmssp"
+path = "src/lib.rs"
+
+[dependencies]
+
+[dev-dependencies]
+rssp-core = { path = "../rssp/crates/rssp-core" }
+
+[build-dependencies]
