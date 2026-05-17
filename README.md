@@ -49,13 +49,18 @@ The first implemented pieces are:
 - `assp_format_stream_segments`
 - `assp_count_note_stats_4`
 - `assp_count_mines_nonfake_4`
+- `assp_count_timing_fakes_4`
 
 `assp_count_note_stats_4` is an initial 4-panel note-data counter. It counts
 tap arrows, holds, rolls, mines, lifts, fakes, steps, jumps, hands, and per-lane
-arrow totals from a note-data byte slice. It does not yet do RSSP's full
-measure minimization or phantom-hold correction.
+arrow totals from a note-data byte slice. The standalone report feeds this
+counter with `assp_minimize_chart_4` output so note stats are based on
+RSSP-style minimized rows; phantom-hold correction is still not complete.
 `assp_count_mines_nonfake_4` minimizes 4-panel note data by measure, then
 counts mine rows outside parsed warp and fake timing ranges.
+`assp_count_timing_fakes_4` minimizes 4-panel note data by measure, then
+counts objects treated as fakes by warp/fake timing ranges, along with literal
+fake notes on judgable rows.
 `assp_measure_densities_4` counts per-measure step-row densities and matches
 RSSP's density output for the bundled SM and SSC fixtures.
 `assp_minimize_measure_4` applies RSSP's per-measure row reduction for 4-panel
@@ -156,7 +161,7 @@ metadata fields before chart rows are passed to the stat counter. Chart reports
 include RSSP-style chart hashes, normalized hash BPMs, peak NPS in thousandths,
 density-derived stream counts, fixed-point duration metrics with
 stops/delays/warps, token breakdowns, segment breakdowns, offset adjustment, and
-note stats.
+note stats with nonfake mine and timing-fake counts.
 
 Run the optional Rust parity tests:
 

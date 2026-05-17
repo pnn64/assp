@@ -3,6 +3,7 @@ default rel
 
 global assp_count_note_stats_4
 global assp_count_mines_nonfake_4
+global assp_count_timing_fakes_4
 
 extern assp_minimize_measure_4
 
@@ -496,4 +497,323 @@ beat_in_timing_range:
     ret
 .no:
     xor eax, eax
+    ret
+
+; rcx = note-data bytes, rdx = byte length, r8 = warp segments, r9 = warp count,
+; stack arg 5 = fake segments, arg 6 = fake count, arg 7 = row scratch,
+; arg 8 = scratch row cap. rax = timing-aware fake object count, or ASSP_NOT_FOUND.
+assp_count_timing_fakes_4:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+
+    mov r13, [rsp + 96]
+    mov r14, [rsp + 104]
+    mov r15, [rsp + 112]
+    mov r12, [rsp + 120]
+    sub rsp, 64
+
+    mov [rsp + 32], r8
+    mov [rsp + 40], r9
+    mov [rsp + 48], r13
+    mov [rsp + 56], r14
+    mov qword [rsp], 0
+    mov qword [rsp + 8], 0
+    mov qword [rsp + 16], 0
+    mov qword [rsp + 24], 0
+
+    test rdx, rdx
+    jz .success
+    test rcx, rcx
+    jz .invalid
+    test r9, r9
+    jz .check_fakes_ptr
+    test r8, r8
+    jz .invalid
+
+.check_fakes_ptr:
+    test r14, r14
+    jz .check_scratch_ptr
+    test r13, r13
+    jz .invalid
+
+.check_scratch_ptr:
+    test r12, r12
+    jz .invalid
+    test r15, r15
+    jz .invalid
+
+    mov rsi, rcx
+    lea rdi, [rcx + rdx]
+
+.line_loop:
+    cmp rsi, rdi
+    jae .eof
+
+    mov rbx, rsi
+.find_line_end:
+    cmp rbx, rdi
+    jae .line_end_found
+    cmp byte [rbx], 10
+    je .line_end_found
+    inc rbx
+    jmp .find_line_end
+
+.line_end_found:
+    mov r14, rbx
+    cmp r14, rdi
+    jae .trim_left
+    inc r14
+
+.trim_left:
+    cmp rsi, rbx
+    jae .line_done
+    mov al, [rsi]
+    cmp al, ' '
+    je .trim_advance
+    cmp al, 9
+    jb .line_start
+    cmp al, 13
+    jbe .trim_advance
+    jmp .line_start
+
+.trim_advance:
+    inc rsi
+    jmp .trim_left
+
+.line_start:
+    mov al, [rsi]
+    cmp al, '/'
+    je .line_done
+    cmp al, ','
+    je .comma
+    cmp al, ';'
+    je .semi
+
+    lea rax, [rsi + 4]
+    cmp rax, rbx
+    ja .line_done
+
+    mov rax, [rsp]
+    cmp rax, r12
+    jae .invalid
+    mov ecx, [rsi]
+    mov [r15 + rax * 4], ecx
+    inc qword [rsp]
+    jmp .line_done
+
+.comma:
+    call timing_fakes_finalize_measure
+    cmp qword [rsp + 24], 0
+    jne .invalid
+    inc qword [rsp + 16]
+    jmp .line_done
+
+.semi:
+    call timing_fakes_finalize_measure
+    cmp qword [rsp + 24], 0
+    jne .invalid
+    jmp .success
+
+.line_done:
+    mov rsi, r14
+    jmp .line_loop
+
+.eof:
+    call timing_fakes_finalize_measure
+    cmp qword [rsp + 24], 0
+    jne .invalid
+
+.success:
+    mov rax, [rsp + 8]
+    jmp .done
+
+.invalid:
+    mov rax, ASSP_NOT_FOUND
+
+.done:
+    add rsp, 64
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
+timing_fakes_finalize_measure:
+    sub rsp, 40
+    cmp qword [rsp + 48], 0
+    je .clear
+
+    mov rcx, r15
+    mov rdx, [rsp + 48]
+    mov r8, r15
+    mov r9, r12
+    call assp_minimize_measure_4
+
+    cmp rax, r12
+    ja .invalid
+    mov [rsp + 48], rax
+    test rax, rax
+    jz .clear
+
+    xor r13d, r13d
+.row_loop:
+    cmp r13, [rsp + 48]
+    jae .clear
+
+    mov rax, [rsp + 64]
+    imul rax, 4000
+    mov r8, rax
+    mov rax, r13
+    imul rax, 4000
+    xor edx, edx
+    div qword [rsp + 48]
+    add r8, rax
+
+    mov rcx, [rsp + 80]
+    mov rdx, [rsp + 88]
+    call beat_in_timing_range
+    test eax, eax
+    jnz .nonjudgable
+    mov rcx, [rsp + 96]
+    mov rdx, [rsp + 104]
+    call beat_in_timing_range
+    test eax, eax
+    jnz .nonjudgable
+
+    mov eax, [r15 + r13 * 4]
+    call row_literal_fake_count
+    add qword [rsp + 56], rax
+    jmp .next
+
+.nonjudgable:
+    mov eax, [r15 + r13 * 4]
+    call row_fake_object_count
+    add qword [rsp + 56], rax
+
+.next:
+    inc r13
+    jmp .row_loop
+
+.invalid:
+    mov qword [rsp + 72], ASSP_NOT_FOUND
+
+.clear:
+    mov qword [rsp + 48], 0
+    add rsp, 40
+    ret
+
+row_literal_fake_count:
+    xor ecx, ecx
+    cmp al, 'F'
+    je .lane0
+    cmp al, 'f'
+    jne .check1
+.lane0:
+    inc ecx
+.check1:
+    cmp ah, 'F'
+    je .lane1
+    cmp ah, 'f'
+    jne .check2
+.lane1:
+    inc ecx
+.check2:
+    shr eax, 16
+    cmp al, 'F'
+    je .lane2
+    cmp al, 'f'
+    jne .check3
+.lane2:
+    inc ecx
+.check3:
+    cmp ah, 'F'
+    je .lane3
+    cmp ah, 'f'
+    jne .done
+.lane3:
+    inc ecx
+.done:
+    mov eax, ecx
+    ret
+
+row_fake_object_count:
+    xor ecx, ecx
+    call fake_object_lane_low
+    cmp ah, '1'
+    je .lane1
+    cmp ah, '2'
+    je .lane1
+    cmp ah, '4'
+    je .lane1
+    cmp ah, 'M'
+    je .lane1
+    cmp ah, 'm'
+    je .lane1
+    cmp ah, 'L'
+    je .lane1
+    cmp ah, 'l'
+    je .lane1
+    cmp ah, 'F'
+    je .lane1
+    cmp ah, 'f'
+    jne .upper
+.lane1:
+    inc ecx
+.upper:
+    shr eax, 16
+    call fake_object_lane_low
+    cmp ah, '1'
+    je .lane3
+    cmp ah, '2'
+    je .lane3
+    cmp ah, '4'
+    je .lane3
+    cmp ah, 'M'
+    je .lane3
+    cmp ah, 'm'
+    je .lane3
+    cmp ah, 'L'
+    je .lane3
+    cmp ah, 'l'
+    je .lane3
+    cmp ah, 'F'
+    je .lane3
+    cmp ah, 'f'
+    jne .done
+.lane3:
+    inc ecx
+.done:
+    mov eax, ecx
+    ret
+
+fake_object_lane_low:
+    cmp al, '1'
+    je .yes
+    cmp al, '2'
+    je .yes
+    cmp al, '4'
+    je .yes
+    cmp al, 'M'
+    je .yes
+    cmp al, 'm'
+    je .yes
+    cmp al, 'L'
+    je .yes
+    cmp al, 'l'
+    je .yes
+    cmp al, 'F'
+    je .yes
+    cmp al, 'f'
+    jne .no
+.yes:
+    inc ecx
+.no:
     ret

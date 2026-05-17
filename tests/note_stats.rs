@@ -1,4 +1,7 @@
-use assp::{NoteStats, count_mines_nonfake_4, count_note_stats_4, parse_bpm_map};
+use assp::{
+    NoteStats, count_mines_nonfake_4, count_note_stats_4, count_note_stats_minimized_4,
+    count_timing_fakes_4, parse_bpm_map,
+};
 use rssp_core::bpm;
 
 #[test]
@@ -72,6 +75,35 @@ fn reports_short_nonempty_rows_as_malformed() {
 }
 
 #[test]
+fn counts_minimized_note_rows_when_requested() {
+    let raw = count_note_stats_4(
+        b"
+1000
+0000
+0100
+0000
+;
+",
+    )
+    .unwrap();
+    let minimized = count_note_stats_minimized_4(
+        b"
+1000
+0000
+0100
+0000
+;
+",
+    )
+    .unwrap();
+
+    assert_eq!(raw.rows, 4);
+    assert_eq!(minimized.rows, 2);
+    assert_eq!(minimized.steps, 2);
+    assert_eq!(minimized.arrows, 2);
+}
+
+#[test]
 fn counts_nonfake_mines_after_measure_minimization() {
     let data = b"
 1000
@@ -102,4 +134,25 @@ M000
         ))
     );
     assert_eq!(count_mines_nonfake_4(data, &asm_warps, &asm_fakes), Some(1));
+}
+
+#[test]
+fn counts_timing_fakes_after_measure_minimization() {
+    let data = b"
+1000
+0000
+M0F0
+0000
+,
+F000
+0000
+0010
+0000
+;
+";
+    let warps = parse_bpm_map(b"2=1").unwrap();
+    let fakes = parse_bpm_map(b"6=0.5").unwrap();
+
+    assert_eq!(count_timing_fakes_4(data, &[], &[]), Some(2));
+    assert_eq!(count_timing_fakes_4(data, &warps, &fakes), Some(4));
 }

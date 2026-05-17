@@ -14,6 +14,7 @@ extern WriteFile
 extern assp_chart_hash_pair
 extern assp_count_mines_nonfake_4
 extern assp_count_note_stats_4
+extern assp_count_timing_fakes_4
 extern assp_count_note_charts
 extern assp_find_chart_bpms_by_index
 extern assp_find_chart_by_index
@@ -110,6 +111,10 @@ start:
     jz fail_duration
 
     call prepare_mines_nonfake
+    test eax, eax
+    jz fail_stats
+
+    call prepare_timing_fakes
     test eax, eax
     jz fail_stats
 
@@ -800,6 +805,34 @@ prepare_mines_nonfake:
     add rsp, 72
     ret
 
+prepare_timing_fakes:
+    sub rsp, 72
+
+    mov rcx, [chart_info + ASSP_CHART_INFO_NOTES_PTR]
+    mov rdx, [chart_info + ASSP_CHART_INFO_NOTES_LEN]
+    lea r8, [warp_segment_buffer]
+    mov r9, [warp_segment_count]
+    lea rax, [fake_segment_buffer]
+    mov [rsp + 32], rax
+    mov rax, [fake_segment_count]
+    mov [rsp + 40], rax
+    lea rax, [row_scratch]
+    mov [rsp + 48], rax
+    mov qword [rsp + 56], ROW_SCRATCH_CAP
+    call assp_count_timing_fakes_4
+    cmp rax, ASSP_NOT_FOUND
+    je .fail
+    mov [timing_fakes], rax
+    mov eax, ASSP_TRUE
+    jmp .done
+
+.fail:
+    xor eax, eax
+
+.done:
+    add rsp, 72
+    ret
+
 prepare_offset:
     sub rsp, 56
 
@@ -1041,6 +1074,9 @@ print_report:
     call print_field
     lea rcx, [label_fakes]
     mov rdx, [note_stats + ASSP_NOTE_STATS_FAKES]
+    call print_field
+    lea rcx, [label_timing_fakes]
+    mov rdx, [timing_fakes]
     call print_field
     lea rcx, [label_left]
     mov rdx, [note_stats + ASSP_NOTE_STATS_LEFT]
@@ -1290,6 +1326,7 @@ label_mines db "mines: ", 0
 label_mines_nonfake db "mines_nonfake: ", 0
 label_lifts db "lifts: ", 0
 label_fakes db "fakes: ", 0
+label_timing_fakes db "timing_fakes: ", 0
 label_left db "left: ", 0
 label_down db "down: ", 0
 label_up db "up: ", 0
@@ -1333,6 +1370,7 @@ peak_nps_milli resq 1
 last_beat_milli resq 1
 offset_ms resq 1
 mines_nonfake resq 1
+timing_fakes resq 1
 chart_has_own_timing resq 1
 duration_ms resq 1
 hash_pair resb 32

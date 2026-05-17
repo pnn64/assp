@@ -291,6 +291,16 @@ size_t assp_count_mines_nonfake_4(
     uint8_t *row_scratch,
     size_t scratch_row_cap
 );
+size_t assp_count_timing_fakes_4(
+    const uint8_t *data,
+    size_t len,
+    const assp_bpm_segment *warps,
+    size_t warp_len,
+    const assp_bpm_segment *fakes,
+    size_t fake_len,
+    uint8_t *row_scratch,
+    size_t scratch_row_cap
+);
 
 #ifdef __cplusplus
 }

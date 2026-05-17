@@ -1,14 +1,20 @@
-use assp::{NoteStats, count_note_stats_4, find_chart_by_index};
+use assp::{NoteStats, count_note_stats_minimized_4, find_chart_by_index};
 use rssp_core::stats::minimize_chart_and_count_with_lanes;
 
+fn minimized_row_count(data: &[u8]) -> u64 {
+    data.split(|&b| b == b'\n')
+        .filter(|line| line.len() >= 4 && line[0] != b',' && line[0] != b';')
+        .count() as u64
+}
+
 fn assert_stats_match_rssp(data: &[u8]) {
-    let asm = count_note_stats_4(data).unwrap();
-    let (_, rust, _) = minimize_chart_and_count_with_lanes(data, 4);
+    let asm = count_note_stats_minimized_4(data).unwrap();
+    let (minimized, rust, _) = minimize_chart_and_count_with_lanes(data, 4);
 
     assert_eq!(
         asm,
         NoteStats {
-            rows: asm.rows,
+            rows: minimized_row_count(&minimized),
             steps: u64::from(rust.total_steps),
             arrows: u64::from(rust.total_arrows),
             jumps: u64::from(rust.jumps),
