@@ -96,7 +96,9 @@ measure durations when stops, delays, or warps are present.
 BPM, stop, delay, and warp event ordering.
 The standalone timing path applies RSSP's chart-local timing ownership rule:
 when an SSC chart defines any local timing tag or offset, global timing maps are
-not mixed into that chart's duration/NPS timing context.
+not mixed into that chart's duration/NPS timing context. Chart-local
+`#TIMESIGNATURES:`, `#LABELS:`, `#TICKCOUNTS:`, and `#COMBOS:` tags also mark
+the chart as owning timing, matching RSSP's timing-data ownership check.
 `assp_stream_counts_from_densities` classifies 16th/20th/24th/32nd stream
 measures, SN breaks, and total break measures from those densities.
 `assp_stream_segments_from_densities` emits stream and break ranges from the
@@ -161,6 +163,12 @@ Run the timing-fake fixture:
 
 ```powershell
 .\assp\target\assp.exe .\assp\fixtures\timing_fakes.ssc 0
+```
+
+Run the metadata-owned timing fixture:
+
+```powershell
+.\assp\target\assp.exe .\assp\fixtures\chart_own_metadata_timing.ssc 0
 ```
 
 The standalone executable currently scans SSC files for chart metadata and

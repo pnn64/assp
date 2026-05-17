@@ -241,6 +241,14 @@ fn finds_chart_local_timing_tag() {
 }
 
 #[test]
+fn finds_chart_metadata_timing_ownership_tag() {
+    let data = include_bytes!("../fixtures/chart_own_metadata_timing.ssc");
+    let labels = find_chart_tag_by_index(data, 0, b"#LABELS:").unwrap();
+
+    assert_eq!(slice(data, labels.data, labels.len), b"0.000=local");
+}
+
+#[test]
 fn finds_chart_local_timing_tags() {
     let data = b"#BPMS:0.000=140.000;
 #STOPS:64.000=1.000;
