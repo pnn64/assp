@@ -20,6 +20,8 @@ The first implemented pieces are:
 
 - `asmssp_version`
 - `asmssp_find_byte`
+- `asmssp_count_note_charts`
+- `asmssp_find_chart_by_index`
 - `asmssp_count_note_stats_4`
 
 `asmssp_count_note_stats_4` is an initial 4-panel note-data counter. It counts
@@ -76,9 +78,9 @@ Run the built executable directly against any `.sm` or `.ssc` file:
 .\asmssp\target\asmssp.exe .\asmssp\fixtures\camellia_mix.ssc 4
 ```
 
-The standalone executable currently scans SSC files for `#NOTES:` tags and
-uses the second argument as a zero-based chart index, or `list` to print chart
-indexes.
+The standalone executable currently scans SSC files for chart metadata and
+`#NOTES:` tags. The second argument is a zero-based chart index, or `list` to
+print chart indexes with step type, difficulty, meter, and description.
 
 Run the optional Rust parity tests:
 

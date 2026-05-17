@@ -3,6 +3,7 @@ default rel
 
 global asmssp_count_note_charts
 global asmssp_find_notes_by_index
+global asmssp_find_chart_by_index
 
 section .text
 
@@ -26,6 +27,51 @@ section .text
 %%no:
     xor eax, eax
 %%done:
+%endmacro
+
+%macro is_notedata_tag 1
+    cmp byte [%1 + 0], '#'
+    jne %%no
+    cmp byte [%1 + 1], 'N'
+    jne %%no
+    cmp byte [%1 + 2], 'O'
+    jne %%no
+    cmp byte [%1 + 3], 'T'
+    jne %%no
+    cmp byte [%1 + 4], 'E'
+    jne %%no
+    cmp byte [%1 + 5], 'D'
+    jne %%no
+    cmp byte [%1 + 6], 'A'
+    jne %%no
+    cmp byte [%1 + 7], 'T'
+    jne %%no
+    cmp byte [%1 + 8], 'A'
+    jne %%no
+    cmp byte [%1 + 9], ':'
+    jne %%no
+    mov eax, ASMSSP_TRUE
+    jmp %%done
+%%no:
+    xor eax, eax
+%%done:
+%endmacro
+
+%macro store_tag 3
+    lea rax, [r10 + %1]
+    mov rdx, rax
+%%find_end:
+    cmp rdx, r11
+    jae .meta_next
+    cmp byte [rdx], ';'
+    je %%found_end
+    inc rdx
+    jmp %%find_end
+%%found_end:
+    mov [rbx + %2], rax
+    sub rdx, rax
+    mov [rbx + %3], rdx
+    jmp .meta_next
 %endmacro
 
 ; rcx = simfile bytes, rdx = len.
@@ -125,3 +171,223 @@ asmssp_find_notes_by_index:
     xor eax, eax
     ret
 
+; rcx = simfile bytes, rdx = len, r8 = chart index, r9 = out asmssp_chart_info.
+; eax = 1 when found, 0 otherwise.
+asmssp_find_chart_by_index:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+
+    test rcx, rcx
+    jz .fail
+    test r9, r9
+    jz .fail
+    cmp rdx, 7
+    jb .fail
+
+    mov rbx, r9
+    xor eax, eax
+    mov r10d, ASMSSP_CHART_INFO_SIZE / 8
+    mov r11, rbx
+
+.zero:
+    mov [r11], rax
+    add r11, 8
+    dec r10d
+    jnz .zero
+
+    mov [rbx + ASMSSP_CHART_INFO_INDEX], r8
+    mov rsi, rcx
+    mov rdi, rcx
+    lea r12, [rcx + rdx]
+    mov r13, r8
+    xor r14d, r14d
+    mov r15, rcx
+
+.scan:
+    lea rax, [rdi + 10]
+    cmp rax, r12
+    ja .fail
+
+    is_notedata_tag rdi
+    test eax, eax
+    jz .check_notes
+    mov r15, rdi
+    add rdi, 10
+    jmp .scan
+
+.check_notes:
+    lea rax, [rdi + 7]
+    cmp rax, r12
+    ja .fail
+    is_notes_tag rdi
+    test eax, eax
+    jz .next
+
+    cmp r14, r13
+    je .found
+    inc r14
+    add rdi, 7
+    jmp .scan
+
+.next:
+    inc rdi
+    jmp .scan
+
+.found:
+    lea rax, [rdi + 7]
+    mov rdx, rax
+
+.find_notes_end:
+    cmp rdx, r12
+    jae .fail
+    cmp byte [rdx], ';'
+    je .store_notes
+    inc rdx
+    jmp .find_notes_end
+
+.store_notes:
+    inc rdx
+    mov [rbx + ASMSSP_CHART_INFO_NOTES_PTR], rax
+    sub rdx, rax
+    mov [rbx + ASMSSP_CHART_INFO_NOTES_LEN], rdx
+
+    mov r10, r15
+    mov r11, rdi
+    call parse_chart_meta
+
+    mov eax, ASMSSP_TRUE
+    jmp .done
+
+.fail:
+    xor eax, eax
+
+.done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
+; r10 = metadata scan start, r11 = metadata end, rbx = asmssp_chart_info.
+parse_chart_meta:
+.meta_loop:
+    cmp r10, r11
+    jae .done
+    cmp byte [r10], '#'
+    jne .meta_next
+
+    lea rax, [r10 + 13]
+    cmp rax, r11
+    ja .check_difficulty
+    cmp byte [r10 + 1], 'D'
+    jne .check_difficulty
+    cmp byte [r10 + 2], 'E'
+    jne .check_difficulty
+    cmp byte [r10 + 3], 'S'
+    jne .check_difficulty
+    cmp byte [r10 + 4], 'C'
+    jne .check_difficulty
+    cmp byte [r10 + 5], 'R'
+    jne .check_difficulty
+    cmp byte [r10 + 6], 'I'
+    jne .check_difficulty
+    cmp byte [r10 + 7], 'P'
+    jne .check_difficulty
+    cmp byte [r10 + 8], 'T'
+    jne .check_difficulty
+    cmp byte [r10 + 9], 'I'
+    jne .check_difficulty
+    cmp byte [r10 + 10], 'O'
+    jne .check_difficulty
+    cmp byte [r10 + 11], 'N'
+    jne .check_difficulty
+    cmp byte [r10 + 12], ':'
+    jne .check_difficulty
+    store_tag 13, ASMSSP_CHART_INFO_DESC_PTR, ASMSSP_CHART_INFO_DESC_LEN
+
+.check_difficulty:
+    lea rax, [r10 + 12]
+    cmp rax, r11
+    ja .check_step_type
+    cmp byte [r10 + 1], 'D'
+    jne .check_step_type
+    cmp byte [r10 + 2], 'I'
+    jne .check_step_type
+    cmp byte [r10 + 3], 'F'
+    jne .check_step_type
+    cmp byte [r10 + 4], 'F'
+    jne .check_step_type
+    cmp byte [r10 + 5], 'I'
+    jne .check_step_type
+    cmp byte [r10 + 6], 'C'
+    jne .check_step_type
+    cmp byte [r10 + 7], 'U'
+    jne .check_step_type
+    cmp byte [r10 + 8], 'L'
+    jne .check_step_type
+    cmp byte [r10 + 9], 'T'
+    jne .check_step_type
+    cmp byte [r10 + 10], 'Y'
+    jne .check_step_type
+    cmp byte [r10 + 11], ':'
+    jne .check_step_type
+    store_tag 12, ASMSSP_CHART_INFO_DIFFICULTY_PTR, ASMSSP_CHART_INFO_DIFFICULTY_LEN
+
+.check_step_type:
+    lea rax, [r10 + 11]
+    cmp rax, r11
+    ja .check_meter
+    cmp byte [r10 + 1], 'S'
+    jne .check_meter
+    cmp byte [r10 + 2], 'T'
+    jne .check_meter
+    cmp byte [r10 + 3], 'E'
+    jne .check_meter
+    cmp byte [r10 + 4], 'P'
+    jne .check_meter
+    cmp byte [r10 + 5], 'S'
+    jne .check_meter
+    cmp byte [r10 + 6], 'T'
+    jne .check_meter
+    cmp byte [r10 + 7], 'Y'
+    jne .check_meter
+    cmp byte [r10 + 8], 'P'
+    jne .check_meter
+    cmp byte [r10 + 9], 'E'
+    jne .check_meter
+    cmp byte [r10 + 10], ':'
+    jne .check_meter
+    store_tag 11, ASMSSP_CHART_INFO_STEP_TYPE_PTR, ASMSSP_CHART_INFO_STEP_TYPE_LEN
+
+.check_meter:
+    lea rax, [r10 + 7]
+    cmp rax, r11
+    ja .meta_next
+    cmp byte [r10 + 1], 'M'
+    jne .meta_next
+    cmp byte [r10 + 2], 'E'
+    jne .meta_next
+    cmp byte [r10 + 3], 'T'
+    jne .meta_next
+    cmp byte [r10 + 4], 'E'
+    jne .meta_next
+    cmp byte [r10 + 5], 'R'
+    jne .meta_next
+    cmp byte [r10 + 6], ':'
+    jne .meta_next
+    store_tag 7, ASMSSP_CHART_INFO_METER_PTR, ASMSSP_CHART_INFO_METER_LEN
+
+.meta_next:
+    inc r10
+    jmp .meta_loop
+
+.done:
+    ret

@@ -34,6 +34,20 @@ typedef struct asmssp_chart_ref {
     size_t index;
 } asmssp_chart_ref;
 
+typedef struct asmssp_chart_info {
+    const uint8_t *note_data;
+    size_t note_data_len;
+    size_t index;
+    const uint8_t *step_type;
+    size_t step_type_len;
+    const uint8_t *description;
+    size_t description_len;
+    const uint8_t *difficulty;
+    size_t difficulty_len;
+    const uint8_t *meter;
+    size_t meter_len;
+} asmssp_chart_info;
+
 uint32_t asmssp_version(void);
 size_t asmssp_find_byte(const uint8_t *data, size_t len, uint32_t byte);
 size_t asmssp_count_note_charts(const uint8_t *data, size_t len);
@@ -42,6 +56,12 @@ int32_t asmssp_find_notes_by_index(
     size_t len,
     size_t index,
     asmssp_chart_ref *out
+);
+int32_t asmssp_find_chart_by_index(
+    const uint8_t *data,
+    size_t len,
+    size_t index,
+    asmssp_chart_info *out
 );
 int32_t asmssp_count_note_stats_4(
     const uint8_t *data,

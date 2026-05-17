@@ -13,7 +13,7 @@ extern WriteFile
 
 extern asmssp_count_note_stats_4
 extern asmssp_count_note_charts
-extern asmssp_find_notes_by_index
+extern asmssp_find_chart_by_index
 
 global start
 
@@ -41,13 +41,13 @@ start:
     lea rcx, [file_buffer]
     mov rdx, [file_len]
     mov r8, [chart_index]
-    lea r9, [chart_ref]
-    call asmssp_find_notes_by_index
+    lea r9, [chart_info]
+    call asmssp_find_chart_by_index
     test eax, eax
     jz fail_notes
 
-    mov rcx, [chart_ref + ASMSSP_CHART_REF_NOTES_PTR]
-    mov rdx, [chart_ref + ASMSSP_CHART_REF_NOTES_LEN]
+    mov rcx, [chart_info + ASMSSP_CHART_INFO_NOTES_PTR]
+    mov rdx, [chart_info + ASMSSP_CHART_INFO_NOTES_LEN]
     lea r8, [note_stats]
     call asmssp_count_note_stats_4
     test eax, eax
@@ -302,9 +302,14 @@ print_chart_list:
 .list_loop:
     cmp r12, [chart_count]
     jae .done
-    lea rcx, [label_chart]
-    mov rdx, r12
-    call print_field
+    lea rcx, [file_buffer]
+    mov rdx, [file_len]
+    mov r8, r12
+    lea r9, [chart_info]
+    call asmssp_find_chart_by_index
+    test eax, eax
+    jz .done
+    call print_chart_line
     inc r12
     jmp .list_loop
 
@@ -328,6 +333,22 @@ print_report:
     lea rcx, [label_chart]
     mov rdx, [chart_index]
     call print_field
+    lea rcx, [label_step_type]
+    mov rdx, [chart_info + ASMSSP_CHART_INFO_STEP_TYPE_PTR]
+    mov r8, [chart_info + ASMSSP_CHART_INFO_STEP_TYPE_LEN]
+    call print_slice_field
+    lea rcx, [label_difficulty]
+    mov rdx, [chart_info + ASMSSP_CHART_INFO_DIFFICULTY_PTR]
+    mov r8, [chart_info + ASMSSP_CHART_INFO_DIFFICULTY_LEN]
+    call print_slice_field
+    lea rcx, [label_meter]
+    mov rdx, [chart_info + ASMSSP_CHART_INFO_METER_PTR]
+    mov r8, [chart_info + ASMSSP_CHART_INFO_METER_LEN]
+    call print_slice_field
+    lea rcx, [label_description]
+    mov rdx, [chart_info + ASMSSP_CHART_INFO_DESC_PTR]
+    mov r8, [chart_info + ASMSSP_CHART_INFO_DESC_LEN]
+    call print_slice_field
     lea rcx, [label_rows]
     mov rdx, [note_stats + ASMSSP_NOTE_STATS_ROWS]
     call print_field
@@ -377,6 +398,37 @@ print_report:
     add rsp, 40
     ret
 
+print_chart_line:
+    sub rsp, 40
+    lea rcx, [label_chart]
+    call print_z
+    mov rcx, [chart_info + ASMSSP_CHART_INFO_INDEX]
+    call print_u64
+    lea rcx, [space]
+    call print_z
+    mov rcx, [chart_info + ASMSSP_CHART_INFO_STEP_TYPE_PTR]
+    mov rdx, [chart_info + ASMSSP_CHART_INFO_STEP_TYPE_LEN]
+    call print_raw
+    lea rcx, [space]
+    call print_z
+    mov rcx, [chart_info + ASMSSP_CHART_INFO_DIFFICULTY_PTR]
+    mov rdx, [chart_info + ASMSSP_CHART_INFO_DIFFICULTY_LEN]
+    call print_raw
+    lea rcx, [space]
+    call print_z
+    mov rcx, [chart_info + ASMSSP_CHART_INFO_METER_PTR]
+    mov rdx, [chart_info + ASMSSP_CHART_INFO_METER_LEN]
+    call print_raw
+    lea rcx, [space]
+    call print_z
+    mov rcx, [chart_info + ASMSSP_CHART_INFO_DESC_PTR]
+    mov rdx, [chart_info + ASMSSP_CHART_INFO_DESC_LEN]
+    call print_raw
+    lea rcx, [newline]
+    call print_z
+    add rsp, 40
+    ret
+
 print_field:
     sub rsp, 56
     mov [rsp + 32], rdx
@@ -386,6 +438,19 @@ print_field:
     lea rcx, [newline]
     call print_z
     add rsp, 56
+    ret
+
+print_slice_field:
+    sub rsp, 72
+    mov [rsp + 32], rdx
+    mov [rsp + 40], r8
+    call print_z
+    mov rcx, [rsp + 32]
+    mov rdx, [rsp + 40]
+    call print_raw
+    lea rcx, [newline]
+    call print_z
+    add rsp, 72
     ret
 
 print_u64:
@@ -454,6 +519,10 @@ msg_stats_fail db "assembly note stat counter failed", 13, 10, 0
 label_file db "file: ", 0
 label_charts db "charts: ", 0
 label_chart db "chart: ", 0
+label_step_type db "step_type: ", 0
+label_difficulty db "difficulty: ", 0
+label_meter db "meter: ", 0
+label_description db "description: ", 0
 label_rows db "rows: ", 0
 label_steps db "steps: ", 0
 label_arrows db "arrows: ", 0
@@ -469,6 +538,7 @@ label_down db "down: ", 0
 label_up db "up: ", 0
 label_right db "right: ", 0
 label_bad_rows db "malformed_rows: ", 0
+space db " ", 0
 newline db 13, 10, 0
 
 section .bss
@@ -483,7 +553,7 @@ file_handle resq 1
 file_size resq 1
 file_len resq 1
 file_bytes_read resd 1
-chart_ref resb ASMSSP_CHART_REF_SIZE
+chart_info resb ASMSSP_CHART_INFO_SIZE
 note_stats resb ASMSSP_NOTE_STATS_SIZE
 num_buffer resb 32
 file_buffer resb FILE_BUFFER_CAP

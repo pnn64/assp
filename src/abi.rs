@@ -30,6 +30,22 @@ pub struct ChartRef {
     pub index: usize,
 }
 
+#[repr(C)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct ChartInfo {
+    pub note_data: *const u8,
+    pub note_data_len: usize,
+    pub index: usize,
+    pub step_type: *const u8,
+    pub step_type_len: usize,
+    pub description: *const u8,
+    pub description_len: usize,
+    pub difficulty: *const u8,
+    pub difficulty_len: usize,
+    pub meter: *const u8,
+    pub meter_len: usize,
+}
+
 unsafe extern "C" {
     fn asmssp_version() -> u32;
     fn asmssp_find_byte(data: *const u8, len: usize, byte: u32) -> usize;
@@ -39,6 +55,12 @@ unsafe extern "C" {
         len: usize,
         index: usize,
         out: *mut ChartRef,
+    ) -> c_int;
+    fn asmssp_find_chart_by_index(
+        data: *const u8,
+        len: usize,
+        index: usize,
+        out: *mut ChartInfo,
     ) -> c_int;
     fn asmssp_count_note_stats_4(data: *const u8, len: usize, out: *mut NoteStats) -> c_int;
 }
@@ -67,6 +89,13 @@ pub fn find_notes_by_index(data: &[u8], index: usize) -> Option<ChartRef> {
 }
 
 #[must_use]
+pub fn find_chart_by_index(data: &[u8], index: usize) -> Option<ChartInfo> {
+    let mut chart = ChartInfo::default();
+    let ok = unsafe { asmssp_find_chart_by_index(data.as_ptr(), data.len(), index, &mut chart) };
+    (ok != 0).then_some(chart)
+}
+
+#[must_use]
 pub fn count_note_stats_4(data: &[u8]) -> Option<NoteStats> {
     let mut stats = NoteStats::default();
     let ok = unsafe { asmssp_count_note_stats_4(data.as_ptr(), data.len(), &mut stats) };
@@ -87,5 +116,11 @@ mod tests {
     fn chart_ref_layout_is_c_abi() {
         assert_eq!(std::mem::size_of::<super::ChartRef>(), 24);
         assert_eq!(std::mem::align_of::<super::ChartRef>(), 8);
+    }
+
+    #[test]
+    fn chart_info_layout_is_c_abi() {
+        assert_eq!(std::mem::size_of::<super::ChartInfo>(), 88);
+        assert_eq!(std::mem::align_of::<super::ChartInfo>(), 8);
     }
 }
