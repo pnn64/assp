@@ -121,6 +121,13 @@ unsafe extern "C" {
         row_scratch: *mut u8,
         row_scratch_cap: usize,
     ) -> usize;
+    fn assp_sha1_short_hex2(
+        first: *const u8,
+        first_len: usize,
+        second: *const u8,
+        second_len: usize,
+        out16: *mut u8,
+    ) -> c_int;
     fn assp_stream_counts_from_densities(
         densities: *const u32,
         len: usize,
@@ -249,6 +256,21 @@ pub fn minimize_chart_4(data: &[u8]) -> Option<Vec<u8>> {
         )
     };
     (count != NOT_FOUND).then_some(out)
+}
+
+#[must_use]
+pub fn sha1_short_hex2(first: &[u8], second: &[u8]) -> Option<[u8; 16]> {
+    let mut out = [0; 16];
+    let ok = unsafe {
+        assp_sha1_short_hex2(
+            first.as_ptr(),
+            first.len(),
+            second.as_ptr(),
+            second.len(),
+            out.as_mut_ptr(),
+        )
+    };
+    (ok != 0).then_some(out)
 }
 
 #[must_use]

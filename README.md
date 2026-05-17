@@ -25,6 +25,7 @@ The first implemented pieces are:
 - `assp_measure_densities_4`
 - `assp_minimize_measure_4`
 - `assp_minimize_chart_4`
+- `assp_sha1_short_hex2`
 - `assp_stream_counts_from_densities`
 - `assp_stream_segments_from_densities`
 - `assp_stream_tokens_from_densities`
@@ -42,6 +43,8 @@ RSSP's density output for the bundled SM and SSC fixtures.
 charts, which is the first piece of the minimized-note/hash pipeline.
 `assp_minimize_chart_4` emits RSSP-style minimized 4-panel note data using
 caller-provided scratch storage.
+`assp_sha1_short_hex2` computes RSSP's short lowercase SHA1 hex string for two
+concatenated byte slices, used by chart hashing.
 `assp_stream_counts_from_densities` classifies 16th/20th/24th/32nd stream
 measures, SN breaks, and total break measures from those densities.
 `assp_stream_segments_from_densities` emits stream and break ranges from the

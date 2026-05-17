@@ -111,6 +111,13 @@ size_t assp_minimize_chart_4(
     uint8_t *row_scratch,
     size_t row_scratch_cap
 );
+int32_t assp_sha1_short_hex2(
+    const uint8_t *first,
+    size_t first_len,
+    const uint8_t *second,
+    size_t second_len,
+    uint8_t *out16
+);
 int32_t assp_stream_counts_from_densities(
     const uint32_t *densities,
     size_t len,
