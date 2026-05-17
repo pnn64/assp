@@ -44,6 +44,13 @@ pub struct ChartRef {
 
 #[repr(C)]
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct ByteSlice {
+    pub data: *const u8,
+    pub len: usize,
+}
+
+#[repr(C)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct ChartInfo {
     pub note_data: *const u8,
     pub note_data_len: usize,
@@ -101,6 +108,19 @@ unsafe extern "C" {
         index: usize,
         out: *mut ChartInfo,
     ) -> c_int;
+    fn assp_find_global_bpms(data: *const u8, len: usize, out: *mut ByteSlice) -> c_int;
+    fn assp_find_chart_bpms_by_index(
+        data: *const u8,
+        len: usize,
+        index: usize,
+        out: *mut ByteSlice,
+    ) -> c_int;
+    fn assp_normalize_float_digits(
+        data: *const u8,
+        len: usize,
+        out: *mut u8,
+        out_cap: usize,
+    ) -> usize;
     fn assp_measure_densities_4(
         data: *const u8,
         len: usize,
@@ -197,6 +217,45 @@ pub fn find_chart_by_index(data: &[u8], index: usize) -> Option<ChartInfo> {
     let mut chart = ChartInfo::default();
     let ok = unsafe { assp_find_chart_by_index(data.as_ptr(), data.len(), index, &mut chart) };
     (ok != 0).then_some(chart)
+}
+
+#[must_use]
+pub fn find_global_bpms(data: &[u8]) -> Option<ByteSlice> {
+    let mut slice = ByteSlice::default();
+    let ok = unsafe { assp_find_global_bpms(data.as_ptr(), data.len(), &mut slice) };
+    (ok != 0).then_some(slice)
+}
+
+#[must_use]
+pub fn find_chart_bpms_by_index(data: &[u8], index: usize) -> Option<ByteSlice> {
+    let mut slice = ByteSlice::default();
+    let ok = unsafe { assp_find_chart_bpms_by_index(data.as_ptr(), data.len(), index, &mut slice) };
+    (ok != 0).then_some(slice)
+}
+
+#[must_use]
+pub fn find_bpms_for_chart(data: &[u8], index: usize) -> Option<ByteSlice> {
+    find_chart_bpms_by_index(data, index).or_else(|| find_global_bpms(data))
+}
+
+#[must_use]
+pub fn normalize_float_digits(data: &[u8]) -> Option<Vec<u8>> {
+    let count =
+        unsafe { assp_normalize_float_digits(data.as_ptr(), data.len(), std::ptr::null_mut(), 0) };
+    if count == NOT_FOUND {
+        return None;
+    }
+
+    let mut out = vec![0; count];
+    if count != 0 {
+        let written = unsafe {
+            assp_normalize_float_digits(data.as_ptr(), data.len(), out.as_mut_ptr(), out.len())
+        };
+        if written == NOT_FOUND {
+            return None;
+        }
+    }
+    Some(out)
 }
 
 #[must_use]
@@ -426,6 +485,12 @@ mod tests {
     fn chart_ref_layout_is_c_abi() {
         assert_eq!(std::mem::size_of::<super::ChartRef>(), 24);
         assert_eq!(std::mem::align_of::<super::ChartRef>(), 8);
+    }
+
+    #[test]
+    fn byte_slice_layout_is_c_abi() {
+        assert_eq!(std::mem::size_of::<super::ByteSlice>(), 16);
+        assert_eq!(std::mem::align_of::<super::ByteSlice>(), 8);
     }
 
     #[test]

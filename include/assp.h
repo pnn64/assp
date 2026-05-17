@@ -41,6 +41,11 @@ typedef struct assp_chart_ref {
     size_t index;
 } assp_chart_ref;
 
+typedef struct assp_byte_slice {
+    const uint8_t *data;
+    size_t len;
+} assp_byte_slice;
+
 typedef struct assp_chart_info {
     const uint8_t *note_data;
     size_t note_data_len;
@@ -90,6 +95,23 @@ int32_t assp_find_chart_by_index(
     size_t len,
     size_t index,
     assp_chart_info *out
+);
+int32_t assp_find_global_bpms(
+    const uint8_t *data,
+    size_t len,
+    assp_byte_slice *out
+);
+int32_t assp_find_chart_bpms_by_index(
+    const uint8_t *data,
+    size_t len,
+    size_t index,
+    assp_byte_slice *out
+);
+size_t assp_normalize_float_digits(
+    const uint8_t *data,
+    size_t len,
+    uint8_t *out,
+    size_t out_cap
 );
 size_t assp_measure_densities_4(
     const uint8_t *data,

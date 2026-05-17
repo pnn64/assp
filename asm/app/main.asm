@@ -11,10 +11,15 @@ extern GetStdHandle
 extern ReadFile
 extern WriteFile
 
+extern assp_chart_hash_pair
 extern assp_count_note_stats_4
 extern assp_count_note_charts
+extern assp_find_chart_bpms_by_index
 extern assp_find_chart_by_index
+extern assp_find_global_bpms
 extern assp_measure_densities_4
+extern assp_minimize_chart_4
+extern assp_normalize_float_digits
 extern assp_stream_counts_from_densities
 extern assp_stream_segments_from_densities
 extern assp_stream_tokens_from_densities
@@ -26,6 +31,9 @@ global start
 %define FILE_BUFFER_CAP 8388608
 %define DENSITY_CAP 131072
 %define TEXT_BUFFER_CAP 1048576
+%define BPM_BUFFER_CAP 65536
+%define MINIMIZED_BUFFER_CAP 2097152
+%define ROW_SCRATCH_CAP 262144
 
 section .text
 
@@ -53,6 +61,10 @@ start:
     call assp_find_chart_by_index
     test eax, eax
     jz fail_notes
+
+    call prepare_hash
+    test eax, eax
+    jz fail_hash
 
     mov rcx, [chart_info + ASSP_CHART_INFO_NOTES_PTR]
     mov rdx, [chart_info + ASSP_CHART_INFO_NOTES_LEN]
@@ -137,6 +149,12 @@ fail_stats:
 
 fail_density:
     lea rcx, [msg_density_fail]
+    call print_z
+    mov ecx, 1
+    call ExitProcess
+
+fail_hash:
+    lea rcx, [msg_hash_fail]
     call print_z
     mov ecx, 1
     call ExitProcess
@@ -384,6 +402,91 @@ print_chart_list:
     pop r12
     ret
 
+prepare_hash:
+    sub rsp, 56
+
+    mov qword [bpms_slice + ASSP_BYTE_SLICE_PTR], 0
+    mov qword [bpms_slice + ASSP_BYTE_SLICE_LEN], 0
+
+    lea rcx, [file_buffer]
+    mov rdx, [file_len]
+    mov r8, [chart_index]
+    lea r9, [bpms_slice]
+    call assp_find_chart_bpms_by_index
+    test eax, eax
+    jnz .normalize_bpms
+
+    lea rcx, [file_buffer]
+    mov rdx, [file_len]
+    lea r8, [bpms_slice]
+    call assp_find_global_bpms
+    test eax, eax
+    jnz .normalize_bpms
+
+    mov qword [normalized_bpms_len], 0
+    jmp .measure_minimized
+
+.normalize_bpms:
+    mov rcx, [bpms_slice + ASSP_BYTE_SLICE_PTR]
+    mov rdx, [bpms_slice + ASSP_BYTE_SLICE_LEN]
+    lea r8, [bpm_buffer]
+    mov r9d, BPM_BUFFER_CAP
+    call assp_normalize_float_digits
+    cmp rax, ASSP_NOT_FOUND
+    je .fail
+    cmp rax, BPM_BUFFER_CAP
+    ja .fail
+    mov [normalized_bpms_len], rax
+
+.measure_minimized:
+    mov rcx, [chart_info + ASSP_CHART_INFO_NOTES_PTR]
+    mov rdx, [chart_info + ASSP_CHART_INFO_NOTES_LEN]
+    xor r8d, r8d
+    xor r9d, r9d
+    lea rax, [row_scratch]
+    mov [rsp + 32], rax
+    mov qword [rsp + 40], ROW_SCRATCH_CAP
+    call assp_minimize_chart_4
+    cmp rax, ASSP_NOT_FOUND
+    je .fail
+    cmp rax, MINIMIZED_BUFFER_CAP
+    ja .fail
+    mov [minimized_chart_len], rax
+
+    mov rcx, [chart_info + ASSP_CHART_INFO_NOTES_PTR]
+    mov rdx, [chart_info + ASSP_CHART_INFO_NOTES_LEN]
+    lea r8, [minimized_buffer]
+    mov r9d, MINIMIZED_BUFFER_CAP
+    lea rax, [row_scratch]
+    mov [rsp + 32], rax
+    mov qword [rsp + 40], ROW_SCRATCH_CAP
+    call assp_minimize_chart_4
+    cmp rax, ASSP_NOT_FOUND
+    je .fail
+    cmp rax, MINIMIZED_BUFFER_CAP
+    ja .fail
+    mov [minimized_chart_len], rax
+
+    lea rcx, [minimized_buffer]
+    mov rdx, rax
+    lea r8, [bpm_buffer]
+    mov r9, [normalized_bpms_len]
+    lea rax, [hash_pair]
+    mov [rsp + 32], rax
+    call assp_chart_hash_pair
+    test eax, eax
+    jz .fail
+
+    mov eax, ASSP_TRUE
+    jmp .done
+
+.fail:
+    xor eax, eax
+
+.done:
+    add rsp, 56
+    ret
+
 print_report:
     sub rsp, 40
 
@@ -414,6 +517,18 @@ print_report:
     lea rcx, [label_description]
     mov rdx, [chart_info + ASSP_CHART_INFO_DESC_PTR]
     mov r8, [chart_info + ASSP_CHART_INFO_DESC_LEN]
+    call print_slice_field
+    lea rcx, [label_hash]
+    lea rdx, [hash_pair]
+    mov r8d, 16
+    call print_slice_field
+    lea rcx, [label_bpm_neutral_hash]
+    lea rdx, [hash_pair + 16]
+    mov r8d, 16
+    call print_slice_field
+    lea rcx, [label_hash_bpms]
+    lea rdx, [bpm_buffer]
+    mov r8, [normalized_bpms_len]
     call print_slice_field
     lea rcx, [label_measures]
     mov rdx, [measure_count]
@@ -695,6 +810,7 @@ msg_read_fail db "failed to read input file", 13, 10, 0
 msg_notes_fail db "failed to find selected #NOTES chart", 13, 10, 0
 msg_stats_fail db "assembly note stat counter failed", 13, 10, 0
 msg_density_fail db "chart has too many measures for the density buffer", 13, 10, 0
+msg_hash_fail db "assembly hash pipeline failed", 13, 10, 0
 msg_breakdown_too_long db "breakdown output exceeded text buffer", 13, 10, 0
 label_file db "file: ", 0
 label_charts db "charts: ", 0
@@ -703,6 +819,9 @@ label_step_type db "step_type: ", 0
 label_difficulty db "difficulty: ", 0
 label_meter db "meter: ", 0
 label_description db "description: ", 0
+label_hash db "hash: ", 0
+label_bpm_neutral_hash db "bpm_neutral_hash: ", 0
+label_hash_bpms db "hash_bpms: ", 0
 label_measures db "measures: ", 0
 label_stream16 db "16th_streams: ", 0
 label_stream20 db "20th_streams: ", 0
@@ -753,9 +872,16 @@ file_size resq 1
 file_len resq 1
 file_bytes_read resd 1
 chart_info resb ASSP_CHART_INFO_SIZE
+bpms_slice resb ASSP_BYTE_SLICE_SIZE
 note_stats resb ASSP_NOTE_STATS_SIZE
 stream_counts resb ASSP_STREAM_COUNTS_SIZE
 num_buffer resb 32
+normalized_bpms_len resq 1
+minimized_chart_len resq 1
+hash_pair resb 32
+bpm_buffer resb BPM_BUFFER_CAP
+row_scratch resd ROW_SCRATCH_CAP
+minimized_buffer resb MINIMIZED_BUFFER_CAP
 density_buffer resd DENSITY_CAP
 stream_segment_buffer resb DENSITY_CAP * ASSP_STREAM_SEGMENT_SIZE
 stream_token_buffer resb DENSITY_CAP * ASSP_STREAM_TOKEN_SIZE

@@ -4,6 +4,8 @@ default rel
 global assp_count_note_charts
 global assp_find_notes_by_index
 global assp_find_chart_by_index
+global assp_find_global_bpms
+global assp_find_chart_bpms_by_index
 
 section .text
 
@@ -49,6 +51,26 @@ section .text
     cmp byte [%1 + 8], 'A'
     jne %%no
     cmp byte [%1 + 9], ':'
+    jne %%no
+    mov eax, ASSP_TRUE
+    jmp %%done
+%%no:
+    xor eax, eax
+%%done:
+%endmacro
+
+%macro is_bpms_tag 1
+    cmp byte [%1 + 0], '#'
+    jne %%no
+    cmp byte [%1 + 1], 'B'
+    jne %%no
+    cmp byte [%1 + 2], 'P'
+    jne %%no
+    cmp byte [%1 + 3], 'M'
+    jne %%no
+    cmp byte [%1 + 4], 'S'
+    jne %%no
+    cmp byte [%1 + 5], ':'
     jne %%no
     mov eax, ASSP_TRUE
     jmp %%done
@@ -136,6 +158,135 @@ assp_count_note_charts:
 
 .zero:
     xor eax, eax
+    ret
+
+; rcx = simfile bytes, rdx = len, r8 = out assp_byte_slice.
+; eax = 1 when a #BPMS: tag is found, 0 otherwise.
+assp_find_global_bpms:
+    test rcx, rcx
+    jz .fail
+    test r8, r8
+    jz .fail
+    cmp rdx, 6
+    jb .fail
+
+    mov qword [r8 + ASSP_BYTE_SLICE_PTR], 0
+    mov qword [r8 + ASSP_BYTE_SLICE_LEN], 0
+
+    mov r10, rcx
+    lea r11, [rcx + rdx]
+
+.scan:
+    lea rax, [r10 + 6]
+    cmp rax, r11
+    ja .fail
+
+    is_bpms_tag r10
+    test eax, eax
+    jnz .found
+    inc r10
+    jmp .scan
+
+.found:
+    lea rax, [r10 + 6]
+    mov rdx, rax
+.find_end:
+    cmp rdx, r11
+    jae .fail
+    cmp byte [rdx], ';'
+    je .store
+    inc rdx
+    jmp .find_end
+
+.store:
+    mov [r8 + ASSP_BYTE_SLICE_PTR], rax
+    sub rdx, rax
+    mov [r8 + ASSP_BYTE_SLICE_LEN], rdx
+    mov eax, ASSP_TRUE
+    ret
+
+.fail:
+    xor eax, eax
+    ret
+
+; rcx = simfile bytes, rdx = len, r8 = chart index, r9 = out assp_byte_slice.
+; Finds a chart-local SSC #BPMS: tag in the selected #NOTEDATA block.
+; eax = 1 when found, 0 otherwise.
+assp_find_chart_bpms_by_index:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+
+    test rcx, rcx
+    jz .fail
+    test r9, r9
+    jz .fail
+    cmp rdx, 7
+    jb .fail
+
+    mov qword [r9 + ASSP_BYTE_SLICE_PTR], 0
+    mov qword [r9 + ASSP_BYTE_SLICE_LEN], 0
+
+    mov rbx, r9
+    mov rdi, rcx
+    lea r12, [rcx + rdx]
+    mov r13, r8
+    xor r14d, r14d
+    xor r15d, r15d
+
+.scan:
+    lea rax, [rdi + 10]
+    cmp rax, r12
+    ja .fail
+
+    is_notedata_tag rdi
+    test eax, eax
+    jz .check_notes
+    mov r15, rdi
+    add rdi, 10
+    jmp .scan
+
+.check_notes:
+    lea rax, [rdi + 7]
+    cmp rax, r12
+    ja .fail
+    is_notes_tag rdi
+    test eax, eax
+    jz .next
+
+    cmp r14, r13
+    je .found_chart
+    inc r14
+    add rdi, 7
+    jmp .scan
+
+.next:
+    inc rdi
+    jmp .scan
+
+.found_chart:
+    test r15, r15
+    jz .fail
+    mov r10, r15
+    mov r11, rdi
+    call find_bpms_in_range
+    jmp .done
+
+.fail:
+    xor eax, eax
+
+.done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
     ret
 
 ; rcx = simfile bytes, rdx = len, r8 = chart index, r9 = out assp_chart_ref.
@@ -311,6 +462,42 @@ assp_find_chart_by_index:
     pop rdi
     pop rsi
     pop rbx
+    ret
+
+; r10 = scan start, r11 = scan end, rbx = out assp_byte_slice.
+; eax = 1 when a #BPMS: tag is found, 0 otherwise.
+find_bpms_in_range:
+.scan:
+    lea rax, [r10 + 6]
+    cmp rax, r11
+    ja .fail
+
+    is_bpms_tag r10
+    test eax, eax
+    jnz .found
+    inc r10
+    jmp .scan
+
+.found:
+    lea rax, [r10 + 6]
+    mov rdx, rax
+.find_end:
+    cmp rdx, r11
+    jae .fail
+    cmp byte [rdx], ';'
+    je .store
+    inc rdx
+    jmp .find_end
+
+.store:
+    mov [rbx + ASSP_BYTE_SLICE_PTR], rax
+    sub rdx, rax
+    mov [rbx + ASSP_BYTE_SLICE_LEN], rdx
+    mov eax, ASSP_TRUE
+    ret
+
+.fail:
+    xor eax, eax
     ret
 
 ; r10 = metadata scan start, r11 = metadata end, rbx = assp_chart_info.
