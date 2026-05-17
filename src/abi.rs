@@ -107,6 +107,12 @@ unsafe extern "C" {
         out: *mut u32,
         out_cap: usize,
     ) -> usize;
+    fn assp_minimize_measure_4(
+        rows: *const u8,
+        row_count: usize,
+        out: *mut u8,
+        out_cap: usize,
+    ) -> usize;
     fn assp_stream_counts_from_densities(
         densities: *const u32,
         len: usize,
@@ -178,6 +184,30 @@ pub fn measure_densities_4(data: &[u8]) -> Vec<u32> {
     let mut out = vec![0; count];
     if count != 0 {
         unsafe { assp_measure_densities_4(data.as_ptr(), data.len(), out.as_mut_ptr(), out.len()) };
+    }
+    out
+}
+
+#[must_use]
+pub fn minimize_measure_4(rows: &[[u8; 4]]) -> Vec<[u8; 4]> {
+    let count = unsafe {
+        assp_minimize_measure_4(
+            rows.as_ptr().cast::<u8>(),
+            rows.len(),
+            std::ptr::null_mut(),
+            0,
+        )
+    };
+    let mut out = vec![[0; 4]; count];
+    if count != 0 {
+        unsafe {
+            assp_minimize_measure_4(
+                rows.as_ptr().cast::<u8>(),
+                rows.len(),
+                out.as_mut_ptr().cast::<u8>(),
+                out.len(),
+            )
+        };
     }
     out
 }
