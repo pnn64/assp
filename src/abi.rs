@@ -339,6 +339,17 @@ unsafe extern "C" {
         row_scratch: *mut u8,
         scratch_row_cap: usize,
     ) -> usize;
+    fn assp_count_timing_note_stats_4(
+        data: *const u8,
+        len: usize,
+        warps: *const BpmSegment,
+        warp_len: usize,
+        fakes: *const BpmSegment,
+        fake_len: usize,
+        out: *mut NoteStats,
+        scratch: *mut u8,
+        scratch_byte_cap: usize,
+    ) -> c_int;
     fn assp_count_timing_note_stats_no_holds_4(
         data: *const u8,
         len: usize,
@@ -1046,6 +1057,30 @@ pub fn count_timing_fakes_8(
         )
     };
     (count != NOT_FOUND).then_some(count as u64)
+}
+
+#[must_use]
+pub fn count_timing_note_stats_4(
+    data: &[u8],
+    warps: &[BpmSegment],
+    fakes: &[BpmSegment],
+) -> Option<NoteStats> {
+    let mut stats = NoteStats::default();
+    let mut scratch = vec![0u8; data.len().saturating_mul(8).max(1024)];
+    let ok = unsafe {
+        assp_count_timing_note_stats_4(
+            data.as_ptr(),
+            data.len(),
+            warps.as_ptr(),
+            warps.len(),
+            fakes.as_ptr(),
+            fakes.len(),
+            &mut stats,
+            scratch.as_mut_ptr(),
+            scratch.len(),
+        )
+    };
+    (ok != 0).then_some(stats)
 }
 
 #[must_use]

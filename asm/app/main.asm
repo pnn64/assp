@@ -18,6 +18,7 @@ extern assp_count_note_stats_4
 extern assp_count_note_stats_8
 extern assp_count_timing_fakes_4
 extern assp_count_timing_fakes_8
+extern assp_count_timing_note_stats_4
 extern assp_count_timing_note_stats_no_holds_4
 extern assp_count_timing_note_stats_no_holds_8
 extern assp_count_note_charts
@@ -156,7 +157,7 @@ start:
     test eax, eax
     jz fail_stats
 
-    call prepare_timing_stats_no_holds
+    call prepare_timing_stats
     test eax, eax
     jz fail_stats
 
@@ -904,13 +905,32 @@ prepare_timing_fakes:
     add rsp, 72
     ret
 
-prepare_timing_stats_no_holds:
+prepare_timing_stats:
     sub rsp, 88
 
     mov rax, [note_stats + ASSP_NOTE_STATS_HOLDS]
     or rax, [note_stats + ASSP_NOTE_STATS_ROLLS]
-    jnz .success
+    jz .no_holds
+    cmp qword [chart_lanes], 8
+    je .success
 
+    mov rcx, [chart_info + ASSP_CHART_INFO_NOTES_PTR]
+    mov rdx, [chart_info + ASSP_CHART_INFO_NOTES_LEN]
+    lea r8, [warp_segment_buffer]
+    mov r9, [warp_segment_count]
+    lea rax, [fake_segment_buffer]
+    mov [rsp + 32], rax
+    mov rax, [fake_segment_count]
+    mov [rsp + 40], rax
+    lea rax, [note_stats]
+    mov [rsp + 48], rax
+    lea rax, [row_scratch]
+    mov [rsp + 56], rax
+    mov qword [rsp + 64], ROW_SCRATCH_CAP * 8
+    call assp_count_timing_note_stats_4
+    jmp .count_done
+
+.no_holds:
     mov rcx, [chart_info + ASSP_CHART_INFO_NOTES_PTR]
     mov rdx, [chart_info + ASSP_CHART_INFO_NOTES_LEN]
     lea r8, [warp_segment_buffer]
