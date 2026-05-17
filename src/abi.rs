@@ -168,6 +168,15 @@ unsafe extern "C" {
         out: *mut BpmSegment,
         out_cap: usize,
     ) -> usize;
+    fn assp_bpm_at_beat_milli(segments: *const BpmSegment, len: usize, beat_milli: i64) -> i64;
+    fn assp_measure_nps_milli_from_bpms(
+        densities: *const u32,
+        density_len: usize,
+        bpms: *const BpmSegment,
+        bpm_len: usize,
+        out: *mut u32,
+        out_cap: usize,
+    ) -> usize;
     fn assp_measure_densities_4(
         data: *const u8,
         len: usize,
@@ -368,6 +377,46 @@ pub fn parse_bpm_map(data: &[u8]) -> Option<Vec<BpmSegment>> {
     if count != 0 {
         let written =
             unsafe { assp_parse_bpm_map(data.as_ptr(), data.len(), out.as_mut_ptr(), out.len()) };
+        if written == NOT_FOUND {
+            return None;
+        }
+    }
+    Some(out)
+}
+
+#[must_use]
+pub fn bpm_at_beat_milli(segments: &[BpmSegment], beat_milli: i64) -> i64 {
+    unsafe { assp_bpm_at_beat_milli(segments.as_ptr(), segments.len(), beat_milli) }
+}
+
+#[must_use]
+pub fn measure_nps_milli_from_bpms(densities: &[u32], bpms: &[BpmSegment]) -> Option<Vec<u32>> {
+    let count = unsafe {
+        assp_measure_nps_milli_from_bpms(
+            densities.as_ptr(),
+            densities.len(),
+            bpms.as_ptr(),
+            bpms.len(),
+            std::ptr::null_mut(),
+            0,
+        )
+    };
+    if count == NOT_FOUND {
+        return None;
+    }
+
+    let mut out = vec![0; count];
+    if count != 0 {
+        let written = unsafe {
+            assp_measure_nps_milli_from_bpms(
+                densities.as_ptr(),
+                densities.len(),
+                bpms.as_ptr(),
+                bpms.len(),
+                out.as_mut_ptr(),
+                out.len(),
+            )
+        };
         if written == NOT_FOUND {
             return None;
         }

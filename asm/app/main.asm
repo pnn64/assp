@@ -18,8 +18,10 @@ extern assp_find_chart_bpms_by_index
 extern assp_find_chart_by_index
 extern assp_find_global_bpms
 extern assp_measure_densities_4
+extern assp_measure_nps_milli_from_bpms
 extern assp_minimize_chart_4
 extern assp_normalize_float_digits
+extern assp_parse_bpm_map
 extern assp_stream_counts_from_densities
 extern assp_stream_segments_from_densities
 extern assp_stream_tokens_from_densities
@@ -32,6 +34,7 @@ global start
 %define DENSITY_CAP 131072
 %define TEXT_BUFFER_CAP 1048576
 %define BPM_BUFFER_CAP 65536
+%define BPM_SEGMENT_CAP 4096
 %define MINIMIZED_BUFFER_CAP 2097152
 %define ROW_SCRATCH_CAP 262144
 
@@ -87,6 +90,10 @@ start:
     lea r8, [density_buffer]
     mov r9d, DENSITY_CAP
     call assp_measure_densities_4
+
+    call prepare_nps
+    test eax, eax
+    jz fail_nps
 
     lea rcx, [density_buffer]
     mov rdx, [measure_count]
@@ -155,6 +162,12 @@ fail_density:
 
 fail_hash:
     lea rcx, [msg_hash_fail]
+    call print_z
+    mov ecx, 1
+    call ExitProcess
+
+fail_nps:
+    lea rcx, [msg_nps_fail]
     call print_z
     mov ecx, 1
     call ExitProcess
@@ -407,6 +420,7 @@ prepare_hash:
 
     mov qword [bpms_slice + ASSP_BYTE_SLICE_PTR], 0
     mov qword [bpms_slice + ASSP_BYTE_SLICE_LEN], 0
+    mov qword [bpm_segment_count], 0
 
     lea rcx, [file_buffer]
     mov rdx, [file_len]
@@ -424,7 +438,7 @@ prepare_hash:
     jnz .normalize_bpms
 
     mov qword [normalized_bpms_len], 0
-    jmp .measure_minimized
+    jmp .parse_bpms
 
 .normalize_bpms:
     mov rcx, [bpms_slice + ASSP_BYTE_SLICE_PTR]
@@ -437,6 +451,18 @@ prepare_hash:
     cmp rax, BPM_BUFFER_CAP
     ja .fail
     mov [normalized_bpms_len], rax
+
+.parse_bpms:
+    mov rcx, [bpms_slice + ASSP_BYTE_SLICE_PTR]
+    mov rdx, [bpms_slice + ASSP_BYTE_SLICE_LEN]
+    lea r8, [bpm_segment_buffer]
+    mov r9d, BPM_SEGMENT_CAP
+    call assp_parse_bpm_map
+    cmp rax, ASSP_NOT_FOUND
+    je .fail
+    cmp rax, BPM_SEGMENT_CAP
+    ja .fail
+    mov [bpm_segment_count], rax
 
 .measure_minimized:
     mov rcx, [chart_info + ASSP_CHART_INFO_NOTES_PTR]
@@ -477,6 +503,48 @@ prepare_hash:
     test eax, eax
     jz .fail
 
+    mov eax, ASSP_TRUE
+    jmp .done
+
+.fail:
+    xor eax, eax
+
+.done:
+    add rsp, 56
+    ret
+
+prepare_nps:
+    sub rsp, 56
+
+    lea rcx, [density_buffer]
+    mov rdx, [measure_count]
+    lea r8, [bpm_segment_buffer]
+    mov r9, [bpm_segment_count]
+    lea rax, [nps_buffer]
+    mov [rsp + 32], rax
+    mov qword [rsp + 40], DENSITY_CAP
+    call assp_measure_nps_milli_from_bpms
+    cmp rax, ASSP_NOT_FOUND
+    je .fail
+    cmp rax, DENSITY_CAP
+    ja .fail
+    mov [nps_count], rax
+    xor r8d, r8d
+    xor r9d, r9d
+    lea r10, [nps_buffer]
+.peak_loop:
+    cmp r8, [nps_count]
+    jae .peak_done
+    mov eax, [r10 + r8 * 4]
+    cmp rax, r9
+    jbe .peak_next
+    mov r9, rax
+.peak_next:
+    inc r8
+    jmp .peak_loop
+
+.peak_done:
+    mov [peak_nps_milli], r9
     mov eax, ASSP_TRUE
     jmp .done
 
@@ -532,6 +600,9 @@ print_report:
     call print_slice_field
     lea rcx, [label_measures]
     mov rdx, [measure_count]
+    call print_field
+    lea rcx, [label_peak_nps_milli]
+    mov rdx, [peak_nps_milli]
     call print_field
     lea rcx, [label_stream16]
     mov rdx, [stream_counts + ASSP_STREAM_COUNTS_RUN16]
@@ -811,6 +882,7 @@ msg_notes_fail db "failed to find selected #NOTES chart", 13, 10, 0
 msg_stats_fail db "assembly note stat counter failed", 13, 10, 0
 msg_density_fail db "chart has too many measures for the density buffer", 13, 10, 0
 msg_hash_fail db "assembly hash pipeline failed", 13, 10, 0
+msg_nps_fail db "assembly nps pipeline failed", 13, 10, 0
 msg_breakdown_too_long db "breakdown output exceeded text buffer", 13, 10, 0
 label_file db "file: ", 0
 label_charts db "charts: ", 0
@@ -823,6 +895,7 @@ label_hash db "hash: ", 0
 label_bpm_neutral_hash db "bpm_neutral_hash: ", 0
 label_hash_bpms db "hash_bpms: ", 0
 label_measures db "measures: ", 0
+label_peak_nps_milli db "peak_nps_milli: ", 0
 label_stream16 db "16th_streams: ", 0
 label_stream20 db "20th_streams: ", 0
 label_stream24 db "24th_streams: ", 0
@@ -877,9 +950,14 @@ note_stats resb ASSP_NOTE_STATS_SIZE
 stream_counts resb ASSP_STREAM_COUNTS_SIZE
 num_buffer resb 32
 normalized_bpms_len resq 1
+bpm_segment_count resq 1
 minimized_chart_len resq 1
+nps_count resq 1
+peak_nps_milli resq 1
 hash_pair resb 32
 bpm_buffer resb BPM_BUFFER_CAP
+bpm_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
+nps_buffer resd DENSITY_CAP
 row_scratch resd ROW_SCRATCH_CAP
 minimized_buffer resb MINIMIZED_BUFFER_CAP
 density_buffer resd DENSITY_CAP

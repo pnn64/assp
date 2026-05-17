@@ -1,0 +1,60 @@
+use assp::{
+    bpm_at_beat_milli, find_bpms_for_chart, find_chart_by_index, measure_densities_4,
+    measure_nps_milli_from_bpms, parse_bpm_map,
+};
+use rssp_core::{bpm, nps};
+
+fn slice_from<'a>(data: &'a [u8], ptr: *const u8, len: usize) -> &'a [u8] {
+    let start = ptr as usize - data.as_ptr() as usize;
+    &data[start..start + len]
+}
+
+fn rust_nps_milli(densities: &[u32], bpms: &[u8]) -> Vec<u32> {
+    let densities: Vec<usize> = densities.iter().map(|&v| v as usize).collect();
+    nps::compute_measure_nps_vec(
+        &densities,
+        &bpm::parse_bpm_map(std::str::from_utf8(bpms).unwrap()),
+    )
+    .into_iter()
+    .map(|v| (v * 1000.0).round() as u32)
+    .collect()
+}
+
+fn assert_nps_match(densities: &[u32], bpms: &[u8]) {
+    let parsed = parse_bpm_map(bpms).unwrap();
+    let asm = measure_nps_milli_from_bpms(densities, &parsed).unwrap();
+    assert_eq!(asm, rust_nps_milli(densities, bpms));
+}
+
+#[test]
+fn selects_bpm_at_measure_beats() {
+    let bpms = parse_bpm_map(b"8=240,4=120").unwrap();
+
+    assert_eq!(bpm_at_beat_milli(&bpms, 0), 120000);
+    assert_eq!(bpm_at_beat_milli(&bpms, 4000), 120000);
+    assert_eq!(bpm_at_beat_milli(&bpms, 8000), 240000);
+    assert_eq!(bpm_at_beat_milli(&bpms, 12000), 240000);
+}
+
+#[test]
+fn computes_measure_nps_like_rssp_core() {
+    assert_nps_match(&[], b"0=120");
+    assert_nps_match(&[0, 16, 20, 24, 32, 8], b"0=120,8=240,16=10001,20=175");
+    assert_nps_match(&[16, 16], b"");
+}
+
+#[test]
+fn fixture_measure_nps_matches_rssp_core() {
+    for simfile in [
+        include_bytes!("../fixtures/camellia_mix.ssc").as_slice(),
+        include_bytes!("../fixtures/200000_step_challenge.sm").as_slice(),
+    ] {
+        let chart = find_chart_by_index(simfile, 4).unwrap();
+        let note_data = slice_from(simfile, chart.note_data, chart.note_data_len);
+        let densities = measure_densities_4(note_data);
+        let bpms = find_bpms_for_chart(simfile, 4).unwrap();
+        let bpms = slice_from(simfile, bpms.data, bpms.len);
+
+        assert_nps_match(&densities, bpms);
+    }
+}

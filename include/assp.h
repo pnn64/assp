@@ -160,6 +160,19 @@ size_t assp_parse_bpm_map(
     assp_bpm_segment *out,
     size_t out_cap
 );
+int64_t assp_bpm_at_beat_milli(
+    const assp_bpm_segment *segments,
+    size_t len,
+    int64_t beat_milli
+);
+size_t assp_measure_nps_milli_from_bpms(
+    const uint32_t *densities,
+    size_t density_len,
+    const assp_bpm_segment *bpms,
+    size_t bpm_len,
+    uint32_t *out,
+    size_t out_cap
+);
 size_t assp_measure_densities_4(
     const uint8_t *data,
     size_t len,

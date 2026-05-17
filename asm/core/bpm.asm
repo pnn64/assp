@@ -3,6 +3,8 @@ default rel
 
 global assp_normalize_float_digits
 global assp_parse_bpm_map
+global assp_bpm_at_beat_milli
+global assp_measure_nps_milli_from_bpms
 
 section .text
 
@@ -137,6 +139,137 @@ assp_normalize_float_digits:
 
 .pop_done:
     add rsp, 64
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
+; rcx = assp_bpm_segment ptr, rdx = segment count, r8 = beat_milli.
+; rax = active bpm_milli, or 0 when the map is empty/invalid.
+assp_bpm_at_beat_milli:
+    test rdx, rdx
+    jz .zero
+    test rcx, rcx
+    jz .zero
+
+    mov rax, [rcx + ASSP_BPM_SEGMENT_BPM_MILLI]
+    xor r9d, r9d
+.loop:
+    cmp r9, rdx
+    jae .done
+    mov r10, r9
+    shl r10, 4
+    cmp [rcx + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI], r8
+    jg .done
+    mov rax, [rcx + r10 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    inc r9
+    jmp .loop
+.zero:
+    xor eax, eax
+.done:
+    ret
+
+; rcx = u32 densities, rdx = density len, r8 = assp_bpm_segment ptr,
+; r9 = bpm len, stack arg 5 = optional u32 output, stack arg 6 = output cap.
+; rax = density len, or ASSP_NOT_FOUND on invalid input.
+assp_measure_nps_milli_from_bpms:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+
+    mov rbx, [rsp + 96]
+    mov r12, [rsp + 104]
+
+    test rdx, rdx
+    jz .empty
+    test rcx, rcx
+    jz .invalid
+
+.check_bpms:
+    test r9, r9
+    jz .init
+    test r8, r8
+    jz .invalid
+
+.init:
+    mov rsi, rcx
+    mov rdi, rdx
+    mov r13, r8
+    mov r14, r9
+    xor r15d, r15d
+
+.loop:
+    cmp r15, rdi
+    jae .done
+
+    xor eax, eax
+    mov r11d, [rsi + r15 * 4]
+    test r11d, r11d
+    jz .store
+    test r14, r14
+    jz .store
+
+    mov r10, r15
+    imul r10, r10, 4000
+    mov rax, [r13 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    xor r8d, r8d
+.bpm_loop:
+    cmp r8, r14
+    jae .got_bpm
+    mov r9, r8
+    shl r9, 4
+    cmp [r13 + r9 + ASSP_BPM_SEGMENT_BEAT_MILLI], r10
+    jg .got_bpm
+    mov rax, [r13 + r9 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    inc r8
+    jmp .bpm_loop
+
+.got_bpm:
+    test rax, rax
+    jle .zero_nps
+    cmp rax, 10000000
+    jge .zero_nps
+    imul rax, r11
+    add rax, 120
+    xor edx, edx
+    mov r10d, 240
+    div r10
+    jmp .store
+
+.zero_nps:
+    xor eax, eax
+
+.store:
+    test rbx, rbx
+    jz .next
+    cmp r15, r12
+    jae .next
+    mov [rbx + r15 * 4], eax
+
+.next:
+    inc r15
+    jmp .loop
+
+.empty:
+    xor eax, eax
+    jmp .pop_done
+
+.done:
+    mov rax, rdi
+    jmp .pop_done
+
+.invalid:
+    mov rax, ASSP_NOT_FOUND
+
+.pop_done:
     pop r15
     pop r14
     pop r13
