@@ -8,6 +8,7 @@ global assp_count_mines_nonfake_8
 global assp_count_timing_fakes_4
 global assp_count_timing_fakes_8
 global assp_count_timing_note_stats_4
+global assp_count_timing_note_stats_8
 global assp_count_timing_note_stats_no_holds_4
 global assp_count_timing_note_stats_no_holds_8
 
@@ -2398,6 +2399,461 @@ timing_hold_start_has_end_4:
     cmp r10, rdx
     jae .no
     lea rax, [rcx + r10 * 4]
+    mov al, [rax + r9]
+    cmp al, '1'
+    je .no
+    cmp al, 'M'
+    je .no
+    cmp al, 'L'
+    je .no
+    cmp al, 'F'
+    je .no
+    cmp al, '2'
+    je .push
+    cmp al, '4'
+    je .push
+    cmp al, '3'
+    je .pop
+    inc r10
+    jmp .loop
+
+.push:
+    cmp r11d, 8
+    jae .push_done
+    inc r11d
+.push_done:
+    inc r10
+    jmp .loop
+
+.pop:
+    test r11d, r11d
+    jz .pop_done
+    dec r11d
+    jz .yes
+.pop_done:
+    inc r10
+    jmp .loop
+
+.yes:
+    mov eax, ASSP_TRUE
+    ret
+
+.no:
+    xor eax, eax
+    ret
+
+%define TS8_RAW_COUNT 0
+%define TS8_MEASURE_INDEX 8
+%define TS8_TOTAL_ROWS 16
+%define TS8_ROW_CAP 24
+%define TS8_RAW_BASE 32
+%define TS8_ROWS_BASE 40
+%define TS8_BEATS_BASE 48
+%define TS8_TEXT_BASE 56
+%define TS8_FAKE_PTR 64
+%define TS8_FAKE_COUNT 72
+%define TS8_WARP_PTR 80
+%define TS8_WARP_COUNT 88
+%define TS8_OUT 96
+%define TS8_STATUS 104
+%define TS8_CURRENT_ROW 112
+%define TS8_MIN_COUNT 120
+
+%macro timing_stats_8_finalize_measure 0
+    cmp qword [rsp + TS8_RAW_COUNT], 0
+    je %%clear
+
+    mov rcx, [rsp + TS8_RAW_BASE]
+    mov rdx, [rsp + TS8_RAW_COUNT]
+    mov r8, rcx
+    mov r9, [rsp + TS8_ROW_CAP]
+    call assp_minimize_measure_8
+
+    cmp rax, [rsp + TS8_ROW_CAP]
+    ja %%invalid
+    test rax, rax
+    jz %%clear
+
+    mov [rsp + TS8_MIN_COUNT], rax
+    xor r13d, r13d
+%%append_loop:
+    cmp r13, [rsp + TS8_MIN_COUNT]
+    jae %%clear
+
+    mov r10, [rsp + TS8_TOTAL_ROWS]
+    cmp r10, [rsp + TS8_ROW_CAP]
+    jae %%invalid
+
+    mov r11, [rsp + TS8_RAW_BASE]
+    mov rcx, [r11 + r13 * 8]
+    mov r11, [rsp + TS8_ROWS_BASE]
+    mov [r11 + r10 * 8], rcx
+
+    mov rax, [rsp + TS8_MEASURE_INDEX]
+    imul rax, 4000
+    mov r11, rax
+    mov rax, r13
+    imul rax, 4000
+    xor edx, edx
+    div qword [rsp + TS8_MIN_COUNT]
+    add rax, r11
+    mov r11, [rsp + TS8_BEATS_BASE]
+    mov [r11 + r10 * 8], rax
+
+    inc qword [rsp + TS8_TOTAL_ROWS]
+    inc r13
+    jmp %%append_loop
+
+%%invalid:
+    mov qword [rsp + TS8_STATUS], ASSP_NOT_FOUND
+
+%%clear:
+    mov qword [rsp + TS8_RAW_COUNT], 0
+%endmacro
+
+%macro timing_filter_judgable_lane_8 2
+    mov rax, [rsp + TS8_CURRENT_ROW]
+    shr rax, %2
+    and eax, 0xff
+    cmp al, '2'
+    je %%hold_start
+    cmp al, '4'
+    je %%hold_start
+    jmp %%store
+
+%%hold_start:
+    mov rcx, [rsp + TS8_ROWS_BASE]
+    mov rdx, [rsp + TS8_TOTAL_ROWS]
+    mov r8, r12
+    mov r9d, %1
+    call timing_hold_start_has_end_8
+    test eax, eax
+    jnz %%reload
+    mov eax, '0'
+    jmp %%store
+
+%%reload:
+    mov rax, [rsp + TS8_CURRENT_ROW]
+    shr rax, %2
+    and eax, 0xff
+
+%%store:
+    shl rax, %2
+    or r13, rax
+%endmacro
+
+%macro timing_filter_fake_lane_8 2
+    mov rax, [rsp + TS8_CURRENT_ROW]
+    shr rax, %2
+    and eax, 0xff
+    cmp al, '1'
+    je %%fake
+    cmp al, 'M'
+    je %%fake
+    cmp al, 'm'
+    je %%fake
+    cmp al, 'L'
+    je %%fake
+    cmp al, 'l'
+    je %%fake
+    cmp al, 'F'
+    je %%fake
+    cmp al, 'f'
+    je %%fake
+    cmp al, '2'
+    je %%hold_start
+    cmp al, '4'
+    je %%hold_start
+    cmp al, '3'
+    je %%end
+    jmp %%done
+
+%%hold_start:
+    mov rcx, [rsp + TS8_ROWS_BASE]
+    mov rdx, [rsp + TS8_TOTAL_ROWS]
+    mov r8, r12
+    mov r9d, %1
+    call timing_hold_start_has_end_8
+    test eax, eax
+    jnz %%fake
+    jmp %%done
+
+%%end:
+    mov eax, '3'
+    shl rax, %2
+    or r13, rax
+    jmp %%done
+
+%%fake:
+    mov eax, 'F'
+    shl rax, %2
+    or r13, rax
+
+%%done:
+%endmacro
+
+; rcx = note-data bytes, rdx = byte length, r8 = warp segments, r9 = warp count,
+; stack arg 5 = fake segments, arg 6 = fake count, arg 7 = out stats,
+; arg 8 = byte scratch, arg 9 = scratch byte cap. eax = 1 on success.
+assp_count_timing_note_stats_8:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+
+    mov r10, [rsp + 96]
+    mov r11, [rsp + 104]
+    mov r13, [rsp + 112]
+    mov r15, [rsp + 120]
+    mov r12, [rsp + 128]
+    sub rsp, 160
+
+    mov [rsp + TS8_OUT], r13
+    mov [rsp + TS8_WARP_PTR], r8
+    mov [rsp + TS8_WARP_COUNT], r9
+    mov [rsp + TS8_FAKE_PTR], r10
+    mov [rsp + TS8_FAKE_COUNT], r11
+    mov qword [rsp + TS8_RAW_COUNT], 0
+    mov qword [rsp + TS8_MEASURE_INDEX], 0
+    mov qword [rsp + TS8_TOTAL_ROWS], 0
+    mov qword [rsp + TS8_STATUS], 0
+
+    test r13, r13
+    jz .invalid
+    test rdx, rdx
+    jz .zero_out
+    test rcx, rcx
+    jz .invalid
+    test r9, r9
+    jz .check_fakes_ptr
+    test r8, r8
+    jz .invalid
+
+.check_fakes_ptr:
+    test r11, r11
+    jz .check_scratch_ptr
+    test r10, r10
+    jz .invalid
+
+.check_scratch_ptr:
+    test r12, r12
+    jz .invalid
+    test r15, r15
+    jz .invalid
+
+.zero_out:
+    mov rbx, [rsp + TS8_OUT]
+    xor eax, eax
+    mov r9d, ASSP_NOTE_STATS_SIZE / 8
+    mov r10, rbx
+.zero_loop:
+    mov [r10], rax
+    add r10, 8
+    dec r9d
+    jnz .zero_loop
+
+    test rdx, rdx
+    jz .success
+
+    mov rsi, rcx
+    lea rdi, [rcx + rdx]
+
+    mov rax, r12
+    xor edx, edx
+    mov r10d, 40
+    div r10
+    test rax, rax
+    jz .invalid
+    mov [rsp + TS8_ROW_CAP], rax
+
+    mov [rsp + TS8_RAW_BASE], r15
+    lea r10, [r15 + rax * 8]
+    mov [rsp + TS8_ROWS_BASE], r10
+    lea r11, [r10 + rax * 8]
+    mov [rsp + TS8_BEATS_BASE], r11
+    lea r10, [r11 + rax * 8]
+    mov [rsp + TS8_TEXT_BASE], r10
+
+.line_loop:
+    cmp rsi, rdi
+    jae .eof
+
+    mov rbx, rsi
+.find_line_end:
+    cmp rbx, rdi
+    jae .line_end_found
+    cmp byte [rbx], 10
+    je .line_end_found
+    inc rbx
+    jmp .find_line_end
+
+.line_end_found:
+    mov r14, rbx
+    cmp r14, rdi
+    jae .trim_left
+    inc r14
+
+.trim_left:
+    cmp rsi, rbx
+    jae .line_done
+    mov al, [rsi]
+    cmp al, ' '
+    je .trim_advance
+    cmp al, 9
+    jb .line_start
+    cmp al, 13
+    jbe .trim_advance
+    jmp .line_start
+
+.trim_advance:
+    inc rsi
+    jmp .trim_left
+
+.line_start:
+    mov al, [rsi]
+    cmp al, '/'
+    je .line_done
+    cmp al, ','
+    je .comma
+    cmp al, ';'
+    je .semi
+
+    lea rax, [rsi + 8]
+    cmp rax, rbx
+    ja .line_done
+
+    mov rax, [rsp + TS8_RAW_COUNT]
+    cmp rax, [rsp + TS8_ROW_CAP]
+    jae .invalid
+    mov r10, [rsp + TS8_RAW_BASE]
+    mov rcx, [rsi]
+    mov [r10 + rax * 8], rcx
+    inc qword [rsp + TS8_RAW_COUNT]
+    jmp .line_done
+
+.comma:
+    timing_stats_8_finalize_measure
+    cmp qword [rsp + TS8_STATUS], 0
+    jne .invalid
+    inc qword [rsp + TS8_MEASURE_INDEX]
+    jmp .line_done
+
+.semi:
+    timing_stats_8_finalize_measure
+    cmp qword [rsp + TS8_STATUS], 0
+    jne .invalid
+    jmp .transform_rows
+
+.line_done:
+    mov rsi, r14
+    jmp .line_loop
+
+.eof:
+    timing_stats_8_finalize_measure
+    cmp qword [rsp + TS8_STATUS], 0
+    jne .invalid
+
+.transform_rows:
+    cmp qword [rsp + TS8_TOTAL_ROWS], 0
+    je .success
+
+    xor r12d, r12d
+.transform_loop:
+    cmp r12, [rsp + TS8_TOTAL_ROWS]
+    jae .count_filtered
+
+    mov r10, [rsp + TS8_ROWS_BASE]
+    mov rax, [r10 + r12 * 8]
+    mov [rsp + TS8_CURRENT_ROW], rax
+
+    mov r10, [rsp + TS8_BEATS_BASE]
+    mov r8, [r10 + r12 * 8]
+    mov rcx, [rsp + TS8_WARP_PTR]
+    mov rdx, [rsp + TS8_WARP_COUNT]
+    call beat_in_timing_range
+    test eax, eax
+    jnz .nonjudgable_row
+    mov r10, [rsp + TS8_BEATS_BASE]
+    mov r8, [r10 + r12 * 8]
+    mov rcx, [rsp + TS8_FAKE_PTR]
+    mov rdx, [rsp + TS8_FAKE_COUNT]
+    call beat_in_timing_range
+    test eax, eax
+    jnz .nonjudgable_row
+
+    xor r13d, r13d
+    timing_filter_judgable_lane_8 0, 0
+    timing_filter_judgable_lane_8 1, 8
+    timing_filter_judgable_lane_8 2, 16
+    timing_filter_judgable_lane_8 3, 24
+    timing_filter_judgable_lane_8 4, 32
+    timing_filter_judgable_lane_8 5, 40
+    timing_filter_judgable_lane_8 6, 48
+    timing_filter_judgable_lane_8 7, 56
+    mov rax, r13
+    jmp .write_row
+
+.nonjudgable_row:
+    xor r13d, r13d
+    timing_filter_fake_lane_8 0, 0
+    timing_filter_fake_lane_8 1, 8
+    timing_filter_fake_lane_8 2, 16
+    timing_filter_fake_lane_8 3, 24
+    timing_filter_fake_lane_8 4, 32
+    timing_filter_fake_lane_8 5, 40
+    timing_filter_fake_lane_8 6, 48
+    timing_filter_fake_lane_8 7, 56
+    mov rax, r13
+
+.write_row:
+    mov r10, [rsp + TS8_TEXT_BASE]
+    mov r11, r12
+    imul r11, 9
+    mov [r10 + r11], rax
+    mov byte [r10 + r11 + 8], 10
+    inc r12
+    jmp .transform_loop
+
+.count_filtered:
+    mov rcx, [rsp + TS8_TEXT_BASE]
+    mov rax, [rsp + TS8_TOTAL_ROWS]
+    lea rdx, [rax + rax * 8]
+    mov r8, [rsp + TS8_OUT]
+    call assp_count_note_stats_8
+    test eax, eax
+    jz .invalid
+
+.success:
+    mov eax, ASSP_TRUE
+    jmp .done
+
+.invalid:
+    xor eax, eax
+
+.done:
+    add rsp, 160
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
+; rcx = packed 8-lane rows, rdx = row count, r8 = start row, r9 = lane offset.
+; eax = 1 when the hold or roll start has a future matching end.
+timing_hold_start_has_end_8:
+    mov r10, r8
+    inc r10
+    mov r11d, 1
+.loop:
+    cmp r10, rdx
+    jae .no
+    lea rax, [rcx + r10 * 8]
     mov al, [rax + r9]
     cmp al, '1'
     je .no

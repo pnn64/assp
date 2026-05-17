@@ -19,6 +19,7 @@ extern assp_count_note_stats_8
 extern assp_count_timing_fakes_4
 extern assp_count_timing_fakes_8
 extern assp_count_timing_note_stats_4
+extern assp_count_timing_note_stats_8
 extern assp_count_timing_note_stats_no_holds_4
 extern assp_count_timing_note_stats_no_holds_8
 extern assp_count_note_charts
@@ -911,8 +912,6 @@ prepare_timing_stats:
     mov rax, [note_stats + ASSP_NOTE_STATS_HOLDS]
     or rax, [note_stats + ASSP_NOTE_STATS_ROLLS]
     jz .no_holds
-    cmp qword [chart_lanes], 8
-    je .success
 
     mov rcx, [chart_info + ASSP_CHART_INFO_NOTES_PTR]
     mov rdx, [chart_info + ASSP_CHART_INFO_NOTES_LEN]
@@ -927,7 +926,12 @@ prepare_timing_stats:
     lea rax, [row_scratch]
     mov [rsp + 56], rax
     mov qword [rsp + 64], ROW_SCRATCH_CAP * 8
+    cmp qword [chart_lanes], 8
+    je .count_holds_8
     call assp_count_timing_note_stats_4
+    jmp .count_done
+.count_holds_8:
+    call assp_count_timing_note_stats_8
     jmp .count_done
 
 .no_holds:

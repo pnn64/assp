@@ -1,7 +1,7 @@
 use assp::{
     ByteSlice, NoteStats, count_mines_nonfake_4, count_mines_nonfake_8, count_note_stats_4,
     count_note_stats_8, count_note_stats_minimized_4, count_timing_fakes_4, count_timing_fakes_8,
-    count_timing_note_stats_4, count_timing_note_stats_no_holds_4,
+    count_timing_note_stats_4, count_timing_note_stats_8, count_timing_note_stats_no_holds_4,
     count_timing_note_stats_no_holds_8, find_chart_by_index, find_chart_timing_tags_by_index,
     parse_bpm_map,
 };
@@ -416,6 +416,73 @@ fn counts_4_panel_timing_stats_with_holds_after_measure_minimization() {
         asm_stats,
         NoteStats {
             rows: minimized_row_count(data, 4),
+            steps: u64::from(rust.total_steps),
+            arrows: u64::from(rust.total_arrows),
+            jumps: u64::from(rust.jumps),
+            hands: u64::from(rust.hands),
+            holds: u64::from(rust.holds),
+            rolls: u64::from(rust.rolls),
+            mines: u64::from(rust.mines),
+            lifts: u64::from(rust.lifts),
+            fakes: u64::from(rust.fakes),
+            left: u64::from(rust.left),
+            down: u64::from(rust.down),
+            up: u64::from(rust.up),
+            right: u64::from(rust.right),
+            malformed_rows: 0,
+        }
+    );
+    assert_eq!(asm_stats.steps, 3);
+    assert_eq!(asm_stats.holds, 1);
+    assert_eq!(asm_stats.rolls, 1);
+    assert_eq!(asm_stats.hands, 1);
+    assert_eq!(asm_stats.fakes, 1);
+}
+
+#[test]
+fn counts_8_panel_timing_stats_with_holds_after_measure_minimization() {
+    let data = b"
+20000000
+00000000
+01000000
+30000000
+,
+00004000
+00000000
+00110000
+00003000
+;
+";
+    let warps = parse_bpm_map(b"2=1").unwrap();
+    let fakes = parse_bpm_map(b"5=1").unwrap();
+    let asm_stats = count_timing_note_stats_8(data, &warps, &fakes).unwrap();
+
+    let timing = timing_data_from_chart_data(
+        0.0,
+        0.0,
+        Some("0=120"),
+        "0=120",
+        None,
+        "",
+        None,
+        "",
+        Some("2=1"),
+        "",
+        None,
+        "",
+        None,
+        "",
+        Some("5=1"),
+        "",
+        TimingFormat::Ssc,
+        false,
+    );
+    let rust = compute_timing_aware_stats(data, 8, &timing);
+
+    assert_eq!(
+        asm_stats,
+        NoteStats {
+            rows: minimized_row_count(data, 8),
             steps: u64::from(rust.total_steps),
             arrows: u64::from(rust.total_arrows),
             jumps: u64::from(rust.jumps),
