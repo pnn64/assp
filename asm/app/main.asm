@@ -12,6 +12,7 @@ extern ReadFile
 extern WriteFile
 
 extern assp_chart_hash_pair
+extern assp_count_mines_nonfake_4
 extern assp_count_note_stats_4
 extern assp_count_note_charts
 extern assp_find_chart_bpms_by_index
@@ -107,6 +108,10 @@ start:
     call prepare_timing_events
     test eax, eax
     jz fail_duration
+
+    call prepare_mines_nonfake
+    test eax, eax
+    jz fail_stats
 
     call prepare_nps
     test eax, eax
@@ -625,6 +630,7 @@ prepare_timing_events:
     mov qword [stop_segment_count], 0
     mov qword [delay_segment_count], 0
     mov qword [warp_segment_count], 0
+    mov qword [fake_segment_count], 0
 
     lea rcx, [file_buffer]
     mov rdx, [file_len]
@@ -738,6 +744,24 @@ prepare_timing_events:
     ja .fail
     mov [warp_segment_count], rax
 
+    cmp qword [chart_has_own_timing], 0
+    je .global_fakes
+    mov rcx, [chart_timing_tags + ASSP_TIMING_TAGS_FAKES + ASSP_BYTE_SLICE_PTR]
+    mov rdx, [chart_timing_tags + ASSP_TIMING_TAGS_FAKES + ASSP_BYTE_SLICE_LEN]
+    jmp .parse_fakes
+.global_fakes:
+    mov rcx, [global_timing_tags + ASSP_TIMING_TAGS_FAKES + ASSP_BYTE_SLICE_PTR]
+    mov rdx, [global_timing_tags + ASSP_TIMING_TAGS_FAKES + ASSP_BYTE_SLICE_LEN]
+.parse_fakes:
+    lea r8, [fake_segment_buffer]
+    mov r9d, BPM_SEGMENT_CAP
+    call assp_parse_bpm_map
+    cmp rax, ASSP_NOT_FOUND
+    je .fail
+    cmp rax, BPM_SEGMENT_CAP
+    ja .fail
+    mov [fake_segment_count], rax
+
     mov eax, ASSP_TRUE
     jmp .done
 
@@ -746,6 +770,34 @@ prepare_timing_events:
 
 .done:
     add rsp, 40
+    ret
+
+prepare_mines_nonfake:
+    sub rsp, 72
+
+    mov rcx, [chart_info + ASSP_CHART_INFO_NOTES_PTR]
+    mov rdx, [chart_info + ASSP_CHART_INFO_NOTES_LEN]
+    lea r8, [warp_segment_buffer]
+    mov r9, [warp_segment_count]
+    lea rax, [fake_segment_buffer]
+    mov [rsp + 32], rax
+    mov rax, [fake_segment_count]
+    mov [rsp + 40], rax
+    lea rax, [row_scratch]
+    mov [rsp + 48], rax
+    mov qword [rsp + 56], ROW_SCRATCH_CAP
+    call assp_count_mines_nonfake_4
+    cmp rax, ASSP_NOT_FOUND
+    je .fail
+    mov [mines_nonfake], rax
+    mov eax, ASSP_TRUE
+    jmp .done
+
+.fail:
+    xor eax, eax
+
+.done:
+    add rsp, 72
     ret
 
 prepare_offset:
@@ -980,6 +1032,9 @@ print_report:
     call print_field
     lea rcx, [label_mines]
     mov rdx, [note_stats + ASSP_NOTE_STATS_MINES]
+    call print_field
+    lea rcx, [label_mines_nonfake]
+    mov rdx, [mines_nonfake]
     call print_field
     lea rcx, [label_lifts]
     mov rdx, [note_stats + ASSP_NOTE_STATS_LIFTS]
@@ -1232,6 +1287,7 @@ label_hands db "hands: ", 0
 label_holds db "holds: ", 0
 label_rolls db "rolls: ", 0
 label_mines db "mines: ", 0
+label_mines_nonfake db "mines_nonfake: ", 0
 label_lifts db "lifts: ", 0
 label_fakes db "fakes: ", 0
 label_left db "left: ", 0
@@ -1270,11 +1326,13 @@ bpm_segment_count resq 1
 stop_segment_count resq 1
 delay_segment_count resq 1
 warp_segment_count resq 1
+fake_segment_count resq 1
 minimized_chart_len resq 1
 nps_count resq 1
 peak_nps_milli resq 1
 last_beat_milli resq 1
 offset_ms resq 1
+mines_nonfake resq 1
 chart_has_own_timing resq 1
 duration_ms resq 1
 hash_pair resb 32
@@ -1283,6 +1341,7 @@ bpm_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
 stop_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
 delay_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
 warp_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
+fake_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
 nps_buffer resd DENSITY_CAP
 row_scratch resd ROW_SCRATCH_CAP
 minimized_buffer resb MINIMIZED_BUFFER_CAP

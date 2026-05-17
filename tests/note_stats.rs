@@ -1,4 +1,5 @@
-use assp::{NoteStats, count_note_stats_4};
+use assp::{NoteStats, count_mines_nonfake_4, count_note_stats_4, parse_bpm_map};
+use rssp_core::bpm;
 
 #[test]
 fn counts_basic_4_panel_note_rows() {
@@ -68,4 +69,37 @@ fn reports_short_nonempty_rows_as_malformed() {
 
     assert_eq!(stats.rows, 1);
     assert_eq!(stats.malformed_rows, 1);
+}
+
+#[test]
+fn counts_nonfake_mines_after_measure_minimization() {
+    let data = b"
+1000
+0000
+M000
+0000
+,
+m000
+0000
+M000
+0000
+;
+";
+    let warps = b"2=1";
+    let fakes = b"4=0.5";
+    let asm_warps = parse_bpm_map(warps).unwrap();
+    let asm_fakes = parse_bpm_map(fakes).unwrap();
+    let rust_warps = bpm::parse_bpm_map(std::str::from_utf8(warps).unwrap());
+    let rust_fakes = bpm::parse_bpm_map(std::str::from_utf8(fakes).unwrap());
+
+    assert_eq!(
+        count_mines_nonfake_4(data, &asm_warps, &asm_fakes).unwrap(),
+        u64::from(bpm::compute_mines_nonfake(
+            data,
+            4,
+            &rust_warps,
+            &rust_fakes
+        ))
+    );
+    assert_eq!(count_mines_nonfake_4(data, &asm_warps, &asm_fakes), Some(1));
 }
