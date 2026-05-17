@@ -33,6 +33,7 @@ The first implemented pieces are:
 - `assp_normalize_float_digits`
 - `assp_parse_bpm_map`
 - `assp_parse_offset_ms`
+- `assp_bpm_display_range`
 - `assp_bpm_at_beat_milli`
 - `assp_elapsed_ms_bpm_only`
 - `assp_elapsed_ms_with_events`
@@ -113,6 +114,8 @@ STOPS, DELAYS, WARPS, SPEEDS, SCROLLS, and FAKES.
 predicate for SSC `#NOTEDATA` blocks.
 `assp_parse_bpm_map` parses BPM timing maps into sorted fixed-point
 beat/BPM pairs, with both fields stored as signed thousandths.
+`assp_bpm_display_range` computes RSSP-style rounded min/max display BPMs,
+including the same high-gimmick BPM filtering and fallback behavior.
 `assp_parse_offset_ms` parses `#OFFSET` values into signed milliseconds for
 duration adjustment.
 `assp_bpm_at_beat_milli` and `assp_measure_nps_milli_from_bpms` provide the
@@ -232,8 +235,8 @@ description. SM `#NOTES:` / `#NOTES2:` blocks are also split into their five
 metadata fields before chart rows are passed to the stat counter. The standalone
 report path currently supports `dance-single` and `dance-double` charts. Chart
 reports include RSSP-style chart hashes,
-normalized hash BPMs, peak NPS in thousandths, density-derived stream counts,
-fixed-point duration metrics with
+normalized hash BPMs, min/max display BPMs, peak NPS in thousandths,
+density-derived stream counts, fixed-point duration metrics with
 stops/delays/warps, token breakdowns, segment breakdowns, offset adjustment, and
 note stats with nonfake mine and timing-fake counts.
 

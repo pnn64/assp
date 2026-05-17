@@ -1,4 +1,6 @@
-use assp::{BpmSegment, find_bpms_for_chart, normalize_float_digits, parse_bpm_map};
+use assp::{
+    BpmSegment, bpm_display_range, find_bpms_for_chart, normalize_float_digits, parse_bpm_map,
+};
 use rssp_core::bpm;
 
 fn assert_normalized(input: &[u8]) {
@@ -26,6 +28,19 @@ fn assert_bpm_map(input: &[u8]) {
     assert_eq!(parse_bpm_map(input).unwrap(), rust_bpm_segments(input));
 }
 
+fn assert_bpm_range(input: &[u8]) {
+    let segments = parse_bpm_map(input).unwrap();
+    let rust_map: Vec<_> = segments
+        .iter()
+        .map(|s| (s.beat_milli as f64 / 1000.0, s.bpm_milli as f64 / 1000.0))
+        .collect();
+    let rust = bpm::compute_bpm_range(&rust_map);
+    assert_eq!(
+        bpm_display_range(&segments).unwrap(),
+        (i64::from(rust.0), i64::from(rust.1))
+    );
+}
+
 #[test]
 fn normalizes_decimal_timing_map() {
     assert_normalized(b"");
@@ -42,6 +57,16 @@ fn parses_bpm_map_like_rssp_core() {
     assert_bpm_map(b"4.000=175.500, 2.000=120.000");
     assert_bpm_map(b"bad,1=2,3=x,4=5");
     assert_bpm_map(b"48r=100.000,96R=200.000");
+}
+
+#[test]
+fn computes_display_bpm_range_like_rssp_core() {
+    assert_bpm_range(b"");
+    assert_bpm_range(b"0=140");
+    assert_bpm_range(b"0=120.499,4=175.500");
+    assert_bpm_range(b"0=120,4=15000,8=-10");
+    assert_bpm_range(b"0=12000,4=15000");
+    assert_bpm_range(b"0=-10,4=-5");
 }
 
 #[test]

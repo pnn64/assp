@@ -4,6 +4,7 @@ default rel
 global assp_normalize_float_digits
 global assp_parse_bpm_map
 global assp_parse_offset_ms
+global assp_bpm_display_range
 global assp_bpm_at_beat_milli
 global assp_elapsed_ms_bpm_only
 global assp_elapsed_ms_with_events
@@ -223,6 +224,118 @@ assp_parse_offset_ms:
 .zero:
     xor eax, eax
 .done:
+    ret
+
+; rcx = BPM segments, rdx = count, r8 = out min BPM, r9 = out max BPM.
+; Values are rounded to whole BPMs after RSSP display-BPM filtering.
+; eax = 1 on success, 0 on invalid pointers.
+assp_bpm_display_range:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+
+    test r8, r8
+    jz .fail
+    test r9, r9
+    jz .fail
+
+    mov r10, r8
+    mov r11, r9
+
+    test rdx, rdx
+    jz .zero
+    test rcx, rcx
+    jz .fail
+
+    mov rbx, 0x7fffffffffffffff
+    mov rsi, 0x8000000000000000
+    xor r8d, r8d
+    xor r9d, r9d
+
+.display_loop:
+    cmp r8, rdx
+    jae .display_done
+    mov r12, r8
+    shl r12, 4
+    mov rax, [rcx + r12 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    cmp rax, 0
+    jle .display_next
+    cmp rax, 10000000
+    jge .display_next
+    cmp rax, rbx
+    jge .display_check_max
+    mov rbx, rax
+.display_check_max:
+    cmp rax, rsi
+    jle .display_count
+    mov rsi, rax
+.display_count:
+    inc r9
+.display_next:
+    inc r8
+    jmp .display_loop
+
+.display_done:
+    test r9, r9
+    jnz .store
+
+    mov rbx, 0x7fffffffffffffff
+    mov rsi, 0x8000000000000000
+    xor r8d, r8d
+.fallback_loop:
+    cmp r8, rdx
+    jae .store
+    mov r12, r8
+    shl r12, 4
+    mov rax, [rcx + r12 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    cmp rax, rbx
+    jge .fallback_check_max
+    mov rbx, rax
+.fallback_check_max:
+    cmp rax, rsi
+    jle .fallback_next
+    mov rsi, rax
+.fallback_next:
+    inc r8
+    jmp .fallback_loop
+
+.store:
+    mov rax, rbx
+    call clamp_round_bpm_milli
+    mov [r10], rax
+    mov rax, rsi
+    call clamp_round_bpm_milli
+    mov [r11], rax
+    mov eax, ASSP_TRUE
+    jmp .done
+
+.zero:
+    mov qword [r10], 0
+    mov qword [r11], 0
+    mov eax, ASSP_TRUE
+    jmp .done
+
+.fail:
+    xor eax, eax
+
+.done:
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
+clamp_round_bpm_milli:
+    test rax, rax
+    jg .round
+    xor eax, eax
+    ret
+.round:
+    add rax, 500
+    xor edx, edx
+    mov r12d, 1000
+    div r12
     ret
 
 ; rcx = assp_bpm_segment ptr, rdx = segment count, r8 = beat_milli.

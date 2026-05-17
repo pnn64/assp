@@ -32,6 +32,7 @@ extern assp_find_chart_tag_by_index
 extern assp_find_global_bpms
 extern assp_find_global_tag
 extern assp_find_global_timing_tags
+extern assp_bpm_display_range
 extern assp_elapsed_ms_bpm_only
 extern assp_elapsed_ms_with_events
 extern assp_last_beat_milli_4
@@ -147,6 +148,10 @@ start:
     jz fail_duration
 
     call prepare_timing_events
+    test eax, eax
+    jz fail_duration
+
+    call prepare_bpm_range
     test eax, eax
     jz fail_duration
 
@@ -838,6 +843,18 @@ prepare_timing_events:
     add rsp, 56
     ret
 
+prepare_bpm_range:
+    sub rsp, 40
+
+    lea rcx, [bpm_segment_buffer]
+    mov rdx, [bpm_segment_count]
+    lea r8, [min_bpm]
+    lea r9, [max_bpm]
+    call assp_bpm_display_range
+
+    add rsp, 40
+    ret
+
 prepare_mines_nonfake:
     sub rsp, 72
 
@@ -908,6 +925,10 @@ prepare_timing_fakes:
 
 prepare_timing_stats:
     sub rsp, 88
+
+    mov rax, [warp_segment_count]
+    or rax, [fake_segment_count]
+    jz .success
 
     mov rax, [note_stats + ASSP_NOTE_STATS_HOLDS]
     or rax, [note_stats + ASSP_NOTE_STATS_ROLLS]
@@ -1127,6 +1148,12 @@ print_report:
     lea rdx, [bpm_buffer]
     mov r8, [normalized_bpms_len]
     call print_slice_field
+    lea rcx, [label_min_bpm]
+    mov rdx, [min_bpm]
+    call print_field
+    lea rcx, [label_max_bpm]
+    mov rdx, [max_bpm]
+    call print_field
     lea rcx, [label_measures]
     mov rdx, [measure_count]
     call print_field
@@ -1439,6 +1466,8 @@ label_description db "description: ", 0
 label_hash db "hash: ", 0
 label_bpm_neutral_hash db "bpm_neutral_hash: ", 0
 label_hash_bpms db "hash_bpms: ", 0
+label_min_bpm db "min_bpm: ", 0
+label_max_bpm db "max_bpm: ", 0
 label_measures db "measures: ", 0
 label_peak_nps_milli db "peak_nps_milli: ", 0
 label_last_beat_milli db "last_beat_milli: ", 0
@@ -1513,6 +1542,8 @@ nps_count resq 1
 peak_nps_milli resq 1
 last_beat_milli resq 1
 offset_ms resq 1
+min_bpm resq 1
+max_bpm resq 1
 mines_nonfake resq 1
 timing_fakes resq 1
 chart_has_own_timing resq 1
