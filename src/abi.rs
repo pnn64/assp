@@ -57,6 +57,14 @@ pub struct StreamCounts {
     pub sn_breaks: u64,
 }
 
+#[repr(C)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct StreamSegment {
+    pub start: usize,
+    pub end: usize,
+    pub is_break: u64,
+}
+
 unsafe extern "C" {
     fn assp_version() -> u32;
     fn assp_find_byte(data: *const u8, len: usize, byte: u32) -> usize;
@@ -84,6 +92,12 @@ unsafe extern "C" {
         len: usize,
         out: *mut StreamCounts,
     ) -> c_int;
+    fn assp_stream_segments_from_densities(
+        densities: *const u32,
+        len: usize,
+        out: *mut StreamSegment,
+        out_cap: usize,
+    ) -> usize;
     fn assp_count_note_stats_4(data: *const u8, len: usize, out: *mut NoteStats) -> c_int;
 }
 
@@ -137,6 +151,30 @@ pub fn stream_counts_from_densities(densities: &[u32]) -> Option<StreamCounts> {
 }
 
 #[must_use]
+pub fn stream_segments_from_densities(densities: &[u32]) -> Vec<StreamSegment> {
+    let count = unsafe {
+        assp_stream_segments_from_densities(
+            densities.as_ptr(),
+            densities.len(),
+            std::ptr::null_mut(),
+            0,
+        )
+    };
+    let mut out = vec![StreamSegment::default(); count];
+    if count != 0 {
+        unsafe {
+            assp_stream_segments_from_densities(
+                densities.as_ptr(),
+                densities.len(),
+                out.as_mut_ptr(),
+                out.len(),
+            )
+        };
+    }
+    out
+}
+
+#[must_use]
 pub fn count_note_stats_4(data: &[u8]) -> Option<NoteStats> {
     let mut stats = NoteStats::default();
     let ok = unsafe { assp_count_note_stats_4(data.as_ptr(), data.len(), &mut stats) };
@@ -169,5 +207,11 @@ mod tests {
     fn stream_counts_layout_is_c_abi() {
         assert_eq!(std::mem::size_of::<super::StreamCounts>(), 48);
         assert_eq!(std::mem::align_of::<super::StreamCounts>(), 8);
+    }
+
+    #[test]
+    fn stream_segment_layout_is_c_abi() {
+        assert_eq!(std::mem::size_of::<super::StreamSegment>(), 24);
+        assert_eq!(std::mem::align_of::<super::StreamSegment>(), 8);
     }
 }

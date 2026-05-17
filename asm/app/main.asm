@@ -16,6 +16,7 @@ extern assp_count_note_charts
 extern assp_find_chart_by_index
 extern assp_measure_densities_4
 extern assp_stream_counts_from_densities
+extern assp_stream_segments_from_densities
 
 global start
 
@@ -77,6 +78,13 @@ start:
     call assp_stream_counts_from_densities
     test eax, eax
     jz fail_stats
+
+    lea rcx, [density_buffer]
+    mov rdx, [measure_count]
+    xor r8d, r8d
+    xor r9d, r9d
+    call assp_stream_segments_from_densities
+    mov [stream_segment_count], rax
 
     call print_report
     xor ecx, ecx
@@ -401,6 +409,9 @@ print_report:
     lea rcx, [label_total_breaks]
     mov rdx, [stream_counts + ASSP_STREAM_COUNTS_TOTAL_BREAKS]
     call print_field
+    lea rcx, [label_stream_segments]
+    mov rdx, [stream_segment_count]
+    call print_field
     lea rcx, [label_rows]
     mov rdx, [note_stats + ASSP_NOTE_STATS_ROWS]
     call print_field
@@ -583,6 +594,7 @@ label_stream24 db "24th_streams: ", 0
 label_stream32 db "32nd_streams: ", 0
 label_sn_breaks db "sn_breaks: ", 0
 label_total_breaks db "total_breaks: ", 0
+label_stream_segments db "stream_segments: ", 0
 label_rows db "rows: ", 0
 label_steps db "steps: ", 0
 label_arrows db "arrows: ", 0
@@ -610,6 +622,7 @@ chart_index resq 1
 list_mode resq 1
 chart_count resq 1
 measure_count resq 1
+stream_segment_count resq 1
 file_handle resq 1
 file_size resq 1
 file_len resq 1

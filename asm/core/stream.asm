@@ -2,6 +2,7 @@ default rel
 %include "assp.inc"
 
 global assp_stream_counts_from_densities
+global assp_stream_segments_from_densities
 
 section .text
 
@@ -177,3 +178,123 @@ assp_stream_counts_from_densities:
     pop rbx
     ret
 
+; rcx = u32 densities, rdx = density count, r8 = optional output segments,
+; r9 = output cap. rax = total segment count.
+assp_stream_segments_from_densities:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+
+    test rcx, rcx
+    jz .zero
+
+    mov rsi, rcx
+    mov rdi, rdx
+    mov rbx, r8
+    mov r12, r9
+    xor r13d, r13d
+    xor r14d, r14d
+    xor r15d, r15d
+    xor r11d, r11d
+
+.scan:
+    cmp r14, rdi
+    jae .tail
+
+    cmp dword [rsi + r14 * 4], 16
+    jae .stream_start
+    inc r14
+    jmp .scan
+
+.stream_start:
+    mov r8, r14
+
+.extend:
+    lea r9, [r14 + 1]
+    cmp r9, rdi
+    jae .stream_end
+    cmp dword [rsi + r9 * 4], 16
+    jb .stream_end
+    inc r14
+    jmp .extend
+
+.stream_end:
+    lea r9, [r14 + 1]
+    test r11d, r11d
+    jz .leading_gap
+
+    mov rax, r8
+    sub rax, r15
+    cmp rax, 2
+    jb .push_stream
+    mov rax, r15
+    mov rdx, r8
+    mov ecx, ASSP_TRUE
+    call store_segment
+    jmp .push_stream
+
+.leading_gap:
+    cmp r8, 2
+    jb .push_stream
+    xor eax, eax
+    mov rdx, r8
+    mov ecx, ASSP_TRUE
+    call store_segment
+
+.push_stream:
+    mov rax, r8
+    mov rdx, r9
+    xor ecx, ecx
+    call store_segment
+
+    mov r15, r9
+    mov r11d, ASSP_TRUE
+    inc r14
+    jmp .scan
+
+.tail:
+    test r11d, r11d
+    jz .done
+    mov rax, rdi
+    sub rax, r15
+    cmp rax, 2
+    jb .done
+    mov rax, r15
+    mov rdx, rdi
+    mov ecx, ASSP_TRUE
+    call store_segment
+
+.done:
+    mov rax, r13
+    jmp .pop_done
+
+.zero:
+    xor eax, eax
+
+.pop_done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
+store_segment:
+    test rbx, rbx
+    jz .count
+    cmp r13, r12
+    jae .count
+    lea r10, [r13 + r13 * 2]
+    shl r10, 3
+    mov [rbx + r10 + ASSP_STREAM_SEGMENT_START], rax
+    mov [rbx + r10 + ASSP_STREAM_SEGMENT_END], rdx
+    mov [rbx + r10 + ASSP_STREAM_SEGMENT_IS_BREAK], rcx
+.count:
+    inc r13
+    ret
