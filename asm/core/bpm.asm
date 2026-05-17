@@ -6,6 +6,7 @@ global assp_parse_bpm_map
 global assp_parse_offset_ms
 global assp_bpm_display_range
 global assp_bpm_average_centi
+global assp_bpm_median_centi
 global assp_bpm_at_beat_milli
 global assp_elapsed_ms_bpm_only
 global assp_elapsed_ms_with_events
@@ -400,6 +401,168 @@ assp_bpm_average_centi:
 .done:
     pop r12
     pop rsi
+    pop rbx
+    ret
+
+; rcx = BPM segments, rdx = count. rax = RSSP median display BPM * 100.
+assp_bpm_median_centi:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+
+    test rdx, rdx
+    jz .zero
+    test rcx, rcx
+    jz .zero
+
+    mov rsi, rcx
+    mov rdi, rdx
+
+    xor r12d, r12d
+    xor r13d, r13d
+.display_count_loop:
+    cmp r12, rdi
+    jae .display_count_done
+    mov r14, r12
+    shl r14, 4
+    mov rax, [rsi + r14 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    cmp rax, 0
+    jle .display_count_next
+    cmp rax, 10000000
+    jge .display_count_next
+    inc r13
+.display_count_next:
+    inc r12
+    jmp .display_count_loop
+
+.display_count_done:
+    mov r14d, 1
+    test r13, r13
+    jnz .have_count
+    mov r13, rdi
+    xor r14d, r14d
+.have_count:
+    test r13, r13
+    jz .zero
+
+    mov rax, r13
+    shr rax, 1
+    test r13, 1
+    jz .even
+
+.odd:
+    mov r8, rax
+    mov r9, r14
+    call kth_bpm_segment_value
+    mov rbx, 10
+    call round_signed_div_ties_even
+    jmp .done
+
+.even:
+    mov r15, rax
+    mov r8, r15
+    dec r8
+    mov r9, r14
+    call kth_bpm_segment_value
+    mov r12, rax
+    mov r8, r15
+    mov r9, r14
+    call kth_bpm_segment_value
+    add rax, r12
+    mov rbx, 20
+    call round_signed_div_ties_even
+    jmp .done
+
+.zero:
+    xor eax, eax
+
+.done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
+; rsi = BPM segments, rdi = count, r8 = kth index, r9 = display-only flag.
+; rax = kth BPM value in signed thousandths.
+kth_bpm_segment_value:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+
+    xor r10d, r10d
+.candidate_loop:
+    cmp r10, rdi
+    jae .zero
+    mov r13, r10
+    shl r13, 4
+    mov r11, [rsi + r13 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    test r9, r9
+    jz .candidate_ok
+    cmp r11, 0
+    jle .candidate_next
+    cmp r11, 10000000
+    jge .candidate_next
+
+.candidate_ok:
+    xor r14d, r14d
+    xor r15d, r15d
+    xor r12d, r12d
+.count_loop:
+    cmp r12, rdi
+    jae .check_candidate
+    mov r13, r12
+    shl r13, 4
+    mov rbx, [rsi + r13 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    test r9, r9
+    jz .count_value_ok
+    cmp rbx, 0
+    jle .count_next
+    cmp rbx, 10000000
+    jge .count_next
+
+.count_value_ok:
+    cmp rbx, r11
+    jl .less
+    jle .less_equal
+    jmp .count_next
+.less:
+    inc r14
+.less_equal:
+    inc r15
+.count_next:
+    inc r12
+    jmp .count_loop
+
+.check_candidate:
+    cmp r14, r8
+    ja .candidate_next
+    cmp r15, r8
+    jbe .candidate_next
+    mov rax, r11
+    jmp .done
+
+.candidate_next:
+    inc r10
+    jmp .candidate_loop
+
+.zero:
+    xor eax, eax
+
+.done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
     pop rbx
     ret
 

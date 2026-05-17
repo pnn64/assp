@@ -180,6 +180,10 @@ int64_t assp_bpm_average_centi(
     const assp_bpm_segment *segments,
     size_t len
 );
+int64_t assp_bpm_median_centi(
+    const assp_bpm_segment *segments,
+    size_t len
+);
 int64_t assp_bpm_at_beat_milli(
     const assp_bpm_segment *segments,
     size_t len,

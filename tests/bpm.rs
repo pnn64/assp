@@ -1,6 +1,6 @@
 use assp::{
-    BpmSegment, bpm_average_centi, bpm_display_range, find_bpms_for_chart, normalize_float_digits,
-    parse_bpm_map,
+    BpmSegment, bpm_average_centi, bpm_display_range, bpm_median_centi, find_bpms_for_chart,
+    normalize_float_digits, parse_bpm_map,
 };
 use rssp_core::bpm;
 
@@ -55,6 +55,19 @@ fn assert_average_bpm(input: &[u8]) {
     );
 }
 
+fn assert_median_bpm(input: &[u8]) {
+    let segments = parse_bpm_map(input).unwrap();
+    let rust_values: Vec<_> = segments
+        .iter()
+        .map(|s| s.bpm_milli as f64 / 1000.0)
+        .collect();
+    let (median, _) = bpm::compute_bpm_stats(&rust_values);
+    assert_eq!(
+        bpm_median_centi(&segments),
+        (median * 100.0).round_ties_even() as i64
+    );
+}
+
 #[test]
 fn normalizes_decimal_timing_map() {
     assert_normalized(b"");
@@ -92,6 +105,19 @@ fn computes_average_bpm_like_rssp_core() {
     assert_average_bpm(b"0=12000,4=15000");
     assert_average_bpm(b"0=-10,4=-5");
     assert_average_bpm(b"0=1.025,4=1.075");
+}
+
+#[test]
+fn computes_median_bpm_like_rssp_core() {
+    assert_median_bpm(b"");
+    assert_median_bpm(b"0=140");
+    assert_median_bpm(b"0=120.499,4=175.500,8=130.250");
+    assert_median_bpm(b"0=120.499,4=175.500");
+    assert_median_bpm(b"0=120,4=15000,8=-10");
+    assert_median_bpm(b"0=12000,4=15000");
+    assert_median_bpm(b"0=-10,4=-5");
+    assert_median_bpm(b"0=1.025");
+    assert_median_bpm(b"0=1.025,4=1.075");
 }
 
 #[test]

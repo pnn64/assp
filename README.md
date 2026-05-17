@@ -35,6 +35,7 @@ The first implemented pieces are:
 - `assp_parse_offset_ms`
 - `assp_bpm_display_range`
 - `assp_bpm_average_centi`
+- `assp_bpm_median_centi`
 - `assp_bpm_at_beat_milli`
 - `assp_elapsed_ms_bpm_only`
 - `assp_elapsed_ms_with_events`
@@ -118,6 +119,8 @@ beat/BPM pairs, with both fields stored as signed thousandths.
 `assp_bpm_display_range` computes RSSP-style rounded min/max display BPMs,
 including the same high-gimmick BPM filtering and fallback behavior.
 `assp_bpm_average_centi` computes RSSP-style average display BPM rounded to two
+decimal places.
+`assp_bpm_median_centi` computes RSSP-style median display BPM rounded to two
 decimal places.
 `assp_parse_offset_ms` parses `#OFFSET` values into signed milliseconds for
 duration adjustment.

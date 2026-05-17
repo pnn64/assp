@@ -34,6 +34,7 @@ extern assp_find_global_tag
 extern assp_find_global_timing_tags
 extern assp_bpm_average_centi
 extern assp_bpm_display_range
+extern assp_bpm_median_centi
 extern assp_elapsed_ms_bpm_only
 extern assp_elapsed_ms_with_events
 extern assp_last_beat_milli_4
@@ -860,6 +861,11 @@ prepare_bpm_range:
     call assp_bpm_average_centi
     mov [average_bpm_centi], rax
 
+    lea rcx, [bpm_segment_buffer]
+    mov rdx, [bpm_segment_count]
+    call assp_bpm_median_centi
+    mov [median_bpm_centi], rax
+
 .done:
     add rsp, 40
     ret
@@ -1165,6 +1171,9 @@ print_report:
     call print_field
     lea rcx, [label_average_bpm]
     mov rdx, [average_bpm_centi]
+    call print_fixed2_field
+    lea rcx, [label_median_bpm]
+    mov rdx, [median_bpm_centi]
     call print_fixed2_field
     lea rcx, [label_measures]
     mov rdx, [measure_count]
@@ -1518,6 +1527,7 @@ label_hash_bpms db "hash_bpms: ", 0
 label_min_bpm db "min_bpm: ", 0
 label_max_bpm db "max_bpm: ", 0
 label_average_bpm db "average_bpm: ", 0
+label_median_bpm db "median_bpm: ", 0
 label_measures db "measures: ", 0
 label_peak_nps_milli db "peak_nps_milli: ", 0
 label_last_beat_milli db "last_beat_milli: ", 0
@@ -1598,6 +1608,7 @@ offset_ms resq 1
 min_bpm resq 1
 max_bpm resq 1
 average_bpm_centi resq 1
+median_bpm_centi resq 1
 mines_nonfake resq 1
 timing_fakes resq 1
 chart_has_own_timing resq 1
