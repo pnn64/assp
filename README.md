@@ -22,12 +22,15 @@ The first implemented pieces are:
 - `assp_find_byte`
 - `assp_count_note_charts`
 - `assp_find_chart_by_index`
+- `assp_measure_densities_4`
 - `assp_count_note_stats_4`
 
 `assp_count_note_stats_4` is an initial 4-panel note-data counter. It counts
 tap arrows, holds, rolls, mines, lifts, fakes, steps, jumps, hands, and per-lane
 arrow totals from a note-data byte slice. It does not yet do RSSP's full
 measure minimization or phantom-hold correction.
+`assp_measure_densities_4` counts per-measure step-row densities and matches
+RSSP's density output for the bundled SM and SSC fixtures.
 
 ## Build And Test
 

@@ -63,6 +63,12 @@ int32_t assp_find_chart_by_index(
     size_t index,
     assp_chart_info *out
 );
+size_t assp_measure_densities_4(
+    const uint8_t *data,
+    size_t len,
+    uint32_t *out,
+    size_t out_cap
+);
 int32_t assp_count_note_stats_4(
     const uint8_t *data,
     size_t len,

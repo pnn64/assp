@@ -62,6 +62,12 @@ unsafe extern "C" {
         index: usize,
         out: *mut ChartInfo,
     ) -> c_int;
+    fn assp_measure_densities_4(
+        data: *const u8,
+        len: usize,
+        out: *mut u32,
+        out_cap: usize,
+    ) -> usize;
     fn assp_count_note_stats_4(data: *const u8, len: usize, out: *mut NoteStats) -> c_int;
 }
 
@@ -93,6 +99,17 @@ pub fn find_chart_by_index(data: &[u8], index: usize) -> Option<ChartInfo> {
     let mut chart = ChartInfo::default();
     let ok = unsafe { assp_find_chart_by_index(data.as_ptr(), data.len(), index, &mut chart) };
     (ok != 0).then_some(chart)
+}
+
+#[must_use]
+pub fn measure_densities_4(data: &[u8]) -> Vec<u32> {
+    let count =
+        unsafe { assp_measure_densities_4(data.as_ptr(), data.len(), std::ptr::null_mut(), 0) };
+    let mut out = vec![0; count];
+    if count != 0 {
+        unsafe { assp_measure_densities_4(data.as_ptr(), data.len(), out.as_mut_ptr(), out.len()) };
+    }
+    out
 }
 
 #[must_use]

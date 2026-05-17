@@ -14,6 +14,7 @@ extern WriteFile
 extern assp_count_note_stats_4
 extern assp_count_note_charts
 extern assp_find_chart_by_index
+extern assp_measure_densities_4
 
 global start
 
@@ -52,6 +53,13 @@ start:
     call assp_count_note_stats_4
     test eax, eax
     jz fail_stats
+
+    mov rcx, [chart_info + ASSP_CHART_INFO_NOTES_PTR]
+    mov rdx, [chart_info + ASSP_CHART_INFO_NOTES_LEN]
+    xor r8d, r8d
+    xor r9d, r9d
+    call assp_measure_densities_4
+    mov [measure_count], rax
 
     call print_report
     xor ecx, ecx
@@ -349,6 +357,9 @@ print_report:
     mov rdx, [chart_info + ASSP_CHART_INFO_DESC_PTR]
     mov r8, [chart_info + ASSP_CHART_INFO_DESC_LEN]
     call print_slice_field
+    lea rcx, [label_measures]
+    mov rdx, [measure_count]
+    call print_field
     lea rcx, [label_rows]
     mov rdx, [note_stats + ASSP_NOTE_STATS_ROWS]
     call print_field
@@ -523,6 +534,7 @@ label_step_type db "step_type: ", 0
 label_difficulty db "difficulty: ", 0
 label_meter db "meter: ", 0
 label_description db "description: ", 0
+label_measures db "measures: ", 0
 label_rows db "rows: ", 0
 label_steps db "steps: ", 0
 label_arrows db "arrows: ", 0
@@ -549,6 +561,7 @@ input_path resq 1
 chart_index resq 1
 list_mode resq 1
 chart_count resq 1
+measure_count resq 1
 file_handle resq 1
 file_size resq 1
 file_len resq 1
