@@ -118,6 +118,13 @@ int32_t assp_sha1_short_hex2(
     size_t second_len,
     uint8_t *out16
 );
+int32_t assp_chart_hash_pair(
+    const uint8_t *chart_data,
+    size_t chart_data_len,
+    const uint8_t *normalized_bpms,
+    size_t normalized_bpms_len,
+    uint8_t *out32
+);
 int32_t assp_stream_counts_from_densities(
     const uint32_t *densities,
     size_t len,

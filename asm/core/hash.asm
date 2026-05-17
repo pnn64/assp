@@ -2,6 +2,7 @@ default rel
 %include "assp.inc"
 
 global assp_sha1_short_hex2
+global assp_chart_hash_pair
 
 %define SHA_BUF 0
 %define SHA_W 64
@@ -84,6 +85,79 @@ assp_sha1_short_hex2:
 
 .done:
     add rsp, SHA_LOCAL_SIZE
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
+; rcx = chart bytes, rdx = chart len, r8 = normalized BPM bytes,
+; r9 = normalized BPM len, stack arg 5 = out32 ascii buffer.
+; Writes chart hash at out32[0..16] and BPM-neutral hash at out32[16..32].
+; eax = 1 on success, 0 on invalid pointers.
+assp_chart_hash_pair:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+
+    mov rbx, [rsp + 96]
+    test rbx, rbx
+    jz .fail
+    test rdx, rdx
+    jz .check_bpms
+    test rcx, rcx
+    jz .fail
+
+.check_bpms:
+    test r9, r9
+    jz .init
+    test r8, r8
+    jz .fail
+
+.init:
+    mov r12, rcx
+    mov r13, rdx
+    mov r14, r8
+    mov r15, r9
+
+    sub rsp, 48
+    mov [rsp + 32], rbx
+    mov rcx, r12
+    mov rdx, r13
+    mov r8, r14
+    mov r9, r15
+    call assp_sha1_short_hex2
+    test eax, eax
+    jz .call_fail
+
+    lea rax, [rbx + 16]
+    mov [rsp + 32], rax
+    mov rcx, r12
+    mov rdx, r13
+    lea r8, [neutral_bpms]
+    mov r9d, 11
+    call assp_sha1_short_hex2
+    test eax, eax
+    jz .call_fail
+
+    add rsp, 48
+    mov eax, ASSP_TRUE
+    jmp .done
+
+.call_fail:
+    add rsp, 48
+
+.fail:
+    xor eax, eax
+
+.done:
     pop r15
     pop r14
     pop r13
@@ -363,3 +437,7 @@ zero_bytes:
     jmp .loop
 .done:
     ret
+
+section .rdata
+
+neutral_bpms db "0.000=0.000"

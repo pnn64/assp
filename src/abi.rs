@@ -128,6 +128,13 @@ unsafe extern "C" {
         second_len: usize,
         out16: *mut u8,
     ) -> c_int;
+    fn assp_chart_hash_pair(
+        chart_data: *const u8,
+        chart_data_len: usize,
+        normalized_bpms: *const u8,
+        normalized_bpms_len: usize,
+        out32: *mut u8,
+    ) -> c_int;
     fn assp_stream_counts_from_densities(
         densities: *const u32,
         len: usize,
@@ -271,6 +278,29 @@ pub fn sha1_short_hex2(first: &[u8], second: &[u8]) -> Option<[u8; 16]> {
         )
     };
     (ok != 0).then_some(out)
+}
+
+#[must_use]
+pub fn chart_hash_pair(chart_data: &[u8], normalized_bpms: &[u8]) -> Option<([u8; 16], [u8; 16])> {
+    let mut out = [0; 32];
+    let ok = unsafe {
+        assp_chart_hash_pair(
+            chart_data.as_ptr(),
+            chart_data.len(),
+            normalized_bpms.as_ptr(),
+            normalized_bpms.len(),
+            out.as_mut_ptr(),
+        )
+    };
+    if ok == 0 {
+        return None;
+    }
+
+    let mut hash = [0; 16];
+    let mut neutral = [0; 16];
+    hash.copy_from_slice(&out[..16]);
+    neutral.copy_from_slice(&out[16..]);
+    Some((hash, neutral))
 }
 
 #[must_use]
