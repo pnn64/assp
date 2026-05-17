@@ -18,11 +18,14 @@ extern assp_measure_densities_4
 extern assp_stream_counts_from_densities
 extern assp_stream_segments_from_densities
 extern assp_stream_tokens_from_densities
+extern assp_format_stream_segments
+extern assp_format_stream_tokens
 
 global start
 
 %define FILE_BUFFER_CAP 8388608
 %define DENSITY_CAP 131072
+%define TEXT_BUFFER_CAP 1048576
 
 section .text
 
@@ -86,6 +89,14 @@ start:
     xor r9d, r9d
     call assp_stream_segments_from_densities
     mov [stream_segment_count], rax
+    cmp rax, DENSITY_CAP
+    ja fail_density
+
+    lea rcx, [density_buffer]
+    mov rdx, [measure_count]
+    lea r8, [stream_segment_buffer]
+    mov r9d, DENSITY_CAP
+    call assp_stream_segments_from_densities
 
     lea rcx, [density_buffer]
     mov rdx, [measure_count]
@@ -93,6 +104,14 @@ start:
     xor r9d, r9d
     call assp_stream_tokens_from_densities
     mov [stream_token_count], rax
+    cmp rax, DENSITY_CAP
+    ja fail_density
+
+    lea rcx, [density_buffer]
+    mov rdx, [measure_count]
+    lea r8, [stream_token_buffer]
+    mov r9d, DENSITY_CAP
+    call assp_stream_tokens_from_densities
 
     call print_report
     xor ecx, ecx
@@ -423,6 +442,27 @@ print_report:
     lea rcx, [label_stream_tokens]
     mov rdx, [stream_token_count]
     call print_field
+    lea rcx, [label_breakdown_detailed]
+    mov edx, ASSP_BREAKDOWN_DETAILED
+    call print_token_breakdown
+    lea rcx, [label_breakdown_partial]
+    mov edx, ASSP_BREAKDOWN_PARTIAL
+    call print_token_breakdown
+    lea rcx, [label_breakdown_simplified]
+    mov edx, ASSP_BREAKDOWN_SIMPLIFIED
+    call print_token_breakdown
+    lea rcx, [label_stream_breakdown_detailed]
+    mov edx, ASSP_STREAM_BREAKDOWN_DETAILED
+    call print_segment_breakdown
+    lea rcx, [label_stream_breakdown_partial]
+    mov edx, ASSP_STREAM_BREAKDOWN_PARTIAL
+    call print_segment_breakdown
+    lea rcx, [label_stream_breakdown_simple]
+    mov edx, ASSP_STREAM_BREAKDOWN_SIMPLE
+    call print_segment_breakdown
+    lea rcx, [label_stream_breakdown_total]
+    mov edx, ASSP_STREAM_BREAKDOWN_TOTAL
+    call print_segment_breakdown
     lea rcx, [label_rows]
     mov rdx, [note_stats + ASSP_NOTE_STATS_ROWS]
     call print_field
@@ -527,6 +567,70 @@ print_slice_field:
     add rsp, 72
     ret
 
+print_token_breakdown:
+    sub rsp, 80
+    mov [rsp + 40], rcx
+    mov [rsp + 48], rdx
+
+    lea rcx, [stream_token_buffer]
+    mov rdx, [stream_token_count]
+    mov r8d, [rsp + 48]
+    lea r9, [text_buffer]
+    mov qword [rsp + 32], TEXT_BUFFER_CAP
+    call assp_format_stream_tokens
+    cmp rax, TEXT_BUFFER_CAP
+    ja .too_long
+
+    mov [rsp + 56], rax
+    mov rcx, [rsp + 40]
+    call print_z
+    lea rcx, [text_buffer]
+    mov rdx, [rsp + 56]
+    call print_raw
+    lea rcx, [newline]
+    call print_z
+    jmp .done
+
+.too_long:
+    lea rcx, [msg_breakdown_too_long]
+    call print_z
+
+.done:
+    add rsp, 80
+    ret
+
+print_segment_breakdown:
+    sub rsp, 80
+    mov [rsp + 40], rcx
+    mov [rsp + 48], rdx
+
+    lea rcx, [stream_segment_buffer]
+    mov rdx, [stream_segment_count]
+    mov r8d, [rsp + 48]
+    lea r9, [text_buffer]
+    mov qword [rsp + 32], TEXT_BUFFER_CAP
+    call assp_format_stream_segments
+    cmp rax, TEXT_BUFFER_CAP
+    ja .too_long
+
+    mov [rsp + 56], rax
+    mov rcx, [rsp + 40]
+    call print_z
+    lea rcx, [text_buffer]
+    mov rdx, [rsp + 56]
+    call print_raw
+    lea rcx, [newline]
+    call print_z
+    jmp .done
+
+.too_long:
+    lea rcx, [msg_breakdown_too_long]
+    call print_z
+
+.done:
+    add rsp, 80
+    ret
+
 print_u64:
     mov rax, rcx
     lea r10, [num_buffer + 32]
@@ -591,6 +695,7 @@ msg_read_fail db "failed to read input file", 13, 10, 0
 msg_notes_fail db "failed to find selected #NOTES chart", 13, 10, 0
 msg_stats_fail db "assembly note stat counter failed", 13, 10, 0
 msg_density_fail db "chart has too many measures for the density buffer", 13, 10, 0
+msg_breakdown_too_long db "breakdown output exceeded text buffer", 13, 10, 0
 label_file db "file: ", 0
 label_charts db "charts: ", 0
 label_chart db "chart: ", 0
@@ -607,6 +712,13 @@ label_sn_breaks db "sn_breaks: ", 0
 label_total_breaks db "total_breaks: ", 0
 label_stream_segments db "stream_segments: ", 0
 label_stream_tokens db "stream_tokens: ", 0
+label_breakdown_detailed db "breakdown_detailed: ", 0
+label_breakdown_partial db "breakdown_partial: ", 0
+label_breakdown_simplified db "breakdown_simplified: ", 0
+label_stream_breakdown_detailed db "stream_breakdown_detailed: ", 0
+label_stream_breakdown_partial db "stream_breakdown_partial: ", 0
+label_stream_breakdown_simple db "stream_breakdown_simple: ", 0
+label_stream_breakdown_total db "stream_breakdown_total: ", 0
 label_rows db "rows: ", 0
 label_steps db "steps: ", 0
 label_arrows db "arrows: ", 0
@@ -645,4 +757,7 @@ note_stats resb ASSP_NOTE_STATS_SIZE
 stream_counts resb ASSP_STREAM_COUNTS_SIZE
 num_buffer resb 32
 density_buffer resd DENSITY_CAP
+stream_segment_buffer resb DENSITY_CAP * ASSP_STREAM_SEGMENT_SIZE
+stream_token_buffer resb DENSITY_CAP * ASSP_STREAM_TOKEN_SIZE
+text_buffer resb TEXT_BUFFER_CAP
 file_buffer resb FILE_BUFFER_CAP

@@ -100,7 +100,8 @@ The standalone executable currently scans SSC files for chart metadata and
 `#NOTES:` tags. The second argument is a zero-based chart index, or `list` to
 print chart indexes with step type, difficulty, meter, and description.
 SM `#NOTES:` blocks are also split into their five metadata fields before chart
-rows are passed to the stat counter.
+rows are passed to the stat counter. Chart reports include density-derived
+stream counts, token breakdowns, segment breakdowns, and note stats.
 
 Run the optional Rust parity tests:
 
