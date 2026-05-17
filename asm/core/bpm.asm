@@ -8,6 +8,7 @@ global assp_bpm_at_beat_milli
 global assp_elapsed_ms_bpm_only
 global assp_elapsed_ms_with_events
 global assp_measure_nps_milli_from_bpms
+global assp_measure_nps_milli_with_events
 
 section .text
 
@@ -25,6 +26,22 @@ section .text
 %define EVT_BEST_VAL -152
 %define EVT_BEST_TYPE -160
 %define EVT_BEST_PRI -168
+
+%define NPS_DENSITIES -8
+%define NPS_DENSITY_LEN -16
+%define NPS_BPMS -24
+%define NPS_BPM_LEN -32
+%define NPS_STOPS -40
+%define NPS_STOP_LEN -48
+%define NPS_DELAYS -56
+%define NPS_DELAY_LEN -64
+%define NPS_WARPS -72
+%define NPS_WARP_LEN -80
+%define NPS_OUT -88
+%define NPS_OUT_CAP -96
+%define NPS_INDEX -104
+%define NPS_START_MS -112
+%define NPS_END_MS -120
 
 %macro ASSP_CONSIDER_TIMING_EVENT 0
     cmp qword [rbp + EVT_BEST_TYPE], -1
@@ -659,6 +676,153 @@ assp_measure_nps_milli_from_bpms:
     pop rdi
     pop rsi
     pop rbx
+    ret
+
+; rcx = u32 densities, rdx = density len, r8 = BPM segments, r9 = BPM count,
+; stack arg 5 = stop segments, arg 6 = stop count, arg 7 = delay segments,
+; arg 8 = delay count, arg 9 = warp segments, arg 10 = warp count,
+; arg 11 = optional u32 output, arg 12 = output cap.
+; rax = density len, or ASSP_NOT_FOUND on invalid input.
+assp_measure_nps_milli_with_events:
+    push rbp
+    mov rbp, rsp
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 168
+
+    mov [rbp + NPS_DENSITIES], rcx
+    mov [rbp + NPS_DENSITY_LEN], rdx
+    mov [rbp + NPS_BPMS], r8
+    mov [rbp + NPS_BPM_LEN], r9
+    mov rax, [rbp + 48]
+    mov [rbp + NPS_STOPS], rax
+    mov rax, [rbp + 56]
+    mov [rbp + NPS_STOP_LEN], rax
+    mov rax, [rbp + 64]
+    mov [rbp + NPS_DELAYS], rax
+    mov rax, [rbp + 72]
+    mov [rbp + NPS_DELAY_LEN], rax
+    mov rax, [rbp + 80]
+    mov [rbp + NPS_WARPS], rax
+    mov rax, [rbp + 88]
+    mov [rbp + NPS_WARP_LEN], rax
+    mov rax, [rbp + 96]
+    mov [rbp + NPS_OUT], rax
+    mov rax, [rbp + 104]
+    mov [rbp + NPS_OUT_CAP], rax
+
+    cmp qword [rbp + NPS_DENSITY_LEN], 0
+    je .empty
+    cmp qword [rbp + NPS_DENSITIES], 0
+    je .invalid
+    cmp qword [rbp + NPS_BPM_LEN], 0
+    je .check_stops
+    cmp qword [rbp + NPS_BPMS], 0
+    je .invalid
+.check_stops:
+    cmp qword [rbp + NPS_STOP_LEN], 0
+    je .check_delays
+    cmp qword [rbp + NPS_STOPS], 0
+    je .invalid
+.check_delays:
+    cmp qword [rbp + NPS_DELAY_LEN], 0
+    je .check_warps
+    cmp qword [rbp + NPS_DELAYS], 0
+    je .invalid
+.check_warps:
+    cmp qword [rbp + NPS_WARP_LEN], 0
+    je .init
+    cmp qword [rbp + NPS_WARPS], 0
+    je .invalid
+
+.init:
+    mov qword [rbp + NPS_INDEX], 0
+    mov qword [rbp + NPS_START_MS], 0
+
+.loop:
+    mov r15, [rbp + NPS_INDEX]
+    cmp r15, [rbp + NPS_DENSITY_LEN]
+    jae .done
+
+    mov rax, r15
+    inc rax
+    imul rax, rax, 4000
+
+    mov rcx, [rbp + NPS_BPMS]
+    mov rdx, [rbp + NPS_BPM_LEN]
+    mov r8, [rbp + NPS_STOPS]
+    mov r9, [rbp + NPS_STOP_LEN]
+    mov r10, [rbp + NPS_DELAYS]
+    mov [rsp + 32], r10
+    mov r10, [rbp + NPS_DELAY_LEN]
+    mov [rsp + 40], r10
+    mov r10, [rbp + NPS_WARPS]
+    mov [rsp + 48], r10
+    mov r10, [rbp + NPS_WARP_LEN]
+    mov [rsp + 56], r10
+    mov [rsp + 64], rax
+    call assp_elapsed_ms_with_events
+    mov [rbp + NPS_END_MS], rax
+
+    xor eax, eax
+    mov rsi, [rbp + NPS_DENSITIES]
+    mov r11d, [rsi + r15 * 4]
+    test r11d, r11d
+    jz .store
+
+    mov r12, [rbp + NPS_END_MS]
+    sub r12, [rbp + NPS_START_MS]
+    cmp r12, 120
+    jle .store
+
+    mov rax, r11
+    imul rax, rax, 1000000
+    mov r10, r12
+    shr r10, 1
+    add rax, r10
+    xor edx, edx
+    div r12
+
+.store:
+    mov rbx, [rbp + NPS_OUT]
+    test rbx, rbx
+    jz .next
+    cmp r15, [rbp + NPS_OUT_CAP]
+    jae .next
+    mov [rbx + r15 * 4], eax
+
+.next:
+    mov rax, [rbp + NPS_END_MS]
+    mov [rbp + NPS_START_MS], rax
+    inc qword [rbp + NPS_INDEX]
+    jmp .loop
+
+.empty:
+    xor eax, eax
+    jmp .pop_done
+
+.done:
+    mov rax, [rbp + NPS_DENSITY_LEN]
+    jmp .pop_done
+
+.invalid:
+    mov rax, ASSP_NOT_FOUND
+
+.pop_done:
+    add rsp, 168
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    pop rbp
     ret
 
 ; rcx = number start, rdx = number end.

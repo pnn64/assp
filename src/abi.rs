@@ -194,6 +194,20 @@ unsafe extern "C" {
         out: *mut u32,
         out_cap: usize,
     ) -> usize;
+    fn assp_measure_nps_milli_with_events(
+        densities: *const u32,
+        density_len: usize,
+        bpms: *const BpmSegment,
+        bpm_len: usize,
+        stops: *const BpmSegment,
+        stop_len: usize,
+        delays: *const BpmSegment,
+        delay_len: usize,
+        warps: *const BpmSegment,
+        warp_len: usize,
+        out: *mut u32,
+        out_cap: usize,
+    ) -> usize;
     fn assp_last_beat_milli_4(data: *const u8, len: usize) -> usize;
     fn assp_measure_densities_4(
         data: *const u8,
@@ -468,6 +482,63 @@ pub fn measure_nps_milli_from_bpms(densities: &[u32], bpms: &[BpmSegment]) -> Op
                 densities.len(),
                 bpms.as_ptr(),
                 bpms.len(),
+                out.as_mut_ptr(),
+                out.len(),
+            )
+        };
+        if written == NOT_FOUND {
+            return None;
+        }
+    }
+    Some(out)
+}
+
+#[must_use]
+pub fn measure_nps_milli_with_events(
+    densities: &[u32],
+    bpms: &[BpmSegment],
+    stops: &[BpmSegment],
+    delays: &[BpmSegment],
+    warps: &[BpmSegment],
+) -> Option<Vec<u32>> {
+    if stops.is_empty() && delays.is_empty() && warps.is_empty() {
+        return measure_nps_milli_from_bpms(densities, bpms);
+    }
+
+    let count = unsafe {
+        assp_measure_nps_milli_with_events(
+            densities.as_ptr(),
+            densities.len(),
+            bpms.as_ptr(),
+            bpms.len(),
+            stops.as_ptr(),
+            stops.len(),
+            delays.as_ptr(),
+            delays.len(),
+            warps.as_ptr(),
+            warps.len(),
+            std::ptr::null_mut(),
+            0,
+        )
+    };
+    if count == NOT_FOUND {
+        return None;
+    }
+
+    let mut out = vec![0; count];
+    if count != 0 {
+        let written = unsafe {
+            assp_measure_nps_milli_with_events(
+                densities.as_ptr(),
+                densities.len(),
+                bpms.as_ptr(),
+                bpms.len(),
+                stops.as_ptr(),
+                stops.len(),
+                delays.as_ptr(),
+                delays.len(),
+                warps.as_ptr(),
+                warps.len(),
                 out.as_mut_ptr(),
                 out.len(),
             )

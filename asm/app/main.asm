@@ -26,6 +26,7 @@ extern assp_elapsed_ms_with_events
 extern assp_last_beat_milli_4
 extern assp_measure_densities_4
 extern assp_measure_nps_milli_from_bpms
+extern assp_measure_nps_milli_with_events
 extern assp_minimize_chart_4
 extern assp_normalize_float_digits
 extern assp_parse_bpm_map
@@ -540,8 +541,14 @@ prepare_hash:
     ret
 
 prepare_nps:
-    sub rsp, 56
+    sub rsp, 104
 
+    mov rax, [stop_segment_count]
+    or rax, [delay_segment_count]
+    or rax, [warp_segment_count]
+    jnz .with_events
+
+.bpm_only:
     lea rcx, [density_buffer]
     mov rdx, [measure_count]
     lea r8, [bpm_segment_buffer]
@@ -555,6 +562,36 @@ prepare_nps:
     cmp rax, DENSITY_CAP
     ja .fail
     mov [nps_count], rax
+    jmp .peak
+
+.with_events:
+    lea rcx, [density_buffer]
+    mov rdx, [measure_count]
+    lea r8, [bpm_segment_buffer]
+    mov r9, [bpm_segment_count]
+    lea rax, [stop_segment_buffer]
+    mov [rsp + 32], rax
+    mov rax, [stop_segment_count]
+    mov [rsp + 40], rax
+    lea rax, [delay_segment_buffer]
+    mov [rsp + 48], rax
+    mov rax, [delay_segment_count]
+    mov [rsp + 56], rax
+    lea rax, [warp_segment_buffer]
+    mov [rsp + 64], rax
+    mov rax, [warp_segment_count]
+    mov [rsp + 72], rax
+    lea rax, [nps_buffer]
+    mov [rsp + 80], rax
+    mov qword [rsp + 88], DENSITY_CAP
+    call assp_measure_nps_milli_with_events
+    cmp rax, ASSP_NOT_FOUND
+    je .fail
+    cmp rax, DENSITY_CAP
+    ja .fail
+    mov [nps_count], rax
+
+.peak:
     xor r8d, r8d
     xor r9d, r9d
     lea r10, [nps_buffer]
@@ -578,7 +615,7 @@ prepare_nps:
     xor eax, eax
 
 .done:
-    add rsp, 56
+    add rsp, 104
     ret
 
 prepare_timing_events:

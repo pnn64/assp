@@ -193,6 +193,20 @@ size_t assp_measure_nps_milli_from_bpms(
     uint32_t *out,
     size_t out_cap
 );
+size_t assp_measure_nps_milli_with_events(
+    const uint32_t *densities,
+    size_t density_len,
+    const assp_bpm_segment *bpms,
+    size_t bpm_len,
+    const assp_bpm_segment *stops,
+    size_t stop_len,
+    const assp_bpm_segment *delays,
+    size_t delay_len,
+    const assp_bpm_segment *warps,
+    size_t warp_len,
+    uint32_t *out,
+    size_t out_cap
+);
 size_t assp_measure_densities_4(
     const uint8_t *data,
     size_t len,
