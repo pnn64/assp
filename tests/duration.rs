@@ -1,5 +1,6 @@
 use assp::{
-    elapsed_ms_bpm_only, elapsed_ms_with_events, find_bpms_for_chart, find_chart_by_index,
+    ByteSlice, TimingTags, elapsed_ms_bpm_only, elapsed_ms_with_events, find_bpms_for_chart,
+    find_chart_by_index, find_chart_timing_tags_by_index, find_global_timing_tags,
     last_beat_milli_4, parse_bpm_map, parse_offset_ms,
 };
 use rssp_core::{bpm, parse::parse_offset_seconds};
@@ -7,6 +8,28 @@ use rssp_core::{bpm, parse::parse_offset_seconds};
 fn slice_from<'a>(data: &'a [u8], ptr: *const u8, len: usize) -> &'a [u8] {
     let start = ptr as usize - data.as_ptr() as usize;
     &data[start..start + len]
+}
+
+fn tag_slice<'a>(data: &'a [u8], slice: ByteSlice) -> &'a [u8] {
+    if slice.data.is_null() {
+        &[]
+    } else {
+        slice_from(data, slice.data, slice.len)
+    }
+}
+
+fn has_timing_tags(tags: TimingTags) -> bool {
+    [
+        tags.bpms.data,
+        tags.stops.data,
+        tags.delays.data,
+        tags.warps.data,
+        tags.speeds.data,
+        tags.scrolls.data,
+        tags.fakes.data,
+    ]
+    .iter()
+    .any(|ptr| !ptr.is_null())
 }
 
 fn rust_last_beat_milli(data: &[u8]) -> usize {
@@ -160,4 +183,32 @@ fn fixture_bpm_only_duration_matches_rssp_core() {
         let bpms = slice_from(simfile, bpms.data, bpms.len);
         assert_elapsed_match(bpms, last_beat as i64);
     }
+}
+
+#[test]
+fn chart_local_timing_owns_duration_context() {
+    let simfile = include_bytes!("../fixtures/chart_own_timing.ssc");
+    let chart = find_chart_by_index(simfile, 0).unwrap();
+    let note_data = slice_from(simfile, chart.note_data, chart.note_data_len);
+    let last_beat = last_beat_milli_4(note_data).unwrap();
+    assert_eq!(last_beat, 4000);
+
+    let global = find_global_timing_tags(simfile).unwrap();
+    let chart = find_chart_timing_tags_by_index(simfile, 0).unwrap();
+    assert!(has_timing_tags(chart));
+
+    let bpms = parse_bpm_map(tag_slice(simfile, chart.bpms)).unwrap();
+    let stops = parse_bpm_map(tag_slice(simfile, chart.stops)).unwrap();
+    let delays = parse_bpm_map(tag_slice(simfile, chart.delays)).unwrap();
+    let warps = parse_bpm_map(tag_slice(simfile, chart.warps)).unwrap();
+    assert_eq!(
+        elapsed_ms_with_events(&bpms, &stops, &delays, &warps, 4000),
+        5000
+    );
+
+    let global_bpms = parse_bpm_map(tag_slice(simfile, global.bpms)).unwrap();
+    assert_eq!(
+        elapsed_ms_with_events(&global_bpms, &stops, &delays, &warps, 4000),
+        3000
+    );
 }

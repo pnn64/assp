@@ -79,6 +79,9 @@ first fixed-point NPS path from parsed BPM maps and per-measure densities.
 `assp_elapsed_ms_bpm_only` computes BPM-only elapsed time in milliseconds.
 `assp_elapsed_ms_with_events` extends that fixed-point duration path with RSSP's
 BPM, stop, delay, and warp event ordering.
+The standalone timing path applies RSSP's chart-local timing ownership rule:
+when an SSC chart defines any local timing tag or offset, global timing maps are
+not mixed into that chart's duration/NPS timing context.
 `assp_stream_counts_from_densities` classifies 16th/20th/24th/32nd stream
 measures, SN breaks, and total break measures from those densities.
 `assp_stream_segments_from_densities` emits stream and break ranges from the

@@ -99,17 +99,17 @@ start:
     mov r9d, DENSITY_CAP
     call assp_measure_densities_4
 
-    call prepare_nps
+    call prepare_offset
     test eax, eax
-    jz fail_nps
+    jz fail_duration
 
     call prepare_timing_events
     test eax, eax
     jz fail_duration
 
-    call prepare_offset
+    call prepare_nps
     test eax, eax
-    jz fail_duration
+    jz fail_nps
 
     call prepare_duration
     test eax, eax
@@ -584,6 +584,7 @@ prepare_nps:
 prepare_timing_events:
     sub rsp, 40
 
+    mov qword [bpm_segment_count], 0
     mov qword [stop_segment_count], 0
     mov qword [delay_segment_count], 0
     mov qword [warp_segment_count], 0
@@ -595,14 +596,14 @@ prepare_timing_events:
     test eax, eax
     jz .fail
 
-    mov qword [chart_timing_tags + ASSP_TIMING_TAGS_BPMS + ASSP_BYTE_SLICE_PTR], 0
-    mov qword [chart_timing_tags + ASSP_TIMING_TAGS_BPMS + ASSP_BYTE_SLICE_LEN], 0
-    mov qword [chart_timing_tags + ASSP_TIMING_TAGS_STOPS + ASSP_BYTE_SLICE_PTR], 0
-    mov qword [chart_timing_tags + ASSP_TIMING_TAGS_STOPS + ASSP_BYTE_SLICE_LEN], 0
-    mov qword [chart_timing_tags + ASSP_TIMING_TAGS_DELAYS + ASSP_BYTE_SLICE_PTR], 0
-    mov qword [chart_timing_tags + ASSP_TIMING_TAGS_DELAYS + ASSP_BYTE_SLICE_LEN], 0
-    mov qword [chart_timing_tags + ASSP_TIMING_TAGS_WARPS + ASSP_BYTE_SLICE_PTR], 0
-    mov qword [chart_timing_tags + ASSP_TIMING_TAGS_WARPS + ASSP_BYTE_SLICE_LEN], 0
+    lea r10, [chart_timing_tags]
+    xor eax, eax
+    mov r11d, ASSP_TIMING_TAGS_SIZE / 8
+.zero_chart_tags:
+    mov [r10], rax
+    add r10, 8
+    dec r11d
+    jnz .zero_chart_tags
 
     lea rcx, [file_buffer]
     mov rdx, [file_len]
@@ -610,10 +611,45 @@ prepare_timing_events:
     lea r9, [chart_timing_tags]
     call assp_find_chart_timing_tags_by_index
 
-    mov rax, [chart_timing_tags + ASSP_TIMING_TAGS_STOPS + ASSP_BYTE_SLICE_PTR]
+    xor eax, eax
+    or rax, [chart_timing_tags + ASSP_TIMING_TAGS_BPMS + ASSP_BYTE_SLICE_PTR]
+    or rax, [chart_timing_tags + ASSP_TIMING_TAGS_STOPS + ASSP_BYTE_SLICE_PTR]
+    or rax, [chart_timing_tags + ASSP_TIMING_TAGS_DELAYS + ASSP_BYTE_SLICE_PTR]
+    or rax, [chart_timing_tags + ASSP_TIMING_TAGS_WARPS + ASSP_BYTE_SLICE_PTR]
+    or rax, [chart_timing_tags + ASSP_TIMING_TAGS_SPEEDS + ASSP_BYTE_SLICE_PTR]
+    or rax, [chart_timing_tags + ASSP_TIMING_TAGS_SCROLLS + ASSP_BYTE_SLICE_PTR]
+    or rax, [chart_timing_tags + ASSP_TIMING_TAGS_FAKES + ASSP_BYTE_SLICE_PTR]
+    jz .select_bpms
+    mov qword [chart_has_own_timing], ASSP_TRUE
+
+.select_bpms:
+    cmp qword [chart_has_own_timing], 0
+    je .global_bpms
+    mov rcx, [chart_timing_tags + ASSP_TIMING_TAGS_BPMS + ASSP_BYTE_SLICE_PTR]
+    mov rdx, [chart_timing_tags + ASSP_TIMING_TAGS_BPMS + ASSP_BYTE_SLICE_LEN]
+    jmp .parse_bpms
+.global_bpms:
+    mov rcx, [global_timing_tags + ASSP_TIMING_TAGS_BPMS + ASSP_BYTE_SLICE_PTR]
+    mov rdx, [global_timing_tags + ASSP_TIMING_TAGS_BPMS + ASSP_BYTE_SLICE_LEN]
+.parse_bpms:
+    lea r8, [bpm_segment_buffer]
+    mov r9d, BPM_SEGMENT_CAP
+    call assp_parse_bpm_map
+    cmp rax, ASSP_NOT_FOUND
+    je .fail
+    cmp rax, BPM_SEGMENT_CAP
+    ja .fail
+    mov [bpm_segment_count], rax
     test rax, rax
-    jz .global_stops
-    mov rcx, rax
+    jnz .select_stops
+    mov qword [bpm_segment_buffer + ASSP_BPM_SEGMENT_BEAT_MILLI], 0
+    mov qword [bpm_segment_buffer + ASSP_BPM_SEGMENT_BPM_MILLI], 60000
+    mov qword [bpm_segment_count], 1
+
+.select_stops:
+    cmp qword [chart_has_own_timing], 0
+    je .global_stops
+    mov rcx, [chart_timing_tags + ASSP_TIMING_TAGS_STOPS + ASSP_BYTE_SLICE_PTR]
     mov rdx, [chart_timing_tags + ASSP_TIMING_TAGS_STOPS + ASSP_BYTE_SLICE_LEN]
     jmp .parse_stops
 .global_stops:
@@ -629,10 +665,9 @@ prepare_timing_events:
     ja .fail
     mov [stop_segment_count], rax
 
-    mov rax, [chart_timing_tags + ASSP_TIMING_TAGS_DELAYS + ASSP_BYTE_SLICE_PTR]
-    test rax, rax
-    jz .global_delays
-    mov rcx, rax
+    cmp qword [chart_has_own_timing], 0
+    je .global_delays
+    mov rcx, [chart_timing_tags + ASSP_TIMING_TAGS_DELAYS + ASSP_BYTE_SLICE_PTR]
     mov rdx, [chart_timing_tags + ASSP_TIMING_TAGS_DELAYS + ASSP_BYTE_SLICE_LEN]
     jmp .parse_delays
 .global_delays:
@@ -648,10 +683,9 @@ prepare_timing_events:
     ja .fail
     mov [delay_segment_count], rax
 
-    mov rax, [chart_timing_tags + ASSP_TIMING_TAGS_WARPS + ASSP_BYTE_SLICE_PTR]
-    test rax, rax
-    jz .global_warps
-    mov rcx, rax
+    cmp qword [chart_has_own_timing], 0
+    je .global_warps
+    mov rcx, [chart_timing_tags + ASSP_TIMING_TAGS_WARPS + ASSP_BYTE_SLICE_PTR]
     mov rdx, [chart_timing_tags + ASSP_TIMING_TAGS_WARPS + ASSP_BYTE_SLICE_LEN]
     jmp .parse_warps
 .global_warps:
@@ -681,6 +715,7 @@ prepare_offset:
     sub rsp, 56
 
     mov qword [offset_ms], 0
+    mov qword [chart_has_own_timing], 0
     mov qword [offset_slice + ASSP_BYTE_SLICE_PTR], 0
     mov qword [offset_slice + ASSP_BYTE_SLICE_LEN], 0
 
@@ -714,6 +749,7 @@ prepare_offset:
     test eax, eax
     jz .success
 
+    mov qword [chart_has_own_timing], ASSP_TRUE
     mov rcx, [offset_slice + ASSP_BYTE_SLICE_PTR]
     mov rdx, [offset_slice + ASSP_BYTE_SLICE_LEN]
     call assp_parse_offset_ms
@@ -1202,6 +1238,7 @@ nps_count resq 1
 peak_nps_milli resq 1
 last_beat_milli resq 1
 offset_ms resq 1
+chart_has_own_timing resq 1
 duration_ms resq 1
 hash_pair resb 32
 bpm_buffer resb BPM_BUFFER_CAP
