@@ -33,19 +33,26 @@ section .text
     jnz .yes
 %endmacro
 
+%macro expect_alpha_ci 4
+    cmp byte [%1 + %2], %3
+    je %%ok
+    cmp byte [%1 + %2], %3 + 32
+    jne %4
+%%ok:
+%endmacro
+
+%macro expect_exact 4
+    cmp byte [%1 + %2], %3
+    jne %4
+%endmacro
+
 %macro is_notes_tag 1
-    cmp byte [%1 + 0], '#'
-    jne %%no
-    cmp byte [%1 + 1], 'N'
-    jne %%no
-    cmp byte [%1 + 2], 'O'
-    jne %%no
-    cmp byte [%1 + 3], 'T'
-    jne %%no
-    cmp byte [%1 + 4], 'E'
-    jne %%no
-    cmp byte [%1 + 5], 'S'
-    jne %%no
+    expect_exact %1, 0, '#', %%no
+    expect_alpha_ci %1, 1, 'N', %%no
+    expect_alpha_ci %1, 2, 'O', %%no
+    expect_alpha_ci %1, 3, 'T', %%no
+    expect_alpha_ci %1, 4, 'E', %%no
+    expect_alpha_ci %1, 5, 'S', %%no
     cmp byte [%1 + 6], ':'
     je %%notes
     cmp byte [%1 + 6], '2'
@@ -63,26 +70,16 @@ section .text
 %endmacro
 
 %macro is_notedata_tag 1
-    cmp byte [%1 + 0], '#'
-    jne %%no
-    cmp byte [%1 + 1], 'N'
-    jne %%no
-    cmp byte [%1 + 2], 'O'
-    jne %%no
-    cmp byte [%1 + 3], 'T'
-    jne %%no
-    cmp byte [%1 + 4], 'E'
-    jne %%no
-    cmp byte [%1 + 5], 'D'
-    jne %%no
-    cmp byte [%1 + 6], 'A'
-    jne %%no
-    cmp byte [%1 + 7], 'T'
-    jne %%no
-    cmp byte [%1 + 8], 'A'
-    jne %%no
-    cmp byte [%1 + 9], ':'
-    jne %%no
+    expect_exact %1, 0, '#', %%no
+    expect_alpha_ci %1, 1, 'N', %%no
+    expect_alpha_ci %1, 2, 'O', %%no
+    expect_alpha_ci %1, 3, 'T', %%no
+    expect_alpha_ci %1, 4, 'E', %%no
+    expect_alpha_ci %1, 5, 'D', %%no
+    expect_alpha_ci %1, 6, 'A', %%no
+    expect_alpha_ci %1, 7, 'T', %%no
+    expect_alpha_ci %1, 8, 'A', %%no
+    expect_exact %1, 9, ':', %%no
     mov eax, ASSP_TRUE
     jmp %%done
 %%no:
@@ -91,18 +88,12 @@ section .text
 %endmacro
 
 %macro is_bpms_tag 1
-    cmp byte [%1 + 0], '#'
-    jne %%no
-    cmp byte [%1 + 1], 'B'
-    jne %%no
-    cmp byte [%1 + 2], 'P'
-    jne %%no
-    cmp byte [%1 + 3], 'M'
-    jne %%no
-    cmp byte [%1 + 4], 'S'
-    jne %%no
-    cmp byte [%1 + 5], ':'
-    jne %%no
+    expect_exact %1, 0, '#', %%no
+    expect_alpha_ci %1, 1, 'B', %%no
+    expect_alpha_ci %1, 2, 'P', %%no
+    expect_alpha_ci %1, 3, 'M', %%no
+    expect_alpha_ci %1, 4, 'S', %%no
+    expect_exact %1, 5, ':', %%no
     mov eax, ASSP_TRUE
     jmp %%done
 %%no:
@@ -907,8 +898,25 @@ match_tag_at:
     cmp r8, r13
     jae .yes
     mov al, [r10 + r8]
-    cmp al, [r12 + r8]
+    mov dl, [r12 + r8]
+    cmp al, dl
+    je .next
+    mov cl, al
+    cmp cl, 'A'
+    jb .fold_tag
+    cmp cl, 'Z'
+    ja .fold_tag
+    add cl, 32
+.fold_tag:
+    cmp dl, 'A'
+    jb .compare_folded
+    cmp dl, 'Z'
+    ja .compare_folded
+    add dl, 32
+.compare_folded:
+    cmp cl, dl
     jne .no
+.next:
     inc r8
     jmp .loop
 .yes:
@@ -1013,106 +1021,48 @@ parse_chart_meta:
     cmp byte [r10], '#'
     jne .meta_next
 
-    lea rax, [r10 + 13]
+    lea rax, [r10 + tag_description_end - tag_description]
     cmp rax, r11
     ja .check_difficulty
-    cmp byte [r10 + 1], 'D'
-    jne .check_difficulty
-    cmp byte [r10 + 2], 'E'
-    jne .check_difficulty
-    cmp byte [r10 + 3], 'S'
-    jne .check_difficulty
-    cmp byte [r10 + 4], 'C'
-    jne .check_difficulty
-    cmp byte [r10 + 5], 'R'
-    jne .check_difficulty
-    cmp byte [r10 + 6], 'I'
-    jne .check_difficulty
-    cmp byte [r10 + 7], 'P'
-    jne .check_difficulty
-    cmp byte [r10 + 8], 'T'
-    jne .check_difficulty
-    cmp byte [r10 + 9], 'I'
-    jne .check_difficulty
-    cmp byte [r10 + 10], 'O'
-    jne .check_difficulty
-    cmp byte [r10 + 11], 'N'
-    jne .check_difficulty
-    cmp byte [r10 + 12], ':'
-    jne .check_difficulty
-    store_tag 13, ASSP_CHART_INFO_DESC_PTR, ASSP_CHART_INFO_DESC_LEN
+    lea r12, [tag_description]
+    mov r13, tag_description_end - tag_description
+    call match_tag_at
+    test eax, eax
+    jz .check_difficulty
+    store_tag tag_description_end - tag_description, ASSP_CHART_INFO_DESC_PTR, ASSP_CHART_INFO_DESC_LEN
 
 .check_difficulty:
-    lea rax, [r10 + 12]
+    lea rax, [r10 + tag_difficulty_end - tag_difficulty]
     cmp rax, r11
     ja .check_step_type
-    cmp byte [r10 + 1], 'D'
-    jne .check_step_type
-    cmp byte [r10 + 2], 'I'
-    jne .check_step_type
-    cmp byte [r10 + 3], 'F'
-    jne .check_step_type
-    cmp byte [r10 + 4], 'F'
-    jne .check_step_type
-    cmp byte [r10 + 5], 'I'
-    jne .check_step_type
-    cmp byte [r10 + 6], 'C'
-    jne .check_step_type
-    cmp byte [r10 + 7], 'U'
-    jne .check_step_type
-    cmp byte [r10 + 8], 'L'
-    jne .check_step_type
-    cmp byte [r10 + 9], 'T'
-    jne .check_step_type
-    cmp byte [r10 + 10], 'Y'
-    jne .check_step_type
-    cmp byte [r10 + 11], ':'
-    jne .check_step_type
-    store_tag 12, ASSP_CHART_INFO_DIFFICULTY_PTR, ASSP_CHART_INFO_DIFFICULTY_LEN
+    lea r12, [tag_difficulty]
+    mov r13, tag_difficulty_end - tag_difficulty
+    call match_tag_at
+    test eax, eax
+    jz .check_step_type
+    store_tag tag_difficulty_end - tag_difficulty, ASSP_CHART_INFO_DIFFICULTY_PTR, ASSP_CHART_INFO_DIFFICULTY_LEN
 
 .check_step_type:
-    lea rax, [r10 + 11]
+    lea rax, [r10 + tag_step_type_end - tag_step_type]
     cmp rax, r11
     ja .check_meter
-    cmp byte [r10 + 1], 'S'
-    jne .check_meter
-    cmp byte [r10 + 2], 'T'
-    jne .check_meter
-    cmp byte [r10 + 3], 'E'
-    jne .check_meter
-    cmp byte [r10 + 4], 'P'
-    jne .check_meter
-    cmp byte [r10 + 5], 'S'
-    jne .check_meter
-    cmp byte [r10 + 6], 'T'
-    jne .check_meter
-    cmp byte [r10 + 7], 'Y'
-    jne .check_meter
-    cmp byte [r10 + 8], 'P'
-    jne .check_meter
-    cmp byte [r10 + 9], 'E'
-    jne .check_meter
-    cmp byte [r10 + 10], ':'
-    jne .check_meter
-    store_tag 11, ASSP_CHART_INFO_STEP_TYPE_PTR, ASSP_CHART_INFO_STEP_TYPE_LEN
+    lea r12, [tag_step_type]
+    mov r13, tag_step_type_end - tag_step_type
+    call match_tag_at
+    test eax, eax
+    jz .check_meter
+    store_tag tag_step_type_end - tag_step_type, ASSP_CHART_INFO_STEP_TYPE_PTR, ASSP_CHART_INFO_STEP_TYPE_LEN
 
 .check_meter:
-    lea rax, [r10 + 7]
+    lea rax, [r10 + tag_meter_end - tag_meter]
     cmp rax, r11
     ja .meta_next
-    cmp byte [r10 + 1], 'M'
-    jne .meta_next
-    cmp byte [r10 + 2], 'E'
-    jne .meta_next
-    cmp byte [r10 + 3], 'T'
-    jne .meta_next
-    cmp byte [r10 + 4], 'E'
-    jne .meta_next
-    cmp byte [r10 + 5], 'R'
-    jne .meta_next
-    cmp byte [r10 + 6], ':'
-    jne .meta_next
-    store_tag 7, ASSP_CHART_INFO_METER_PTR, ASSP_CHART_INFO_METER_LEN
+    lea r12, [tag_meter]
+    mov r13, tag_meter_end - tag_meter
+    call match_tag_at
+    test eax, eax
+    jz .meta_next
+    store_tag tag_meter_end - tag_meter, ASSP_CHART_INFO_METER_PTR, ASSP_CHART_INFO_METER_LEN
 
 .meta_next:
     inc r10
@@ -1227,3 +1177,11 @@ tag_tickcounts db "#TICKCOUNTS:"
 tag_tickcounts_end:
 tag_combos db "#COMBOS:"
 tag_combos_end:
+tag_description db "#DESCRIPTION:"
+tag_description_end:
+tag_difficulty db "#DIFFICULTY:"
+tag_difficulty_end:
+tag_step_type db "#STEPSTYPE:"
+tag_step_type_end:
+tag_meter db "#METER:"
+tag_meter_end:

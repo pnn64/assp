@@ -80,9 +80,10 @@ for minimized chart data.
 tag used for chart hashing, and `assp_normalize_float_digits` converts timing
 maps to RSSP's three-decimal hash input format.
 `assp_find_global_tag` and `assp_find_chart_tag_by_index` provide generic
-exact-tag extraction for `#TAG:` sections. The timing-tag collectors gather the
-RSSP timing maps currently needed for timing parity work: BPMS, STOPS, DELAYS,
-WARPS, SPEEDS, SCROLLS, and FAKES.
+tag extraction for `#TAG:` sections. Implemented simfile tag names are matched
+case-insensitively, following RSSP's parser behavior. The timing-tag collectors
+gather the RSSP timing maps currently needed for timing parity work: BPMS,
+STOPS, DELAYS, WARPS, SPEEDS, SCROLLS, and FAKES.
 `assp_chart_owns_timing_by_index` checks the RSSP chart-local timing ownership
 predicate for SSC `#NOTEDATA` blocks.
 `assp_parse_bpm_map` parses BPM timing maps into sorted fixed-point

@@ -74,6 +74,49 @@ fn finds_ssc_chart_metadata() {
 }
 
 #[test]
+fn matches_simfile_tags_case_insensitively() {
+    let data = b"#title:X;
+#bpms:0.000=140.000;
+#notedata:;
+#stepstype:dance-single;
+#description:lower tags;
+#difficulty:Challenge;
+#meter:9;
+#labels:0.000=local;
+#stops:4.000=0.500;
+#notes2:
+1000
+;";
+    let chart = find_chart_by_index(data, 0).unwrap();
+    let bpms = find_global_bpms(data).unwrap();
+    let labels = find_chart_tag_by_index(data, 0, b"#LABELS:").unwrap();
+    let tags = find_chart_timing_tags_by_index(data, 0).unwrap();
+
+    assert_eq!(count_note_charts(data), 1);
+    assert_eq!(slice(data, bpms.data, bpms.len), b"0.000=140.000");
+    assert_eq!(
+        slice(data, chart.step_type, chart.step_type_len),
+        b"dance-single"
+    );
+    assert_eq!(
+        slice(data, chart.description, chart.description_len),
+        b"lower tags"
+    );
+    assert_eq!(
+        slice(data, chart.difficulty, chart.difficulty_len),
+        b"Challenge"
+    );
+    assert_eq!(slice(data, chart.meter, chart.meter_len), b"9");
+    assert_eq!(
+        slice(data, chart.note_data, chart.note_data_len),
+        b"\n1000\n;"
+    );
+    assert_eq!(slice(data, labels.data, labels.len), b"0.000=local");
+    assert_eq!(slice(data, tags.stops.data, tags.stops.len), b"4.000=0.500");
+    assert!(chart_owns_timing_by_index(data, 0));
+}
+
+#[test]
 fn finds_sm_chart_metadata_and_note_rows() {
     let data = b"#TITLE:X;
 #NOTES2:
