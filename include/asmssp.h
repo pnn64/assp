@@ -28,8 +28,21 @@ typedef struct asmssp_note_stats {
     uint64_t malformed_rows;
 } asmssp_note_stats;
 
+typedef struct asmssp_chart_ref {
+    const uint8_t *note_data;
+    size_t note_data_len;
+    size_t index;
+} asmssp_chart_ref;
+
 uint32_t asmssp_version(void);
 size_t asmssp_find_byte(const uint8_t *data, size_t len, uint32_t byte);
+size_t asmssp_count_note_charts(const uint8_t *data, size_t len);
+int32_t asmssp_find_notes_by_index(
+    const uint8_t *data,
+    size_t len,
+    size_t index,
+    asmssp_chart_ref *out
+);
 int32_t asmssp_count_note_stats_4(
     const uint8_t *data,
     size_t len,
@@ -41,4 +54,3 @@ int32_t asmssp_count_note_stats_4(
 #endif
 
 #endif
-

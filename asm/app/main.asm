@@ -12,6 +12,8 @@ extern ReadFile
 extern WriteFile
 
 extern asmssp_count_note_stats_4
+extern asmssp_count_note_charts
+extern asmssp_find_notes_by_index
 
 global start
 
@@ -29,12 +31,23 @@ start:
     test eax, eax
     jz fail_read
 
-    call find_selected_notes
+    cmp qword [list_mode], 0
+    je .run_chart
+    call print_chart_list
+    xor ecx, ecx
+    call ExitProcess
+
+.run_chart:
+    lea rcx, [file_buffer]
+    mov rdx, [file_len]
+    mov r8, [chart_index]
+    lea r9, [chart_ref]
+    call asmssp_find_notes_by_index
     test eax, eax
     jz fail_notes
 
-    mov rcx, [note_ptr]
-    mov rdx, [note_len]
+    mov rcx, [chart_ref + ASMSSP_CHART_REF_NOTES_PTR]
+    mov rdx, [chart_ref + ASMSSP_CHART_REF_NOTES_LEN]
     lea r8, [note_stats]
     call asmssp_count_note_stats_4
     test eax, eax
@@ -77,6 +90,7 @@ parse_args:
     lea rax, [default_fixture]
     mov [input_path], rax
     mov qword [chart_index], 0
+    mov qword [list_mode], 0
 
     call GetCommandLineA
     mov rsi, rax
@@ -157,6 +171,20 @@ parse_args:
     jmp .skip_arg_spaces
 
 .parse_chart:
+    cmp byte [rsi], 'l'
+    je .store_list
+    cmp byte [rsi], 'L'
+    je .store_list
+    cmp byte [rsi], '-'
+    jne .parse_chart_number
+    cmp byte [rsi + 1], '-'
+    jne .parse_chart_number
+    cmp byte [rsi + 2], 'l'
+    je .store_list
+    cmp byte [rsi + 2], 'L'
+    je .store_list
+
+.parse_chart_number:
     xor rax, rax
 .chart_loop:
     movzx rdx, byte [rsi]
@@ -172,6 +200,10 @@ parse_args:
 
 .store_chart:
     mov [chart_index], rax
+    jmp .done
+
+.store_list:
+    mov qword [list_mode], 1
 
 .done:
     add rsp, 32
@@ -244,65 +276,41 @@ read_file:
     add rsp, 72
     ret
 
-find_selected_notes:
-    lea r10, [file_buffer]
-    mov r11, [file_len]
-    lea r11, [r10 + r11]
-    mov r8, [chart_index]
-    xor r9d, r9d
+print_chart_list:
+    push r12
+    sub rsp, 40
 
-.scan:
-    lea rax, [r10 + 7]
-    cmp rax, r11
-    ja .fail
+    lea rcx, [msg_header]
+    call print_z
+    lea rcx, [label_file]
+    call print_z
+    mov rcx, [input_path]
+    call print_z
+    lea rcx, [newline]
+    call print_z
 
-    cmp byte [r10 + 0], '#'
-    jne .next
-    cmp byte [r10 + 1], 'N'
-    jne .next
-    cmp byte [r10 + 2], 'O'
-    jne .next
-    cmp byte [r10 + 3], 'T'
-    jne .next
-    cmp byte [r10 + 4], 'E'
-    jne .next
-    cmp byte [r10 + 5], 'S'
-    jne .next
-    cmp byte [r10 + 6], ':'
-    jne .next
+    lea rcx, [file_buffer]
+    mov rdx, [file_len]
+    call asmssp_count_note_charts
+    mov [chart_count], rax
 
-    cmp r9, r8
-    je .found_tag
-    inc r9
-    add r10, 7
-    jmp .scan
+    lea rcx, [label_charts]
+    mov rdx, [chart_count]
+    call print_field
 
-.next:
-    inc r10
-    jmp .scan
+    xor r12d, r12d
+.list_loop:
+    cmp r12, [chart_count]
+    jae .done
+    lea rcx, [label_chart]
+    mov rdx, r12
+    call print_field
+    inc r12
+    jmp .list_loop
 
-.found_tag:
-    lea rax, [r10 + 7]
-    mov rdx, rax
-
-.find_end:
-    cmp rdx, r11
-    jae .fail
-    cmp byte [rdx], ';'
-    je .found_end
-    inc rdx
-    jmp .find_end
-
-.found_end:
-    inc rdx
-    mov [note_ptr], rax
-    sub rdx, rax
-    mov [note_len], rdx
-    mov eax, ASMSSP_TRUE
-    ret
-
-.fail:
-    xor eax, eax
+.done:
+    add rsp, 40
+    pop r12
     ret
 
 print_report:
@@ -444,6 +452,7 @@ msg_read_fail db "failed to read input file", 13, 10, 0
 msg_notes_fail db "failed to find selected #NOTES chart", 13, 10, 0
 msg_stats_fail db "assembly note stat counter failed", 13, 10, 0
 label_file db "file: ", 0
+label_charts db "charts: ", 0
 label_chart db "chart: ", 0
 label_rows db "rows: ", 0
 label_steps db "steps: ", 0
@@ -468,13 +477,13 @@ stdout_handle resq 1
 stdout_written resd 1
 input_path resq 1
 chart_index resq 1
+list_mode resq 1
+chart_count resq 1
 file_handle resq 1
 file_size resq 1
 file_len resq 1
 file_bytes_read resd 1
-note_ptr resq 1
-note_len resq 1
+chart_ref resb ASMSSP_CHART_REF_SIZE
 note_stats resb ASMSSP_NOTE_STATS_SIZE
 num_buffer resb 32
 file_buffer resb FILE_BUFFER_CAP
-

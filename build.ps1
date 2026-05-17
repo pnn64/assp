@@ -2,6 +2,7 @@ param(
     [switch]$RunFixture,
     [string]$Fixture,
     [int]$Chart = 0,
+    [switch]$ListCharts,
     [switch]$Clean
 )
 
@@ -86,7 +87,11 @@ if ($RunFixture -or $Fixture) {
     }
 
     $resolvedFixture = (Resolve-Path $Fixture).Path
-    $runArgs = @($resolvedFixture, $Chart)
+    if ($ListCharts) {
+        $runArgs = @($resolvedFixture, "list")
+    } else {
+        $runArgs = @($resolvedFixture, $Chart)
+    }
 
     Write-Host "running $exe $($runArgs -join ' ')"
     Push-Location $root

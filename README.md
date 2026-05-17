@@ -58,6 +58,12 @@ Run the local Camellia fixture:
 .\asmssp\build.ps1 -RunFixture
 ```
 
+List the local Camellia fixture chart indexes:
+
+```powershell
+.\asmssp\build.ps1 -RunFixture -ListCharts
+```
+
 Run a specific chart, where Camellia has chart indexes `0..4`:
 
 ```powershell
@@ -71,7 +77,8 @@ Run the built executable directly against any `.sm` or `.ssc` file:
 ```
 
 The standalone executable currently scans SSC files for `#NOTES:` tags and
-uses the second argument as a zero-based chart index.
+uses the second argument as a zero-based chart index, or `list` to print chart
+indexes.
 
 Run the optional Rust parity tests:
 
