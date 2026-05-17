@@ -24,6 +24,10 @@ The first implemented pieces are:
 - `assp_find_chart_by_index`
 - `assp_find_global_bpms`
 - `assp_find_chart_bpms_by_index`
+- `assp_find_global_tag`
+- `assp_find_chart_tag_by_index`
+- `assp_find_global_timing_tags`
+- `assp_find_chart_timing_tags_by_index`
 - `assp_normalize_float_digits`
 - `assp_measure_densities_4`
 - `assp_minimize_measure_4`
@@ -54,6 +58,10 @@ for minimized chart data.
 `assp_find_global_bpms` and `assp_find_chart_bpms_by_index` select the raw BPM
 tag used for chart hashing, and `assp_normalize_float_digits` converts timing
 maps to RSSP's three-decimal hash input format.
+`assp_find_global_tag` and `assp_find_chart_tag_by_index` provide generic
+exact-tag extraction for `#TAG:` sections. The timing-tag collectors gather the
+RSSP timing maps currently needed for timing parity work: BPMS, STOPS, DELAYS,
+WARPS, SPEEDS, SCROLLS, and FAKES.
 `assp_stream_counts_from_densities` classifies 16th/20th/24th/32nd stream
 measures, SN breaks, and total break measures from those densities.
 `assp_stream_segments_from_densities` emits stream and break ranges from the

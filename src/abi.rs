@@ -51,6 +51,18 @@ pub struct ByteSlice {
 
 #[repr(C)]
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct TimingTags {
+    pub bpms: ByteSlice,
+    pub stops: ByteSlice,
+    pub delays: ByteSlice,
+    pub warps: ByteSlice,
+    pub speeds: ByteSlice,
+    pub scrolls: ByteSlice,
+    pub fakes: ByteSlice,
+}
+
+#[repr(C)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct ChartInfo {
     pub note_data: *const u8,
     pub note_data_len: usize,
@@ -114,6 +126,28 @@ unsafe extern "C" {
         len: usize,
         index: usize,
         out: *mut ByteSlice,
+    ) -> c_int;
+    fn assp_find_global_tag(
+        data: *const u8,
+        len: usize,
+        tag: *const u8,
+        tag_len: usize,
+        out: *mut ByteSlice,
+    ) -> c_int;
+    fn assp_find_chart_tag_by_index(
+        data: *const u8,
+        len: usize,
+        index: usize,
+        tag: *const u8,
+        tag_len: usize,
+        out: *mut ByteSlice,
+    ) -> c_int;
+    fn assp_find_global_timing_tags(data: *const u8, len: usize, out: *mut TimingTags) -> c_int;
+    fn assp_find_chart_timing_tags_by_index(
+        data: *const u8,
+        len: usize,
+        index: usize,
+        out: *mut TimingTags,
     ) -> c_int;
     fn assp_normalize_float_digits(
         data: *const u8,
@@ -236,6 +270,58 @@ pub fn find_chart_bpms_by_index(data: &[u8], index: usize) -> Option<ByteSlice> 
 #[must_use]
 pub fn find_bpms_for_chart(data: &[u8], index: usize) -> Option<ByteSlice> {
     find_chart_bpms_by_index(data, index).or_else(|| find_global_bpms(data))
+}
+
+#[must_use]
+pub fn find_global_tag(data: &[u8], tag: &[u8]) -> Option<ByteSlice> {
+    let mut slice = ByteSlice::default();
+    let ok = unsafe {
+        assp_find_global_tag(
+            data.as_ptr(),
+            data.len(),
+            tag.as_ptr(),
+            tag.len(),
+            &mut slice,
+        )
+    };
+    (ok != 0).then_some(slice)
+}
+
+#[must_use]
+pub fn find_chart_tag_by_index(data: &[u8], index: usize, tag: &[u8]) -> Option<ByteSlice> {
+    let mut slice = ByteSlice::default();
+    let ok = unsafe {
+        assp_find_chart_tag_by_index(
+            data.as_ptr(),
+            data.len(),
+            index,
+            tag.as_ptr(),
+            tag.len(),
+            &mut slice,
+        )
+    };
+    (ok != 0).then_some(slice)
+}
+
+#[must_use]
+pub fn find_tag_for_chart(data: &[u8], index: usize, tag: &[u8]) -> Option<ByteSlice> {
+    find_chart_tag_by_index(data, index, tag).or_else(|| find_global_tag(data, tag))
+}
+
+#[must_use]
+pub fn find_global_timing_tags(data: &[u8]) -> Option<TimingTags> {
+    let mut tags = TimingTags::default();
+    let ok = unsafe { assp_find_global_timing_tags(data.as_ptr(), data.len(), &mut tags) };
+    (ok != 0).then_some(tags)
+}
+
+#[must_use]
+pub fn find_chart_timing_tags_by_index(data: &[u8], index: usize) -> Option<TimingTags> {
+    let mut tags = TimingTags::default();
+    let ok = unsafe {
+        assp_find_chart_timing_tags_by_index(data.as_ptr(), data.len(), index, &mut tags)
+    };
+    (ok != 0).then_some(tags)
 }
 
 #[must_use]
@@ -491,6 +577,12 @@ mod tests {
     fn byte_slice_layout_is_c_abi() {
         assert_eq!(std::mem::size_of::<super::ByteSlice>(), 16);
         assert_eq!(std::mem::align_of::<super::ByteSlice>(), 8);
+    }
+
+    #[test]
+    fn timing_tags_layout_is_c_abi() {
+        assert_eq!(std::mem::size_of::<super::TimingTags>(), 112);
+        assert_eq!(std::mem::align_of::<super::TimingTags>(), 8);
     }
 
     #[test]

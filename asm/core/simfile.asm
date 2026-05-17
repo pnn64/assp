@@ -6,8 +6,21 @@ global assp_find_notes_by_index
 global assp_find_chart_by_index
 global assp_find_global_bpms
 global assp_find_chart_bpms_by_index
+global assp_find_global_tag
+global assp_find_chart_tag_by_index
+global assp_find_global_timing_tags
+global assp_find_chart_timing_tags_by_index
 
 section .text
+
+%macro find_timing_tag 3
+    mov r10, rsi
+    mov r11, rdi
+    lea r12, [%1]
+    mov r13, %2
+    lea rbx, [r15 + %3]
+    call find_tag_in_range
+%endmacro
 
 %macro is_notes_tag 1
     cmp byte [%1 + 0], '#'
@@ -289,6 +302,259 @@ assp_find_chart_bpms_by_index:
     pop rbx
     ret
 
+; rcx = simfile bytes, rdx = len, r8 = tag bytes, r9 = tag len,
+; stack arg 5 = out assp_byte_slice.
+; The tag must include the leading '#' and trailing ':'.
+; eax = 1 when found, 0 otherwise.
+assp_find_global_tag:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+
+    mov rbx, [rsp + 96]
+    test rcx, rcx
+    jz .fail
+    test r8, r8
+    jz .fail
+    test r9, r9
+    jz .fail
+    test rbx, rbx
+    jz .fail
+    cmp rdx, r9
+    jb .fail
+
+    mov qword [rbx + ASSP_BYTE_SLICE_PTR], 0
+    mov qword [rbx + ASSP_BYTE_SLICE_LEN], 0
+
+    mov r10, rcx
+    lea r11, [rcx + rdx]
+    mov r12, r8
+    mov r13, r9
+    call find_tag_in_range
+    jmp .done
+
+.fail:
+    xor eax, eax
+
+.done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
+; rcx = simfile bytes, rdx = len, r8 = chart index, r9 = tag bytes,
+; stack arg 5 = tag len, stack arg 6 = out assp_byte_slice.
+; Finds a chart-local SSC tag in the selected #NOTEDATA block.
+; eax = 1 when found, 0 otherwise.
+assp_find_chart_tag_by_index:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+
+    mov r12, [rsp + 96]
+    mov rbx, [rsp + 104]
+    test rcx, rcx
+    jz .fail
+    test r9, r9
+    jz .fail
+    test r12, r12
+    jz .fail
+    test rbx, rbx
+    jz .fail
+    cmp rdx, 7
+    jb .fail
+
+    mov qword [rbx + ASSP_BYTE_SLICE_PTR], 0
+    mov qword [rbx + ASSP_BYTE_SLICE_LEN], 0
+
+    mov rdi, rcx
+    lea rsi, [rcx + rdx]
+    mov r13, r8
+    xor r14d, r14d
+    xor r15d, r15d
+
+.scan:
+    lea rax, [rdi + 10]
+    cmp rax, rsi
+    ja .fail
+
+    is_notedata_tag rdi
+    test eax, eax
+    jz .check_notes
+    mov r15, rdi
+    add rdi, 10
+    jmp .scan
+
+.check_notes:
+    lea rax, [rdi + 7]
+    cmp rax, rsi
+    ja .fail
+    is_notes_tag rdi
+    test eax, eax
+    jz .next
+
+    cmp r14, r13
+    je .found_chart
+    inc r14
+    add rdi, 7
+    jmp .scan
+
+.next:
+    inc rdi
+    jmp .scan
+
+.found_chart:
+    test r15, r15
+    jz .fail
+    mov r10, r15
+    mov r11, rdi
+    mov r12, r9
+    mov r13, [rsp + 96]
+    call find_tag_in_range
+    jmp .done
+
+.fail:
+    xor eax, eax
+
+.done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
+; rcx = simfile bytes, rdx = len, r8 = out assp_timing_tags.
+; eax = 1 on valid input. Missing tags remain empty slices.
+assp_find_global_timing_tags:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+
+    test rcx, rcx
+    jz .fail
+    test r8, r8
+    jz .fail
+
+    mov r10, rcx
+    lea r11, [rcx + rdx]
+    mov rbx, r8
+    call find_timing_tags_in_range
+    mov eax, ASSP_TRUE
+    jmp .done
+
+.fail:
+    xor eax, eax
+
+.done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
+; rcx = simfile bytes, rdx = len, r8 = chart index, r9 = out assp_timing_tags.
+; Collects chart-local SSC timing tags from the selected #NOTEDATA block.
+; eax = 1 when the chart is found, 0 otherwise.
+assp_find_chart_timing_tags_by_index:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+
+    test rcx, rcx
+    jz .fail
+    test r9, r9
+    jz .fail
+    cmp rdx, 7
+    jb .fail
+
+    mov r13, r8
+    mov rbx, r9
+    call zero_timing_tags
+
+    mov rdi, rcx
+    lea rsi, [rcx + rdx]
+    xor r14d, r14d
+    xor r15d, r15d
+
+.scan:
+    lea rax, [rdi + 10]
+    cmp rax, rsi
+    ja .fail
+
+    is_notedata_tag rdi
+    test eax, eax
+    jz .check_notes
+    mov r15, rdi
+    add rdi, 10
+    jmp .scan
+
+.check_notes:
+    lea rax, [rdi + 7]
+    cmp rax, rsi
+    ja .fail
+    is_notes_tag rdi
+    test eax, eax
+    jz .next
+
+    cmp r14, r13
+    je .found_chart
+    inc r14
+    add rdi, 7
+    jmp .scan
+
+.next:
+    inc rdi
+    jmp .scan
+
+.found_chart:
+    test r15, r15
+    jz .fail
+    mov r10, r15
+    mov r11, rdi
+    mov rbx, r9
+    call find_timing_tags_in_range
+    mov eax, ASSP_TRUE
+    jmp .done
+
+.fail:
+    xor eax, eax
+
+.done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
 ; rcx = simfile bytes, rdx = len, r8 = chart index, r9 = out assp_chart_ref.
 ; eax = 1 when found, 0 otherwise.
 assp_find_notes_by_index:
@@ -500,6 +766,96 @@ find_bpms_in_range:
     xor eax, eax
     ret
 
+; r10 = scan start, r11 = scan end, r12 = tag ptr, r13 = tag len,
+; rbx = out assp_byte_slice.
+; eax = 1 when the exact tag is found, 0 otherwise.
+find_tag_in_range:
+    test r12, r12
+    jz .fail
+    test r13, r13
+    jz .fail
+
+.scan:
+    lea rax, [r10 + r13]
+    cmp rax, r11
+    ja .fail
+
+    call match_tag_at
+    test eax, eax
+    jnz .found
+    inc r10
+    jmp .scan
+
+.found:
+    lea rax, [r10 + r13]
+    mov rdx, rax
+.find_end:
+    cmp rdx, r11
+    jae .fail
+    cmp byte [rdx], ';'
+    je .store
+    inc rdx
+    jmp .find_end
+
+.store:
+    mov [rbx + ASSP_BYTE_SLICE_PTR], rax
+    sub rdx, rax
+    mov [rbx + ASSP_BYTE_SLICE_LEN], rdx
+    mov eax, ASSP_TRUE
+    ret
+
+.fail:
+    xor eax, eax
+    ret
+
+; r10 = candidate ptr, r12 = tag ptr, r13 = tag len.
+; eax = 1 on exact byte match, 0 otherwise.
+match_tag_at:
+    xor r8d, r8d
+.loop:
+    cmp r8, r13
+    jae .yes
+    mov al, [r10 + r8]
+    cmp al, [r12 + r8]
+    jne .no
+    inc r8
+    jmp .loop
+.yes:
+    mov eax, ASSP_TRUE
+    ret
+.no:
+    xor eax, eax
+    ret
+
+; rbx = assp_timing_tags.
+zero_timing_tags:
+    xor eax, eax
+    xor r8d, r8d
+.loop:
+    cmp r8, ASSP_TIMING_TAGS_SIZE
+    jae .done
+    mov [rbx + r8], rax
+    add r8, 8
+    jmp .loop
+.done:
+    ret
+
+; r10 = scan start, r11 = scan end, rbx = assp_timing_tags.
+find_timing_tags_in_range:
+    mov rsi, r10
+    mov rdi, r11
+    mov r15, rbx
+    call zero_timing_tags
+
+    find_timing_tag tag_bpms, tag_bpms_end - tag_bpms, ASSP_TIMING_TAGS_BPMS
+    find_timing_tag tag_stops, tag_stops_end - tag_stops, ASSP_TIMING_TAGS_STOPS
+    find_timing_tag tag_delays, tag_delays_end - tag_delays, ASSP_TIMING_TAGS_DELAYS
+    find_timing_tag tag_warps, tag_warps_end - tag_warps, ASSP_TIMING_TAGS_WARPS
+    find_timing_tag tag_speeds, tag_speeds_end - tag_speeds, ASSP_TIMING_TAGS_SPEEDS
+    find_timing_tag tag_scrolls, tag_scrolls_end - tag_scrolls, ASSP_TIMING_TAGS_SCROLLS
+    find_timing_tag tag_fakes, tag_fakes_end - tag_fakes, ASSP_TIMING_TAGS_FAKES
+    ret
+
 ; r10 = metadata scan start, r11 = metadata end, rbx = assp_chart_info.
 parse_chart_meta:
 .meta_loop:
@@ -693,3 +1049,20 @@ parse_sm_notes_block:
 .fail:
     xor eax, eax
     ret
+
+section .rdata
+
+tag_bpms db "#BPMS:"
+tag_bpms_end:
+tag_stops db "#STOPS:"
+tag_stops_end:
+tag_delays db "#DELAYS:"
+tag_delays_end:
+tag_warps db "#WARPS:"
+tag_warps_end:
+tag_speeds db "#SPEEDS:"
+tag_speeds_end:
+tag_scrolls db "#SCROLLS:"
+tag_scrolls_end:
+tag_fakes db "#FAKES:"
+tag_fakes_end:

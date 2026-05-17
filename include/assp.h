@@ -46,6 +46,16 @@ typedef struct assp_byte_slice {
     size_t len;
 } assp_byte_slice;
 
+typedef struct assp_timing_tags {
+    assp_byte_slice bpms;
+    assp_byte_slice stops;
+    assp_byte_slice delays;
+    assp_byte_slice warps;
+    assp_byte_slice speeds;
+    assp_byte_slice scrolls;
+    assp_byte_slice fakes;
+} assp_timing_tags;
+
 typedef struct assp_chart_info {
     const uint8_t *note_data;
     size_t note_data_len;
@@ -106,6 +116,32 @@ int32_t assp_find_chart_bpms_by_index(
     size_t len,
     size_t index,
     assp_byte_slice *out
+);
+int32_t assp_find_global_tag(
+    const uint8_t *data,
+    size_t len,
+    const uint8_t *tag,
+    size_t tag_len,
+    assp_byte_slice *out
+);
+int32_t assp_find_chart_tag_by_index(
+    const uint8_t *data,
+    size_t len,
+    size_t index,
+    const uint8_t *tag,
+    size_t tag_len,
+    assp_byte_slice *out
+);
+int32_t assp_find_global_timing_tags(
+    const uint8_t *data,
+    size_t len,
+    assp_timing_tags *out
+);
+int32_t assp_find_chart_timing_tags_by_index(
+    const uint8_t *data,
+    size_t len,
+    size_t index,
+    assp_timing_tags *out
 );
 size_t assp_normalize_float_digits(
     const uint8_t *data,

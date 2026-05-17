@@ -1,6 +1,7 @@
 use assp::{
     count_note_charts, find_bpms_for_chart, find_chart_bpms_by_index, find_chart_by_index,
-    find_global_bpms, find_notes_by_index,
+    find_chart_tag_by_index, find_chart_timing_tags_by_index, find_global_bpms, find_global_tag,
+    find_global_timing_tags, find_notes_by_index, find_tag_for_chart,
 };
 
 #[test]
@@ -96,6 +97,56 @@ fn finds_global_bpms() {
 }
 
 #[test]
+fn finds_global_timing_tag() {
+    let data = b"#TITLE:X;#BPMS:0.000=140.000;#STOPS:64.000=1.500;#NOTES:0000\n;";
+    let stops = find_global_tag(data, b"#STOPS:").unwrap();
+
+    assert_eq!(slice(data, stops.data, stops.len), b"64.000=1.500");
+    assert!(find_global_tag(data, b"").is_none());
+}
+
+#[test]
+fn finds_global_timing_tags() {
+    let data = b"#TITLE:X;
+#BPMS:0.000=140.000;
+#STOPS:64.000=1.500;
+#DELAYS:96.000=0.250;
+#WARPS:128.000=4.000;
+#SPEEDS:0.000=1.000=0.000=0;
+#SCROLLS:0.000=1.000;
+#FAKES:192.000=4.000;
+#NOTES:0000
+;";
+    let tags = find_global_timing_tags(data).unwrap();
+
+    assert_eq!(slice(data, tags.bpms.data, tags.bpms.len), b"0.000=140.000");
+    assert_eq!(
+        slice(data, tags.stops.data, tags.stops.len),
+        b"64.000=1.500"
+    );
+    assert_eq!(
+        slice(data, tags.delays.data, tags.delays.len),
+        b"96.000=0.250"
+    );
+    assert_eq!(
+        slice(data, tags.warps.data, tags.warps.len),
+        b"128.000=4.000"
+    );
+    assert_eq!(
+        slice(data, tags.speeds.data, tags.speeds.len),
+        b"0.000=1.000=0.000=0"
+    );
+    assert_eq!(
+        slice(data, tags.scrolls.data, tags.scrolls.len),
+        b"0.000=1.000"
+    );
+    assert_eq!(
+        slice(data, tags.fakes.data, tags.fakes.len),
+        b"192.000=4.000"
+    );
+}
+
+#[test]
 fn finds_chart_local_bpms() {
     let data = b"#BPMS:0.000=140.000;
 #NOTEDATA:;
@@ -107,6 +158,49 @@ fn finds_chart_local_bpms() {
     let bpms = find_chart_bpms_by_index(data, 0).unwrap();
 
     assert_eq!(slice(data, bpms.data, bpms.len), b"0.000=175.000");
+}
+
+#[test]
+fn finds_chart_local_timing_tag() {
+    let data = b"#STOPS:64.000=1.000;
+#NOTEDATA:;
+#STEPSTYPE:dance-single;
+#STOPS:64.000=2.000;
+#DELAYS:96.000=0.500;
+#NOTES:
+1000
+;";
+    let stops = find_chart_tag_by_index(data, 0, b"#STOPS:").unwrap();
+    let delays = find_chart_tag_by_index(data, 0, b"#DELAYS:").unwrap();
+
+    assert_eq!(slice(data, stops.data, stops.len), b"64.000=2.000");
+    assert_eq!(slice(data, delays.data, delays.len), b"96.000=0.500");
+}
+
+#[test]
+fn finds_chart_local_timing_tags() {
+    let data = b"#BPMS:0.000=140.000;
+#STOPS:64.000=1.000;
+#NOTEDATA:;
+#STEPSTYPE:dance-single;
+#BPMS:0.000=175.000;
+#STOPS:64.000=2.000;
+#DELAYS:96.000=0.500;
+#NOTES:
+1000
+;";
+    let tags = find_chart_timing_tags_by_index(data, 0).unwrap();
+
+    assert_eq!(slice(data, tags.bpms.data, tags.bpms.len), b"0.000=175.000");
+    assert_eq!(
+        slice(data, tags.stops.data, tags.stops.len),
+        b"64.000=2.000"
+    );
+    assert_eq!(
+        slice(data, tags.delays.data, tags.delays.len),
+        b"96.000=0.500"
+    );
+    assert_eq!(tags.warps.len, 0);
 }
 
 #[test]
@@ -125,6 +219,24 @@ fn falls_back_to_global_bpms_for_sm_chart() {
 
     let bpms = find_bpms_for_chart(data, 0).unwrap();
     assert_eq!(slice(data, bpms.data, bpms.len), b"0.000=140.000");
+}
+
+#[test]
+fn falls_back_to_global_timing_tag_for_sm_chart() {
+    let data = b"#TITLE:X;
+#STOPS:64.000=1.000;
+#NOTES:
+     dance-single:
+     1sts?:
+     Beginner:
+     1:
+     0,0,0,0,0:
+0001
+;";
+    assert!(find_chart_tag_by_index(data, 0, b"#STOPS:").is_none());
+
+    let stops = find_tag_for_chart(data, 0, b"#STOPS:").unwrap();
+    assert_eq!(slice(data, stops.data, stops.len), b"64.000=1.000");
 }
 
 #[test]
