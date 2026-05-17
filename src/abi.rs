@@ -46,6 +46,17 @@ pub struct ChartInfo {
     pub meter_len: usize,
 }
 
+#[repr(C)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct StreamCounts {
+    pub run16_streams: u64,
+    pub run20_streams: u64,
+    pub run24_streams: u64,
+    pub run32_streams: u64,
+    pub total_breaks: u64,
+    pub sn_breaks: u64,
+}
+
 unsafe extern "C" {
     fn assp_version() -> u32;
     fn assp_find_byte(data: *const u8, len: usize, byte: u32) -> usize;
@@ -68,6 +79,11 @@ unsafe extern "C" {
         out: *mut u32,
         out_cap: usize,
     ) -> usize;
+    fn assp_stream_counts_from_densities(
+        densities: *const u32,
+        len: usize,
+        out: *mut StreamCounts,
+    ) -> c_int;
     fn assp_count_note_stats_4(data: *const u8, len: usize, out: *mut NoteStats) -> c_int;
 }
 
@@ -113,6 +129,14 @@ pub fn measure_densities_4(data: &[u8]) -> Vec<u32> {
 }
 
 #[must_use]
+pub fn stream_counts_from_densities(densities: &[u32]) -> Option<StreamCounts> {
+    let mut out = StreamCounts::default();
+    let ok =
+        unsafe { assp_stream_counts_from_densities(densities.as_ptr(), densities.len(), &mut out) };
+    (ok != 0).then_some(out)
+}
+
+#[must_use]
 pub fn count_note_stats_4(data: &[u8]) -> Option<NoteStats> {
     let mut stats = NoteStats::default();
     let ok = unsafe { assp_count_note_stats_4(data.as_ptr(), data.len(), &mut stats) };
@@ -139,5 +163,11 @@ mod tests {
     fn chart_info_layout_is_c_abi() {
         assert_eq!(std::mem::size_of::<super::ChartInfo>(), 88);
         assert_eq!(std::mem::align_of::<super::ChartInfo>(), 8);
+    }
+
+    #[test]
+    fn stream_counts_layout_is_c_abi() {
+        assert_eq!(std::mem::size_of::<super::StreamCounts>(), 48);
+        assert_eq!(std::mem::align_of::<super::StreamCounts>(), 8);
     }
 }

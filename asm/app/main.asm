@@ -15,10 +15,12 @@ extern assp_count_note_stats_4
 extern assp_count_note_charts
 extern assp_find_chart_by_index
 extern assp_measure_densities_4
+extern assp_stream_counts_from_densities
 
 global start
 
 %define FILE_BUFFER_CAP 8388608
+%define DENSITY_CAP 131072
 
 section .text
 
@@ -60,6 +62,21 @@ start:
     xor r9d, r9d
     call assp_measure_densities_4
     mov [measure_count], rax
+    cmp rax, DENSITY_CAP
+    ja fail_density
+
+    mov rcx, [chart_info + ASSP_CHART_INFO_NOTES_PTR]
+    mov rdx, [chart_info + ASSP_CHART_INFO_NOTES_LEN]
+    lea r8, [density_buffer]
+    mov r9d, DENSITY_CAP
+    call assp_measure_densities_4
+
+    lea rcx, [density_buffer]
+    mov rdx, [measure_count]
+    lea r8, [stream_counts]
+    call assp_stream_counts_from_densities
+    test eax, eax
+    jz fail_stats
 
     call print_report
     xor ecx, ecx
@@ -79,6 +96,12 @@ fail_notes:
 
 fail_stats:
     lea rcx, [msg_stats_fail]
+    call print_z
+    mov ecx, 1
+    call ExitProcess
+
+fail_density:
+    lea rcx, [msg_density_fail]
     call print_z
     mov ecx, 1
     call ExitProcess
@@ -360,6 +383,24 @@ print_report:
     lea rcx, [label_measures]
     mov rdx, [measure_count]
     call print_field
+    lea rcx, [label_stream16]
+    mov rdx, [stream_counts + ASSP_STREAM_COUNTS_RUN16]
+    call print_field
+    lea rcx, [label_stream20]
+    mov rdx, [stream_counts + ASSP_STREAM_COUNTS_RUN20]
+    call print_field
+    lea rcx, [label_stream24]
+    mov rdx, [stream_counts + ASSP_STREAM_COUNTS_RUN24]
+    call print_field
+    lea rcx, [label_stream32]
+    mov rdx, [stream_counts + ASSP_STREAM_COUNTS_RUN32]
+    call print_field
+    lea rcx, [label_sn_breaks]
+    mov rdx, [stream_counts + ASSP_STREAM_COUNTS_SN_BREAKS]
+    call print_field
+    lea rcx, [label_total_breaks]
+    mov rdx, [stream_counts + ASSP_STREAM_COUNTS_TOTAL_BREAKS]
+    call print_field
     lea rcx, [label_rows]
     mov rdx, [note_stats + ASSP_NOTE_STATS_ROWS]
     call print_field
@@ -527,6 +568,7 @@ msg_header db "assp standalone", 13, 10, 0
 msg_read_fail db "failed to read input file", 13, 10, 0
 msg_notes_fail db "failed to find selected #NOTES chart", 13, 10, 0
 msg_stats_fail db "assembly note stat counter failed", 13, 10, 0
+msg_density_fail db "chart has too many measures for the density buffer", 13, 10, 0
 label_file db "file: ", 0
 label_charts db "charts: ", 0
 label_chart db "chart: ", 0
@@ -535,6 +577,12 @@ label_difficulty db "difficulty: ", 0
 label_meter db "meter: ", 0
 label_description db "description: ", 0
 label_measures db "measures: ", 0
+label_stream16 db "16th_streams: ", 0
+label_stream20 db "20th_streams: ", 0
+label_stream24 db "24th_streams: ", 0
+label_stream32 db "32nd_streams: ", 0
+label_sn_breaks db "sn_breaks: ", 0
+label_total_breaks db "total_breaks: ", 0
 label_rows db "rows: ", 0
 label_steps db "steps: ", 0
 label_arrows db "arrows: ", 0
@@ -568,5 +616,7 @@ file_len resq 1
 file_bytes_read resd 1
 chart_info resb ASSP_CHART_INFO_SIZE
 note_stats resb ASSP_NOTE_STATS_SIZE
+stream_counts resb ASSP_STREAM_COUNTS_SIZE
 num_buffer resb 32
+density_buffer resd DENSITY_CAP
 file_buffer resb FILE_BUFFER_CAP

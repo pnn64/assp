@@ -48,6 +48,15 @@ typedef struct assp_chart_info {
     size_t meter_len;
 } assp_chart_info;
 
+typedef struct assp_stream_counts {
+    uint64_t run16_streams;
+    uint64_t run20_streams;
+    uint64_t run24_streams;
+    uint64_t run32_streams;
+    uint64_t total_breaks;
+    uint64_t sn_breaks;
+} assp_stream_counts;
+
 uint32_t assp_version(void);
 size_t assp_find_byte(const uint8_t *data, size_t len, uint32_t byte);
 size_t assp_count_note_charts(const uint8_t *data, size_t len);
@@ -68,6 +77,11 @@ size_t assp_measure_densities_4(
     size_t len,
     uint32_t *out,
     size_t out_cap
+);
+int32_t assp_stream_counts_from_densities(
+    const uint32_t *densities,
+    size_t len,
+    assp_stream_counts *out
 );
 int32_t assp_count_note_stats_4(
     const uint8_t *data,

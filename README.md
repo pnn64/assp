@@ -23,6 +23,7 @@ The first implemented pieces are:
 - `assp_count_note_charts`
 - `assp_find_chart_by_index`
 - `assp_measure_densities_4`
+- `assp_stream_counts_from_densities`
 - `assp_count_note_stats_4`
 
 `assp_count_note_stats_4` is an initial 4-panel note-data counter. It counts
@@ -31,6 +32,8 @@ arrow totals from a note-data byte slice. It does not yet do RSSP's full
 measure minimization or phantom-hold correction.
 `assp_measure_densities_4` counts per-measure step-row densities and matches
 RSSP's density output for the bundled SM and SSC fixtures.
+`assp_stream_counts_from_densities` classifies 16th/20th/24th/32nd stream
+measures, SN breaks, and total break measures from those densities.
 
 ## Build And Test
 
