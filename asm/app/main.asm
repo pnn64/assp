@@ -15,6 +15,7 @@ extern assp_chart_hash_pair
 extern assp_count_mines_nonfake_4
 extern assp_count_note_stats_4
 extern assp_count_timing_fakes_4
+extern assp_count_timing_note_stats_no_holds_4
 extern assp_count_note_charts
 extern assp_find_chart_bpms_by_index
 extern assp_find_chart_by_index
@@ -115,6 +116,10 @@ start:
     jz fail_stats
 
     call prepare_timing_fakes
+    test eax, eax
+    jz fail_stats
+
+    call prepare_timing_stats_no_holds
     test eax, eax
     jz fail_stats
 
@@ -831,6 +836,41 @@ prepare_timing_fakes:
 
 .done:
     add rsp, 72
+    ret
+
+prepare_timing_stats_no_holds:
+    sub rsp, 88
+
+    mov rax, [note_stats + ASSP_NOTE_STATS_HOLDS]
+    or rax, [note_stats + ASSP_NOTE_STATS_ROLLS]
+    jnz .success
+
+    mov rcx, [chart_info + ASSP_CHART_INFO_NOTES_PTR]
+    mov rdx, [chart_info + ASSP_CHART_INFO_NOTES_LEN]
+    lea r8, [warp_segment_buffer]
+    mov r9, [warp_segment_count]
+    lea rax, [fake_segment_buffer]
+    mov [rsp + 32], rax
+    mov rax, [fake_segment_count]
+    mov [rsp + 40], rax
+    lea rax, [note_stats]
+    mov [rsp + 48], rax
+    lea rax, [row_scratch]
+    mov [rsp + 56], rax
+    mov qword [rsp + 64], ROW_SCRATCH_CAP
+    call assp_count_timing_note_stats_no_holds_4
+    test eax, eax
+    jz .fail
+
+.success:
+    mov eax, ASSP_TRUE
+    jmp .done
+
+.fail:
+    xor eax, eax
+
+.done:
+    add rsp, 88
     ret
 
 prepare_offset:

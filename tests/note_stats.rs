@@ -1,10 +1,11 @@
 use assp::{
     ByteSlice, NoteStats, count_mines_nonfake_4, count_note_stats_4, count_note_stats_minimized_4,
-    count_timing_fakes_4, find_chart_by_index, find_chart_timing_tags_by_index, parse_bpm_map,
+    count_timing_fakes_4, count_timing_note_stats_no_holds_4, find_chart_by_index,
+    find_chart_timing_tags_by_index, parse_bpm_map,
 };
 use rssp_core::{
     bpm,
-    stats::compute_timing_aware_stats,
+    stats::{compute_timing_aware_stats, minimize_chart_for_hash},
     timing::{TimingFormat, timing_data_from_chart_data},
 };
 
@@ -19,6 +20,13 @@ fn tag_str(data: &[u8], slice: ByteSlice) -> Option<&str> {
     } else {
         std::str::from_utf8(slice_from(data, slice.data, slice.len)).ok()
     }
+}
+
+fn minimized_row_count(data: &[u8]) -> u64 {
+    minimize_chart_for_hash(data, 4)
+        .split(|&b| b == b'\n')
+        .filter(|line| line.len() >= 4 && line[0] != b',' && line[0] != b';')
+        .count() as u64
 }
 
 #[test]
@@ -184,6 +192,7 @@ fn fixture_timing_fakes_match_rssp_core() {
     let warps = parse_bpm_map(tag_str(simfile, tags.warps).unwrap().as_bytes()).unwrap();
     let fakes = parse_bpm_map(tag_str(simfile, tags.fakes).unwrap().as_bytes()).unwrap();
     let asm = count_timing_fakes_4(notes, &warps, &fakes).unwrap();
+    let asm_stats = count_timing_note_stats_no_holds_4(notes, &warps, &fakes).unwrap();
 
     let timing = timing_data_from_chart_data(
         0.0,
@@ -209,4 +218,28 @@ fn fixture_timing_fakes_match_rssp_core() {
 
     assert_eq!(asm, u64::from(rust.fakes));
     assert_eq!(asm, 4);
+    assert_eq!(
+        asm_stats,
+        NoteStats {
+            rows: minimized_row_count(notes),
+            steps: u64::from(rust.total_steps),
+            arrows: u64::from(rust.total_arrows),
+            jumps: u64::from(rust.jumps),
+            hands: u64::from(rust.hands),
+            holds: u64::from(rust.holds),
+            rolls: u64::from(rust.rolls),
+            mines: u64::from(rust.mines),
+            lifts: u64::from(rust.lifts),
+            fakes: u64::from(rust.fakes),
+            left: u64::from(rust.left),
+            down: u64::from(rust.down),
+            up: u64::from(rust.up),
+            right: u64::from(rust.right),
+            malformed_rows: 0,
+        }
+    );
+    assert_eq!(asm_stats.steps, 1);
+    assert_eq!(asm_stats.arrows, 1);
+    assert_eq!(asm_stats.mines, 0);
+    assert_eq!(asm_stats.fakes, 4);
 }

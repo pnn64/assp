@@ -50,6 +50,7 @@ The first implemented pieces are:
 - `assp_count_note_stats_4`
 - `assp_count_mines_nonfake_4`
 - `assp_count_timing_fakes_4`
+- `assp_count_timing_note_stats_no_holds_4`
 
 `assp_count_note_stats_4` is an initial 4-panel note-data counter. It counts
 tap arrows, holds, rolls, mines, lifts, fakes, steps, jumps, hands, and per-lane
@@ -61,6 +62,9 @@ counts mine rows outside parsed warp and fake timing ranges.
 `assp_count_timing_fakes_4` minimizes 4-panel note data by measure, then
 counts objects treated as fakes by warp/fake timing ranges, along with literal
 fake notes on judgable rows.
+`assp_count_timing_note_stats_no_holds_4` produces RSSP-style timing-aware
+stats for 4-panel charts with no holds or rolls; the standalone report uses it
+when that fast path applies.
 `assp_measure_densities_4` counts per-measure step-row densities and matches
 RSSP's density output for the bundled SM and SSC fixtures.
 `assp_minimize_measure_4` applies RSSP's per-measure row reduction for 4-panel
