@@ -1,10 +1,17 @@
-use assp::{find_chart_by_index, minimize_measure_4};
-use rssp_core::stats::minimize_measure;
+use assp::{find_chart_by_index, minimize_chart_4, minimize_measure_4};
+use rssp_core::stats::{minimize_chart_for_hash, minimize_measure};
 
 fn assert_measure_minimize_match(rows: &[[u8; 4]]) {
     let asm = minimize_measure_4(rows);
     let mut rust = rows.to_vec();
     minimize_measure(&mut rust);
+
+    assert_eq!(asm, rust);
+}
+
+fn assert_chart_minimize_match(data: &[u8]) {
+    let asm = minimize_chart_4(data).unwrap();
+    let rust = minimize_chart_for_hash(data, 4);
 
     assert_eq!(asm, rust);
 }
@@ -62,6 +69,35 @@ fn synthetic_measure_minimization_matches_rssp_core() {
 }
 
 #[test]
+fn synthetic_chart_minimization_matches_rssp_core() {
+    assert_chart_minimize_match(b"");
+    assert_chart_minimize_match(
+        b"
+1000
+0000
+0100
+0000
+,
+0000
+0010
+0000
+0001
+;
+",
+    );
+    assert_chart_minimize_match(
+        b"
+// ignored
+1000
+0000
+0000
+0000
+;
+",
+    );
+}
+
+#[test]
 fn fixture_measures_match_rssp_core() {
     let simfile = include_bytes!("../fixtures/camellia_mix.ssc");
     let chart = find_chart_by_index(simfile, 4).unwrap();
@@ -74,6 +110,16 @@ fn fixture_measures_match_rssp_core() {
 }
 
 #[test]
+fn ssc_fixture_chart_minimization_matches_rssp_core() {
+    let simfile = include_bytes!("../fixtures/camellia_mix.ssc");
+    let chart = find_chart_by_index(simfile, 4).unwrap();
+    let start = chart.note_data as usize - simfile.as_ptr() as usize;
+    let notes = &simfile[start..start + chart.note_data_len];
+
+    assert_chart_minimize_match(notes);
+}
+
+#[test]
 fn sm_fixture_measures_match_rssp_core() {
     let simfile = include_bytes!("../fixtures/200000_step_challenge.sm");
     let chart = find_chart_by_index(simfile, 4).unwrap();
@@ -83,4 +129,14 @@ fn sm_fixture_measures_match_rssp_core() {
     for measure in parse_measures_4(notes) {
         assert_measure_minimize_match(&measure);
     }
+}
+
+#[test]
+fn sm_fixture_chart_minimization_matches_rssp_core() {
+    let simfile = include_bytes!("../fixtures/200000_step_challenge.sm");
+    let chart = find_chart_by_index(simfile, 4).unwrap();
+    let start = chart.note_data as usize - simfile.as_ptr() as usize;
+    let notes = &simfile[start..start + chart.note_data_len];
+
+    assert_chart_minimize_match(notes);
 }

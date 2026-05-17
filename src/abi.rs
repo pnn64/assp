@@ -113,6 +113,14 @@ unsafe extern "C" {
         out: *mut u8,
         out_cap: usize,
     ) -> usize;
+    fn assp_minimize_chart_4(
+        data: *const u8,
+        len: usize,
+        out: *mut u8,
+        out_cap: usize,
+        row_scratch: *mut u8,
+        row_scratch_cap: usize,
+    ) -> usize;
     fn assp_stream_counts_from_densities(
         densities: *const u32,
         len: usize,
@@ -210,6 +218,37 @@ pub fn minimize_measure_4(rows: &[[u8; 4]]) -> Vec<[u8; 4]> {
         };
     }
     out
+}
+
+#[must_use]
+pub fn minimize_chart_4(data: &[u8]) -> Option<Vec<u8>> {
+    let mut scratch = vec![[0; 4]; data.len() / 4 + 1];
+    let count = unsafe {
+        assp_minimize_chart_4(
+            data.as_ptr(),
+            data.len(),
+            std::ptr::null_mut(),
+            0,
+            scratch.as_mut_ptr().cast::<u8>(),
+            scratch.len(),
+        )
+    };
+    if count == NOT_FOUND {
+        return None;
+    }
+
+    let mut out = vec![0; count];
+    let count = unsafe {
+        assp_minimize_chart_4(
+            data.as_ptr(),
+            data.len(),
+            out.as_mut_ptr(),
+            out.len(),
+            scratch.as_mut_ptr().cast::<u8>(),
+            scratch.len(),
+        )
+    };
+    (count != NOT_FOUND).then_some(out)
 }
 
 #[must_use]

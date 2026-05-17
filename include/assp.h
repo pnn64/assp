@@ -103,6 +103,14 @@ size_t assp_minimize_measure_4(
     uint8_t *out,
     size_t out_cap
 );
+size_t assp_minimize_chart_4(
+    const uint8_t *data,
+    size_t len,
+    uint8_t *out,
+    size_t out_cap,
+    uint8_t *row_scratch,
+    size_t row_scratch_cap
+);
 int32_t assp_stream_counts_from_densities(
     const uint32_t *densities,
     size_t len,

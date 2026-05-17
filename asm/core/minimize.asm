@@ -2,6 +2,7 @@ default rel
 %include "assp.inc"
 
 global assp_minimize_measure_4
+global assp_minimize_chart_4
 
 section .text
 
@@ -96,4 +97,187 @@ assp_minimize_measure_4:
     pop rdi
     pop rsi
     pop rbx
+    ret
+
+; rcx = note-data bytes, rdx = len, r8 = optional output bytes,
+; r9 = output byte cap, stack arg 5 = row scratch, stack arg 6 = scratch row cap.
+; rax = bytes required/written, or ASSP_NOT_FOUND when scratch/input is invalid.
+assp_minimize_chart_4:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+
+    mov r10, [rsp + 96]
+    mov r11, [rsp + 104]
+    sub rsp, 64
+    mov [rsp], r10
+    mov [rsp + 8], r11
+    mov qword [rsp + 16], 0
+    mov qword [rsp + 24], 0
+
+    test rdx, rdx
+    jz .init
+    test rcx, rcx
+    jz .invalid
+
+.init:
+    mov rsi, rcx
+    lea rdi, [rcx + rdx]
+    mov rbx, r8
+    mov r12, r9
+    xor r13d, r13d
+
+    cmp rsi, rdi
+    jae .eof
+
+.line_loop:
+    cmp rsi, rdi
+    jae .eof
+
+    mov r14, rsi
+.find_line_end:
+    cmp r14, rdi
+    jae .line_end_found
+    cmp byte [r14], 10
+    je .line_end_found
+    inc r14
+    jmp .find_line_end
+
+.line_end_found:
+    mov r15, r14
+    cmp r15, rdi
+    jae .trim_left
+    inc r15
+
+.trim_left:
+    cmp rsi, r14
+    jae .line_done
+    mov al, [rsi]
+    cmp al, ' '
+    je .trim_advance
+    cmp al, 9
+    jb .line_start
+    cmp al, 13
+    jbe .trim_advance
+    jmp .line_start
+
+.trim_advance:
+    inc rsi
+    jmp .trim_left
+
+.line_start:
+    mov al, [rsi]
+    cmp al, '/'
+    je .line_done
+    cmp al, ','
+    je .comma
+    cmp al, ';'
+    je .semi
+
+    lea rax, [rsi + 4]
+    cmp rax, r14
+    ja .line_done
+
+    mov r10, [rsp]
+    test r10, r10
+    jz .invalid
+    mov r11, [rsp + 16]
+    cmp r11, [rsp + 8]
+    jae .invalid
+    mov eax, [rsi]
+    mov [r10 + r11 * 4], eax
+    inc qword [rsp + 16]
+    jmp .line_done
+
+.comma:
+    call chart_finalize_measure
+    mov al, ','
+    call chart_append_byte
+    mov al, 10
+    call chart_append_byte
+    jmp .line_done
+
+.semi:
+    call chart_finalize_measure
+    mov qword [rsp + 24], 1
+    jmp .done
+
+.line_done:
+    mov rsi, r15
+    jmp .line_loop
+
+.eof:
+    cmp qword [rsp + 24], 0
+    jne .done
+    call chart_finalize_measure
+
+.done:
+    mov rax, r13
+    jmp .pop_done
+
+.invalid:
+    mov rax, ASSP_NOT_FOUND
+
+.pop_done:
+    add rsp, 64
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
+chart_finalize_measure:
+    cmp qword [rsp + 24], 0
+    je .done
+
+    sub rsp, 32
+    mov rcx, [rsp + 40]
+    mov rdx, [rsp + 56]
+    mov r8, rcx
+    mov r9, [rsp + 48]
+    call assp_minimize_measure_4
+    add rsp, 32
+    mov [rsp + 40], rax
+
+    xor r10d, r10d
+.row_loop:
+    cmp r10, [rsp + 40]
+    jae .clear
+    mov r11, [rsp + 8]
+    mov ecx, [r11 + r10 * 4]
+    mov al, cl
+    call chart_append_byte
+    mov al, ch
+    call chart_append_byte
+    shr ecx, 16
+    mov al, cl
+    call chart_append_byte
+    mov al, ch
+    call chart_append_byte
+    mov al, 10
+    call chart_append_byte
+    inc r10
+    jmp .row_loop
+
+.clear:
+    mov qword [rsp + 24], 0
+
+.done:
+    ret
+
+chart_append_byte:
+    test rbx, rbx
+    jz .count
+    cmp r13, r12
+    jae .count
+    mov [rbx + r13], al
+.count:
+    inc r13
     ret
