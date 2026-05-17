@@ -60,6 +60,7 @@ The first implemented pieces are:
 - `assp_count_timing_fakes_4`
 - `assp_count_timing_fakes_8`
 - `assp_count_timing_note_stats_no_holds_4`
+- `assp_count_timing_note_stats_no_holds_8`
 
 `assp_count_note_stats_4` is an initial 4-panel note-data counter. It counts
 tap arrows, holds, rolls, mines, lifts, fakes, steps, jumps, hands, and per-lane
@@ -81,9 +82,10 @@ counts objects treated as fakes by warp/fake timing ranges, along with literal
 fake notes on judgable rows.
 `assp_count_timing_fakes_8` provides the same timing-fake object count for
 8-panel chart data.
-`assp_count_timing_note_stats_no_holds_4` produces RSSP-style timing-aware
-stats for 4-panel charts with no holds or rolls; the standalone report uses it
-when that fast path applies.
+`assp_count_timing_note_stats_no_holds_4` and
+`assp_count_timing_note_stats_no_holds_8` produce RSSP-style timing-aware stats
+for charts with no holds or rolls; the standalone report uses them when that
+fast path applies.
 `assp_measure_densities_4` counts per-measure step-row densities and matches
 RSSP's density output for the bundled SM and SSC fixtures.
 `assp_measure_densities_8` provides the same density primitive for 8-panel
@@ -195,6 +197,12 @@ Run the basic dance-double fixture:
 
 ```powershell
 .\assp\target\assp.exe .\assp\fixtures\dance_double_basic.ssc 0
+```
+
+Run the dance-double timing fixture:
+
+```powershell
+.\assp\target\assp.exe .\assp\fixtures\dance_double_timing.ssc 0
 ```
 
 Run the metadata-owned timing fixture:

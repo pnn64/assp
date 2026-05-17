@@ -19,6 +19,7 @@ extern assp_count_note_stats_8
 extern assp_count_timing_fakes_4
 extern assp_count_timing_fakes_8
 extern assp_count_timing_note_stats_no_holds_4
+extern assp_count_timing_note_stats_no_holds_8
 extern assp_count_note_charts
 extern assp_chart_owns_timing_by_index
 extern assp_supported_step_type_lanes
@@ -906,9 +907,6 @@ prepare_timing_fakes:
 prepare_timing_stats_no_holds:
     sub rsp, 88
 
-    cmp qword [chart_lanes], 4
-    jne .success
-
     mov rax, [note_stats + ASSP_NOTE_STATS_HOLDS]
     or rax, [note_stats + ASSP_NOTE_STATS_ROLLS]
     jnz .success
@@ -926,7 +924,13 @@ prepare_timing_stats_no_holds:
     lea rax, [row_scratch]
     mov [rsp + 56], rax
     mov qword [rsp + 64], ROW_SCRATCH_CAP
+    cmp qword [chart_lanes], 8
+    je .count_8
     call assp_count_timing_note_stats_no_holds_4
+    jmp .count_done
+.count_8:
+    call assp_count_timing_note_stats_no_holds_8
+.count_done:
     test eax, eax
     jz .fail
 

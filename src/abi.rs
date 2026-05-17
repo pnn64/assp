@@ -350,6 +350,17 @@ unsafe extern "C" {
         row_scratch: *mut u8,
         scratch_row_cap: usize,
     ) -> c_int;
+    fn assp_count_timing_note_stats_no_holds_8(
+        data: *const u8,
+        len: usize,
+        warps: *const BpmSegment,
+        warp_len: usize,
+        fakes: *const BpmSegment,
+        fake_len: usize,
+        out: *mut NoteStats,
+        row_scratch: *mut u8,
+        scratch_row_cap: usize,
+    ) -> c_int;
 }
 
 #[must_use]
@@ -1047,6 +1058,30 @@ pub fn count_timing_note_stats_no_holds_4(
     let mut scratch = vec![[0; 4]; data.len() / 4 + 1];
     let ok = unsafe {
         assp_count_timing_note_stats_no_holds_4(
+            data.as_ptr(),
+            data.len(),
+            warps.as_ptr(),
+            warps.len(),
+            fakes.as_ptr(),
+            fakes.len(),
+            &mut stats,
+            scratch.as_mut_ptr().cast::<u8>(),
+            scratch.len(),
+        )
+    };
+    (ok != 0).then_some(stats)
+}
+
+#[must_use]
+pub fn count_timing_note_stats_no_holds_8(
+    data: &[u8],
+    warps: &[BpmSegment],
+    fakes: &[BpmSegment],
+) -> Option<NoteStats> {
+    let mut stats = NoteStats::default();
+    let mut scratch = vec![[0; 8]; data.len() / 8 + 1];
+    let ok = unsafe {
+        assp_count_timing_note_stats_no_holds_8(
             data.as_ptr(),
             data.len(),
             warps.as_ptr(),

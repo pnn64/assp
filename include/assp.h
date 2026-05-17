@@ -367,6 +367,17 @@ int32_t assp_count_timing_note_stats_no_holds_4(
     uint8_t *row_scratch,
     size_t scratch_row_cap
 );
+int32_t assp_count_timing_note_stats_no_holds_8(
+    const uint8_t *data,
+    size_t len,
+    const assp_bpm_segment *warps,
+    size_t warp_len,
+    const assp_bpm_segment *fakes,
+    size_t fake_len,
+    assp_note_stats *out,
+    uint8_t *row_scratch,
+    size_t scratch_row_cap
+);
 
 #ifdef __cplusplus
 }
