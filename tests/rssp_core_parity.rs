@@ -67,6 +67,21 @@ fn active_hold_hands_match_rssp_core() {
 }
 
 #[test]
+fn phantom_holds_match_rssp_core() {
+    assert_stats_match_rssp(
+        b"
+2000
+1000
+3000
+,
+0400
+0000
+;
+",
+    );
+}
+
+#[test]
 fn sm_fixture_chart_matches_rssp_core() {
     let simfile = include_bytes!("../fixtures/200000_step_challenge.sm");
     let chart = find_chart_by_index(simfile, 0).unwrap();

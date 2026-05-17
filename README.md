@@ -57,7 +57,8 @@ The first implemented pieces are:
 tap arrows, holds, rolls, mines, lifts, fakes, steps, jumps, hands, and per-lane
 arrow totals from a note-data byte slice. The standalone report feeds this
 counter with `assp_minimize_chart_4` output so note stats are based on
-RSSP-style minimized rows; phantom-hold correction is still not complete.
+RSSP-style minimized rows; phantom hold/roll starts are corrected with RSSP's
+matching-end rule.
 `assp_count_mines_nonfake_4` minimizes 4-panel note data by measure, then
 counts mine rows outside parsed warp and fake timing ranges.
 `assp_count_timing_fakes_4` minimizes 4-panel note data by measure, then
