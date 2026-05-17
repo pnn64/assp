@@ -12,7 +12,7 @@ fn main() {
 
     let manifest = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
-    let asm_dir = manifest.join("asm");
+    let asm_dir = manifest.join("asm").join("core");
     let include_dir = manifest.join("include");
 
     println!("cargo:rerun-if-changed={}", asm_dir.display());

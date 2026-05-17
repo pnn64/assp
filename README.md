@@ -2,16 +2,19 @@
 
 `asmssp` is the assembly port of `rssp`, the Rust StepMania simfile parser.
 
-This is intentionally starting as a small, testable core rather than a CLI.
-The assembly routines expose a C ABI, and the Rust crate in this directory is
-only a build and parity-test harness.
+The runnable program is standalone NASM x86-64 assembly. The optional Rust
+crate in this directory is only a parity-test harness for calling core assembly
+routines from existing Rust tests; `build.ps1` does not use Cargo or compile
+Rust code.
 
 ## Current Shape
 
 - NASM x86-64 source lives under `asm/`.
+- `asm/app/main.asm` owns the standalone executable entrypoint.
+- `asm/core/` owns parser and chart-analysis routines.
 - Shared ABI constants live in `include/asmssp.inc`.
 - C callers can use `include/asmssp.h`.
-- Rust tests call the assembly functions through `src/abi.rs`.
+- Optional Rust tests call core assembly functions through `src/abi.rs`.
 
 The first implemented pieces are:
 
@@ -28,10 +31,10 @@ measure minimization or phantom-hold correction.
 
 Requirements:
 
-- Rust MSVC toolchain
 - `nasm` on `PATH`
+- A Windows x64 linker and Windows SDK import libraries
 
-Build the probe executable:
+Build the standalone assembly executable:
 
 ```powershell
 .\build.ps1
@@ -46,19 +49,13 @@ From the repository root, the same script can be run as:
 The executable is written to:
 
 ```text
-asmssp\target\release\asmssp.exe
+asmssp\target\asmssp.exe
 ```
 
-Run the default RSSP Camellia fixture:
+Run the local Camellia fixture:
 
 ```powershell
 .\asmssp\build.ps1 -RunFixture
-```
-
-List the charts in that fixture:
-
-```powershell
-.\asmssp\build.ps1 -RunFixture -ListCharts
 ```
 
 Run a specific chart, where Camellia has chart indexes `0..4`:
@@ -70,21 +67,20 @@ Run a specific chart, where Camellia has chart indexes `0..4`:
 Run the built executable directly against any `.sm` or `.ssc` file:
 
 ```powershell
-.\asmssp\target\release\asmssp.exe .\rssp\crates\rssp\benches\fixtures\camellia_mix.ssc --chart 0
+.\asmssp\target\asmssp.exe .\asmssp\fixtures\camellia_mix.ssc 4
 ```
 
-The probe currently uses RSSP's Rust section extractor to find chart note-data,
-then passes that note-data to the assembly stat counter. The output includes
-the assembly stats and an `rssp-core` comparison line.
+The standalone executable currently scans SSC files for `#NOTES:` tags and
+uses the second argument as a zero-based chart index.
 
-Run the test suite:
+Run the optional Rust parity tests:
 
 ```powershell
 cargo test
 ```
 
-The build script assembles all `.asm` files under `asm/` and links the objects
-into the Rust test binaries.
+The Cargo harness assembles only `asm/core/` routines. It is not part of the
+standalone executable build path.
 
 ## Intended Porting Path
 

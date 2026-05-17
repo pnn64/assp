@@ -2,14 +2,17 @@
 
 `asmssp` is the x86-64 assembly port of `rssp`.
 
-The Rust code in this project exists only as a build and parity-test harness.
+The runnable program must be standalone assembly built by `build.ps1`, not by
+Cargo. Rust code in this project exists only as an optional parity-test harness.
 Core parser, scanner, hashing, and chart-analysis behavior belongs in NASM
 source under `asm/`.
 
 ## Structure
 
 - `asm/core/`: pure byte-slice parser and analysis routines.
+- `asm/app/`: standalone executable entrypoint and app-facing I/O.
 - `include/asmssp.inc`: NASM constants, ABI layout, and shared macros.
+- `include/win64.inc`: Win32 constants used by standalone assembly modules.
 - `include/asmssp.h`: C ABI for external callers and future harnesses.
 - `src/`: Rust FFI declarations and safe wrappers used by tests.
 - `tests/`: Rust parity and smoke tests that call the assembly ABI.
@@ -33,4 +36,3 @@ source under `asm/`.
 4. Hash/minimized-note pipeline.
 5. Timing, density, and pattern analysis.
 6. CLI/reporting only after the core ABI is stable.
-

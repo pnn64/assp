@@ -10,10 +10,8 @@ name = "asmssp"
 path = "src/lib.rs"
 
 [dependencies]
+
+[dev-dependencies]
 rssp-core = { path = "../rssp/crates/rssp-core" }
 
 [build-dependencies]
-
-[[bin]]
-name = "asmssp"
-path = "src/bin/asmssp.rs"
