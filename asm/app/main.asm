@@ -634,7 +634,7 @@ prepare_nps:
     ret
 
 prepare_timing_events:
-    sub rsp, 40
+    sub rsp, 56
 
     mov qword [bpm_segment_count], 0
     mov qword [stop_segment_count], 0
@@ -672,7 +672,12 @@ prepare_timing_events:
     or rax, [chart_timing_tags + ASSP_TIMING_TAGS_SPEEDS + ASSP_BYTE_SLICE_PTR]
     or rax, [chart_timing_tags + ASSP_TIMING_TAGS_SCROLLS + ASSP_BYTE_SLICE_PTR]
     or rax, [chart_timing_tags + ASSP_TIMING_TAGS_FAKES + ASSP_BYTE_SLICE_PTR]
+    jnz .set_own_timing
+    call chart_metadata_owns_timing
+    test eax, eax
     jz .select_bpms
+
+.set_own_timing:
     mov qword [chart_has_own_timing], ASSP_TRUE
 
 .select_bpms:
@@ -779,7 +784,48 @@ prepare_timing_events:
     xor eax, eax
 
 .done:
+    add rsp, 56
+    ret
+
+chart_metadata_owns_timing:
+    sub rsp, 40
+    lea rcx, [tag_time_signatures]
+    mov edx, tag_time_signatures_end - tag_time_signatures
+    call chart_has_tag
+    test eax, eax
+    jnz .done
+    lea rcx, [tag_labels]
+    mov edx, tag_labels_end - tag_labels
+    call chart_has_tag
+    test eax, eax
+    jnz .done
+    lea rcx, [tag_tickcounts]
+    mov edx, tag_tickcounts_end - tag_tickcounts
+    call chart_has_tag
+    test eax, eax
+    jnz .done
+    lea rcx, [tag_combos]
+    mov edx, tag_combos_end - tag_combos
+    call chart_has_tag
+.done:
     add rsp, 40
+    ret
+
+chart_has_tag:
+    sub rsp, 56
+    mov r10, rcx
+    mov r11, rdx
+    mov qword [offset_slice + ASSP_BYTE_SLICE_PTR], 0
+    mov qword [offset_slice + ASSP_BYTE_SLICE_LEN], 0
+    lea rcx, [file_buffer]
+    mov rdx, [file_len]
+    mov r8, [chart_index]
+    mov r9, r10
+    mov [rsp + 32], r11
+    lea rax, [offset_slice]
+    mov [rsp + 40], rax
+    call assp_find_chart_tag_by_index
+    add rsp, 56
     ret
 
 prepare_mines_nonfake:
@@ -1317,6 +1363,14 @@ section .data
 default_fixture db "fixtures\camellia_mix.ssc", 0
 tag_offset db "#OFFSET:"
 tag_offset_end:
+tag_time_signatures db "#TIMESIGNATURES:"
+tag_time_signatures_end:
+tag_labels db "#LABELS:"
+tag_labels_end:
+tag_tickcounts db "#TICKCOUNTS:"
+tag_tickcounts_end:
+tag_combos db "#COMBOS:"
+tag_combos_end:
 msg_header db "assp standalone", 13, 10, 0
 msg_read_fail db "failed to read input file", 13, 10, 0
 msg_notes_fail db "failed to find selected #NOTES chart", 13, 10, 0
