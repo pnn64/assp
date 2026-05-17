@@ -31,6 +31,54 @@ Requirements:
 - Rust MSVC toolchain
 - `nasm` on `PATH`
 
+Build the probe executable:
+
+```powershell
+.\build.ps1
+```
+
+From the repository root, the same script can be run as:
+
+```powershell
+.\asmssp\build.ps1
+```
+
+The executable is written to:
+
+```text
+asmssp\target\release\asmssp.exe
+```
+
+Run the default RSSP Camellia fixture:
+
+```powershell
+.\asmssp\build.ps1 -RunFixture
+```
+
+List the charts in that fixture:
+
+```powershell
+.\asmssp\build.ps1 -RunFixture -ListCharts
+```
+
+Run a specific chart, where Camellia has chart indexes `0..4`:
+
+```powershell
+.\asmssp\build.ps1 -RunFixture -Chart 4
+```
+
+Run the built executable directly against any `.sm` or `.ssc` file:
+
+```powershell
+.\asmssp\target\release\asmssp.exe .\rssp\crates\rssp\benches\fixtures\camellia_mix.ssc --chart 0
+```
+
+The probe currently uses RSSP's Rust section extractor to find chart note-data,
+then passes that note-data to the assembly stat counter. The output includes
+the assembly stats and an `rssp-core` comparison line.
+
+Run the test suite:
+
 ```powershell
 cargo test
 ```
@@ -45,4 +93,3 @@ into the Rust test binaries.
 3. Add `.sm` / `.ssc` section extraction.
 4. Add hash generation and compare against RSSP hash tests.
 5. Expand into timing, NPS, stream breakdown, and pattern parity.
-
