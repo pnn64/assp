@@ -297,6 +297,7 @@ unsafe extern "C" {
         out_cap: usize,
     ) -> usize;
     fn assp_count_note_stats_4(data: *const u8, len: usize, out: *mut NoteStats) -> c_int;
+    fn assp_count_note_stats_8(data: *const u8, len: usize, out: *mut NoteStats) -> c_int;
     fn assp_count_mines_nonfake_4(
         data: *const u8,
         len: usize,
@@ -903,9 +904,22 @@ pub fn count_note_stats_4(data: &[u8]) -> Option<NoteStats> {
 }
 
 #[must_use]
+pub fn count_note_stats_8(data: &[u8]) -> Option<NoteStats> {
+    let mut stats = NoteStats::default();
+    let ok = unsafe { assp_count_note_stats_8(data.as_ptr(), data.len(), &mut stats) };
+    (ok != 0).then_some(stats)
+}
+
+#[must_use]
 pub fn count_note_stats_minimized_4(data: &[u8]) -> Option<NoteStats> {
     let minimized = minimize_chart_4(data)?;
     count_note_stats_4(&minimized)
+}
+
+#[must_use]
+pub fn count_note_stats_minimized_8(data: &[u8]) -> Option<NoteStats> {
+    let minimized = minimize_chart_8(data)?;
+    count_note_stats_8(&minimized)
 }
 
 #[must_use]

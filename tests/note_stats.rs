@@ -1,7 +1,7 @@
 use assp::{
-    ByteSlice, NoteStats, count_mines_nonfake_4, count_note_stats_4, count_note_stats_minimized_4,
-    count_timing_fakes_4, count_timing_note_stats_no_holds_4, find_chart_by_index,
-    find_chart_timing_tags_by_index, parse_bpm_map,
+    ByteSlice, NoteStats, count_mines_nonfake_4, count_note_stats_4, count_note_stats_8,
+    count_note_stats_minimized_4, count_timing_fakes_4, count_timing_note_stats_no_holds_4,
+    find_chart_by_index, find_chart_timing_tags_by_index, parse_bpm_map,
 };
 use rssp_core::{
     bpm,
@@ -67,6 +67,49 @@ L00F
             down: 1,
             up: 1,
             right: 2,
+            malformed_rows: 0,
+        }
+    );
+}
+
+#[test]
+fn counts_basic_8_panel_note_rows() {
+    let stats = count_note_stats_8(
+        b"
+00000000
+10000001
+01001000
+00110010
+MM000000
+,
+20000004
+00000000
+30000003
+00040000
+00030000
+L00F0000
+;
+",
+    )
+    .unwrap();
+
+    assert_eq!(
+        stats,
+        NoteStats {
+            rows: 11,
+            steps: 5,
+            arrows: 10,
+            jumps: 4,
+            hands: 1,
+            holds: 1,
+            rolls: 2,
+            mines: 2,
+            lifts: 1,
+            fakes: 1,
+            left: 3,
+            down: 1,
+            up: 2,
+            right: 4,
             malformed_rows: 0,
         }
     );

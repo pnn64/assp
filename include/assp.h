@@ -307,6 +307,11 @@ int32_t assp_count_note_stats_4(
     size_t len,
     assp_note_stats *out
 );
+int32_t assp_count_note_stats_8(
+    const uint8_t *data,
+    size_t len,
+    assp_note_stats *out
+);
 size_t assp_count_mines_nonfake_4(
     const uint8_t *data,
     size_t len,

@@ -53,6 +53,7 @@ The first implemented pieces are:
 - `assp_format_stream_tokens`
 - `assp_format_stream_segments`
 - `assp_count_note_stats_4`
+- `assp_count_note_stats_8`
 - `assp_count_mines_nonfake_4`
 - `assp_count_timing_fakes_4`
 - `assp_count_timing_note_stats_no_holds_4`
@@ -63,6 +64,8 @@ arrow totals from a note-data byte slice. The standalone report feeds this
 counter with `assp_minimize_chart_4` output so note stats are based on
 RSSP-style minimized rows; phantom hold/roll starts are corrected with RSSP's
 matching-end rule.
+`assp_count_note_stats_8` provides the same RSSP-style row/stat counting and
+phantom hold correction for 8-panel chart data.
 `assp_supported_step_type_lanes` resolves RSSP-supported StepMania step types:
 `dance-single` / `dance_single` to 4 lanes, and `dance-double` /
 `dance_double` to 8 lanes.
