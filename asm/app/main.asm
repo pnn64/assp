@@ -17,7 +17,9 @@ extern assp_count_note_charts
 extern assp_find_chart_bpms_by_index
 extern assp_find_chart_by_index
 extern assp_find_chart_timing_tags_by_index
+extern assp_find_chart_tag_by_index
 extern assp_find_global_bpms
+extern assp_find_global_tag
 extern assp_find_global_timing_tags
 extern assp_elapsed_ms_bpm_only
 extern assp_elapsed_ms_with_events
@@ -27,6 +29,7 @@ extern assp_measure_nps_milli_from_bpms
 extern assp_minimize_chart_4
 extern assp_normalize_float_digits
 extern assp_parse_bpm_map
+extern assp_parse_offset_ms
 extern assp_stream_counts_from_densities
 extern assp_stream_segments_from_densities
 extern assp_stream_tokens_from_densities
@@ -101,6 +104,10 @@ start:
     jz fail_nps
 
     call prepare_timing_events
+    test eax, eax
+    jz fail_duration
+
+    call prepare_offset
     test eax, eax
     jz fail_duration
 
@@ -670,6 +677,53 @@ prepare_timing_events:
     add rsp, 40
     ret
 
+prepare_offset:
+    sub rsp, 56
+
+    mov qword [offset_ms], 0
+    mov qword [offset_slice + ASSP_BYTE_SLICE_PTR], 0
+    mov qword [offset_slice + ASSP_BYTE_SLICE_LEN], 0
+
+    lea rcx, [file_buffer]
+    mov rdx, [file_len]
+    lea r8, [tag_offset]
+    mov r9d, tag_offset_end - tag_offset
+    lea rax, [offset_slice]
+    mov [rsp + 32], rax
+    call assp_find_global_tag
+    test eax, eax
+    jz .chart_offset
+
+    mov rcx, [offset_slice + ASSP_BYTE_SLICE_PTR]
+    mov rdx, [offset_slice + ASSP_BYTE_SLICE_LEN]
+    call assp_parse_offset_ms
+    mov [offset_ms], rax
+
+.chart_offset:
+    mov qword [offset_slice + ASSP_BYTE_SLICE_PTR], 0
+    mov qword [offset_slice + ASSP_BYTE_SLICE_LEN], 0
+
+    lea rcx, [file_buffer]
+    mov rdx, [file_len]
+    mov r8, [chart_index]
+    lea r9, [tag_offset]
+    mov qword [rsp + 32], tag_offset_end - tag_offset
+    lea rax, [offset_slice]
+    mov [rsp + 40], rax
+    call assp_find_chart_tag_by_index
+    test eax, eax
+    jz .success
+
+    mov rcx, [offset_slice + ASSP_BYTE_SLICE_PTR]
+    mov rdx, [offset_slice + ASSP_BYTE_SLICE_LEN]
+    call assp_parse_offset_ms
+    mov [offset_ms], rax
+
+.success:
+    mov eax, ASSP_TRUE
+    add rsp, 56
+    ret
+
 prepare_duration:
     sub rsp, 80
 
@@ -679,6 +733,8 @@ prepare_duration:
     cmp rax, ASSP_NOT_FOUND
     je .fail
     mov [last_beat_milli], rax
+    test rax, rax
+    jz .zero_duration
 
     mov rax, [stop_segment_count]
     or rax, [delay_segment_count]
@@ -700,6 +756,7 @@ prepare_duration:
     mov rax, [last_beat_milli]
     mov [rsp + 64], rax
     call assp_elapsed_ms_with_events
+    sub rax, [offset_ms]
     mov [duration_ms], rax
     jmp .success
 
@@ -708,6 +765,7 @@ prepare_duration:
     mov rdx, [bpm_segment_count]
     mov r8, [last_beat_milli]
     call assp_elapsed_ms_bpm_only
+    sub rax, [offset_ms]
     mov [duration_ms], rax
 
 .success:
@@ -716,6 +774,11 @@ prepare_duration:
 
 .fail:
     xor eax, eax
+    jmp .done
+
+.zero_duration:
+    mov qword [duration_ms], 0
+    mov eax, ASSP_TRUE
 
 .done:
     add rsp, 80
@@ -1048,6 +1111,8 @@ print_raw:
 section .data
 
 default_fixture db "fixtures\camellia_mix.ssc", 0
+tag_offset db "#OFFSET:"
+tag_offset_end:
 msg_header db "assp standalone", 13, 10, 0
 msg_read_fail db "failed to read input file", 13, 10, 0
 msg_notes_fail db "failed to find selected #NOTES chart", 13, 10, 0
@@ -1121,6 +1186,7 @@ file_len resq 1
 file_bytes_read resd 1
 chart_info resb ASSP_CHART_INFO_SIZE
 bpms_slice resb ASSP_BYTE_SLICE_SIZE
+offset_slice resb ASSP_BYTE_SLICE_SIZE
 global_timing_tags resb ASSP_TIMING_TAGS_SIZE
 chart_timing_tags resb ASSP_TIMING_TAGS_SIZE
 note_stats resb ASSP_NOTE_STATS_SIZE
@@ -1135,6 +1201,7 @@ minimized_chart_len resq 1
 nps_count resq 1
 peak_nps_milli resq 1
 last_beat_milli resq 1
+offset_ms resq 1
 duration_ms resq 1
 hash_pair resb 32
 bpm_buffer resb BPM_BUFFER_CAP

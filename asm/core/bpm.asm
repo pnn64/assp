@@ -3,6 +3,7 @@ default rel
 
 global assp_normalize_float_digits
 global assp_parse_bpm_map
+global assp_parse_offset_ms
 global assp_bpm_at_beat_milli
 global assp_elapsed_ms_bpm_only
 global assp_elapsed_ms_with_events
@@ -179,6 +180,32 @@ assp_normalize_float_digits:
     pop rdi
     pop rsi
     pop rbx
+    ret
+
+; rcx = offset bytes, rdx = byte len. rax = signed offset milliseconds.
+; Invalid or empty values match RSSP's parser fallback and return 0.
+assp_parse_offset_ms:
+    test rdx, rdx
+    jz .zero
+    test rcx, rcx
+    jz .zero
+    cmp byte [rcx], ' '
+    jbe .zero
+    cmp byte [rcx + rdx - 1], ' '
+    jbe .zero
+
+    add rdx, rcx
+    call parse_dec3
+    cmp rax, ASSP_NOT_FOUND
+    je .zero
+    test edx, edx
+    jz .done
+    neg rax
+    ret
+
+.zero:
+    xor eax, eax
+.done:
     ret
 
 ; rcx = assp_bpm_segment ptr, rdx = segment count, r8 = beat_milli.

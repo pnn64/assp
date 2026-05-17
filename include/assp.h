@@ -160,6 +160,10 @@ size_t assp_parse_bpm_map(
     assp_bpm_segment *out,
     size_t out_cap
 );
+int64_t assp_parse_offset_ms(
+    const uint8_t *data,
+    size_t len
+);
 int64_t assp_bpm_at_beat_milli(
     const assp_bpm_segment *segments,
     size_t len,

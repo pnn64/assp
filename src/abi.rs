@@ -168,6 +168,7 @@ unsafe extern "C" {
         out: *mut BpmSegment,
         out_cap: usize,
     ) -> usize;
+    fn assp_parse_offset_ms(data: *const u8, len: usize) -> i64;
     fn assp_bpm_at_beat_milli(segments: *const BpmSegment, len: usize, beat_milli: i64) -> i64;
     fn assp_elapsed_ms_bpm_only(
         segments: *const BpmSegment,
@@ -399,6 +400,11 @@ pub fn parse_bpm_map(data: &[u8]) -> Option<Vec<BpmSegment>> {
         }
     }
     Some(out)
+}
+
+#[must_use]
+pub fn parse_offset_ms(data: &[u8]) -> i64 {
+    unsafe { assp_parse_offset_ms(data.as_ptr(), data.len()) }
 }
 
 #[must_use]

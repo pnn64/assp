@@ -1,8 +1,8 @@
 use assp::{
     elapsed_ms_bpm_only, elapsed_ms_with_events, find_bpms_for_chart, find_chart_by_index,
-    last_beat_milli_4, parse_bpm_map,
+    last_beat_milli_4, parse_bpm_map, parse_offset_ms,
 };
-use rssp_core::bpm;
+use rssp_core::{bpm, parse::parse_offset_seconds};
 
 fn slice_from<'a>(data: &'a [u8], ptr: *const u8, len: usize) -> &'a [u8] {
     let start = ptr as usize - data.as_ptr() as usize;
@@ -75,6 +75,10 @@ fn assert_event_elapsed_match(
     );
 }
 
+fn rust_offset_ms(offset: &[u8]) -> i64 {
+    (parse_offset_seconds(Some(offset)) * 1000.0).round() as i64
+}
+
 #[test]
 fn computes_last_beat_like_rssp_core() {
     let data = b"
@@ -90,6 +94,21 @@ fn computes_last_beat_like_rssp_core() {
 
     assert_eq!(last_beat_milli_4(data).unwrap(), rust_last_beat_milli(data));
     assert_eq!(last_beat_milli_4(b"0000\n0000\n;").unwrap(), 0);
+}
+
+#[test]
+fn parses_offsets_like_rssp_core() {
+    for raw in [
+        b"0.008000".as_slice(),
+        b"0.009".as_slice(),
+        b"-1.2504".as_slice(),
+        b" 2.5 ".as_slice(),
+    ] {
+        assert_eq!(parse_offset_ms(raw), rust_offset_ms(raw));
+    }
+
+    assert_eq!(parse_offset_ms(b""), 0);
+    assert_eq!(parse_offset_ms(b"not an offset"), 0);
 }
 
 #[test]
