@@ -5,9 +5,41 @@ global assp_normalize_float_digits
 global assp_parse_bpm_map
 global assp_bpm_at_beat_milli
 global assp_elapsed_ms_bpm_only
+global assp_elapsed_ms_with_events
 global assp_measure_nps_milli_from_bpms
 
 section .text
+
+%define EVT_WARP_LEN -64
+%define EVT_TARGET -72
+%define EVT_TIME -80
+%define EVT_BEAT -88
+%define EVT_BPM -96
+%define EVT_WARP_END -104
+%define EVT_I_BPM -112
+%define EVT_I_STOP -120
+%define EVT_I_DELAY -128
+%define EVT_I_WARP -136
+%define EVT_BEST_BEAT -144
+%define EVT_BEST_VAL -152
+%define EVT_BEST_TYPE -160
+%define EVT_BEST_PRI -168
+
+%macro ASSP_CONSIDER_TIMING_EVENT 0
+    cmp qword [rbp + EVT_BEST_TYPE], -1
+    je %%store
+    cmp r8, [rbp + EVT_BEST_BEAT]
+    jl %%store
+    jg %%done
+    cmp r10, [rbp + EVT_BEST_PRI]
+    jge %%done
+%%store:
+    mov [rbp + EVT_BEST_BEAT], r8
+    mov [rbp + EVT_BEST_VAL], r9
+    mov [rbp + EVT_BEST_PRI], r10
+    mov [rbp + EVT_BEST_TYPE], r11
+%%done:
+%endmacro
 
 ; rcx = timing map bytes, rdx = len, r8 = optional output bytes,
 ; r9 = output byte cap. rax = bytes required/written, or ASSP_NOT_FOUND.
@@ -259,6 +291,241 @@ assp_elapsed_ms_bpm_only:
     pop r12
     pop rsi
     pop rbx
+    ret
+
+; rcx = BPM segments, rdx = BPM count, r8 = stop segments, r9 = stop count,
+; stack arg 5 = delay segments, arg 6 = delay count, arg 7 = warp segments,
+; arg 8 = warp count, arg 9 = target beat_milli.
+; rax = elapsed milliseconds using RSSP's BPM/stop/delay/warp event order.
+assp_elapsed_ms_with_events:
+    push rbp
+    mov rbp, rsp
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 128
+
+    mov rbx, rcx
+    mov rsi, rdx
+    mov rdi, r8
+    mov r12, r9
+    mov r13, [rbp + 48]
+    mov r14, [rbp + 56]
+    mov r15, [rbp + 64]
+    mov rax, [rbp + 72]
+    mov [rbp + EVT_WARP_LEN], rax
+    mov rax, [rbp + 80]
+    mov [rbp + EVT_TARGET], rax
+
+    test rax, rax
+    jle .zero
+    test rsi, rsi
+    jz .check_stops
+    test rbx, rbx
+    jz .zero
+.check_stops:
+    test r12, r12
+    jz .check_delays
+    test rdi, rdi
+    jz .zero
+.check_delays:
+    test r14, r14
+    jz .check_warps
+    test r13, r13
+    jz .zero
+.check_warps:
+    cmp qword [rbp + EVT_WARP_LEN], 0
+    je .init
+    test r15, r15
+    jz .zero
+
+.init:
+    mov qword [rbp + EVT_TIME], 0
+    mov qword [rbp + EVT_BEAT], 0
+    mov qword [rbp + EVT_BPM], 60000
+    mov qword [rbp + EVT_WARP_END], 0
+    mov qword [rbp + EVT_I_BPM], 0
+    mov qword [rbp + EVT_I_STOP], 0
+    mov qword [rbp + EVT_I_DELAY], 0
+    mov qword [rbp + EVT_I_WARP], 0
+
+    test rsi, rsi
+    jz .select_loop
+    mov rax, [rbx + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    cmp rax, 0
+    jg .select_loop
+    mov rax, [rbx + ASSP_BPM_SEGMENT_BPM_MILLI]
+    mov [rbp + EVT_BPM], rax
+
+.select_loop:
+    mov qword [rbp + EVT_BEST_TYPE], -1
+    mov qword [rbp + EVT_BEST_PRI], 4
+
+.check_bpm:
+    mov rax, [rbp + EVT_I_BPM]
+    cmp rax, rsi
+    jae .check_stop
+    mov rdx, rax
+    shl rdx, 4
+    mov r8, [rbx + rdx + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    mov r9, [rbx + rdx + ASSP_BPM_SEGMENT_BPM_MILLI]
+    xor r10d, r10d
+    xor r11d, r11d
+    ASSP_CONSIDER_TIMING_EVENT
+
+.check_stop:
+    mov rax, [rbp + EVT_I_STOP]
+    cmp rax, r12
+    jae .check_delay
+    mov rdx, rax
+    shl rdx, 4
+    mov r8, [rdi + rdx + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    mov r9, [rdi + rdx + ASSP_BPM_SEGMENT_BPM_MILLI]
+    mov r10d, 1
+    mov r11d, 1
+    ASSP_CONSIDER_TIMING_EVENT
+
+.check_delay:
+    mov rax, [rbp + EVT_I_DELAY]
+    cmp rax, r14
+    jae .check_warp
+    mov rdx, rax
+    shl rdx, 4
+    mov r8, [r13 + rdx + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    mov r9, [r13 + rdx + ASSP_BPM_SEGMENT_BPM_MILLI]
+    mov r10d, 1
+    mov r11d, 2
+    ASSP_CONSIDER_TIMING_EVENT
+
+.check_warp:
+    mov rax, [rbp + EVT_I_WARP]
+    cmp rax, [rbp + EVT_WARP_LEN]
+    jae .selected
+    mov rdx, rax
+    shl rdx, 4
+    mov r8, [r15 + rdx + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    mov r9, [r15 + rdx + ASSP_BPM_SEGMENT_BPM_MILLI]
+    mov r10d, 2
+    mov r11d, 3
+    ASSP_CONSIDER_TIMING_EVENT
+
+.selected:
+    cmp qword [rbp + EVT_BEST_TYPE], -1
+    je .tail
+
+    mov r8, [rbp + EVT_BEST_BEAT]
+    mov rax, [rbp + EVT_TARGET]
+    cmp r8, rax
+    jle .advance_to_event
+    mov r9, [rbp + EVT_WARP_END]
+    cmp r9, rax
+    jle .tail
+
+.advance_to_event:
+    mov rax, [rbp + EVT_BEAT]
+    cmp r8, rax
+    jle .apply_event
+
+    mov r10, rax
+    mov r11, [rbp + EVT_WARP_END]
+    cmp r10, r11
+    jge .have_effective_beat
+    mov r10, r11
+.have_effective_beat:
+    cmp r8, r10
+    jle .store_event_beat
+    mov r11, [rbp + EVT_BPM]
+    test r11, r11
+    jle .store_event_beat
+    mov rax, r8
+    sub rax, r10
+    imul rax, rax, 60000
+    cqo
+    idiv r11
+    add [rbp + EVT_TIME], rax
+
+.store_event_beat:
+    mov [rbp + EVT_BEAT], r8
+
+.apply_event:
+    mov rax, [rbp + EVT_BEST_TYPE]
+    test rax, rax
+    jz .apply_bpm
+    cmp rax, 1
+    je .apply_stop
+    cmp rax, 2
+    je .apply_delay
+    jmp .apply_warp
+
+.apply_bpm:
+    mov rax, [rbp + EVT_BEST_VAL]
+    mov [rbp + EVT_BPM], rax
+    inc qword [rbp + EVT_I_BPM]
+    jmp .select_loop
+
+.apply_stop:
+    mov rax, [rbp + EVT_BEST_VAL]
+    add [rbp + EVT_TIME], rax
+    inc qword [rbp + EVT_I_STOP]
+    jmp .select_loop
+
+.apply_delay:
+    mov rax, [rbp + EVT_BEST_VAL]
+    add [rbp + EVT_TIME], rax
+    inc qword [rbp + EVT_I_DELAY]
+    jmp .select_loop
+
+.apply_warp:
+    mov rax, [rbp + EVT_BEST_BEAT]
+    add rax, [rbp + EVT_BEST_VAL]
+    cmp rax, [rbp + EVT_WARP_END]
+    jle .warp_done
+    mov [rbp + EVT_WARP_END], rax
+.warp_done:
+    inc qword [rbp + EVT_I_WARP]
+    jmp .select_loop
+
+.tail:
+    mov r8, [rbp + EVT_TARGET]
+    mov r10, [rbp + EVT_BEAT]
+    mov r11, [rbp + EVT_WARP_END]
+    cmp r10, r11
+    jge .tail_have_effective
+    mov r10, r11
+.tail_have_effective:
+    cmp r8, r10
+    jle .done
+    mov r11, [rbp + EVT_BPM]
+    test r11, r11
+    jle .done
+    mov rax, r8
+    sub rax, r10
+    imul rax, rax, 60000
+    cqo
+    idiv r11
+    add [rbp + EVT_TIME], rax
+
+.done:
+    mov rax, [rbp + EVT_TIME]
+    jmp .pop_done
+
+.zero:
+    xor eax, eax
+
+.pop_done:
+    add rsp, 128
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    pop rbp
     ret
 
 ; rcx = u32 densities, rdx = density len, r8 = assp_bpm_segment ptr,

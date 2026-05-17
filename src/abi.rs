@@ -174,6 +174,17 @@ unsafe extern "C" {
         len: usize,
         target_beat_milli: i64,
     ) -> i64;
+    fn assp_elapsed_ms_with_events(
+        bpms: *const BpmSegment,
+        bpm_len: usize,
+        stops: *const BpmSegment,
+        stop_len: usize,
+        delays: *const BpmSegment,
+        delay_len: usize,
+        warps: *const BpmSegment,
+        warp_len: usize,
+        target_beat_milli: i64,
+    ) -> i64;
     fn assp_measure_nps_milli_from_bpms(
         densities: *const u32,
         density_len: usize,
@@ -398,6 +409,33 @@ pub fn bpm_at_beat_milli(segments: &[BpmSegment], beat_milli: i64) -> i64 {
 #[must_use]
 pub fn elapsed_ms_bpm_only(segments: &[BpmSegment], target_beat_milli: i64) -> i64 {
     unsafe { assp_elapsed_ms_bpm_only(segments.as_ptr(), segments.len(), target_beat_milli) }
+}
+
+#[must_use]
+pub fn elapsed_ms_with_events(
+    bpms: &[BpmSegment],
+    stops: &[BpmSegment],
+    delays: &[BpmSegment],
+    warps: &[BpmSegment],
+    target_beat_milli: i64,
+) -> i64 {
+    if stops.is_empty() && delays.is_empty() && warps.is_empty() {
+        return elapsed_ms_bpm_only(bpms, target_beat_milli);
+    }
+
+    unsafe {
+        assp_elapsed_ms_with_events(
+            bpms.as_ptr(),
+            bpms.len(),
+            stops.as_ptr(),
+            stops.len(),
+            delays.as_ptr(),
+            delays.len(),
+            warps.as_ptr(),
+            warps.len(),
+            target_beat_milli,
+        )
+    }
 }
 
 #[must_use]

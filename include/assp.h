@@ -170,6 +170,17 @@ int64_t assp_elapsed_ms_bpm_only(
     size_t len,
     int64_t target_beat_milli
 );
+int64_t assp_elapsed_ms_with_events(
+    const assp_bpm_segment *bpms,
+    size_t bpm_len,
+    const assp_bpm_segment *stops,
+    size_t stop_len,
+    const assp_bpm_segment *delays,
+    size_t delay_len,
+    const assp_bpm_segment *warps,
+    size_t warp_len,
+    int64_t target_beat_milli
+);
 size_t assp_measure_nps_milli_from_bpms(
     const uint32_t *densities,
     size_t density_len,

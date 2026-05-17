@@ -1,5 +1,6 @@
 use assp::{
-    elapsed_ms_bpm_only, find_bpms_for_chart, find_chart_by_index, last_beat_milli_4, parse_bpm_map,
+    elapsed_ms_bpm_only, elapsed_ms_with_events, find_bpms_for_chart, find_chart_by_index,
+    last_beat_milli_4, parse_bpm_map,
 };
 use rssp_core::bpm;
 
@@ -18,6 +19,21 @@ fn rust_elapsed_ms(bpms: &[u8], target_beat_milli: i64) -> i64 {
     (bpm::get_elapsed_time(target, &bpms, &[], &[], &[]) * 1000.0).floor() as i64
 }
 
+fn rust_elapsed_ms_with_events(
+    bpms: &[u8],
+    stops: &[u8],
+    delays: &[u8],
+    warps: &[u8],
+    target_beat_milli: i64,
+) -> i64 {
+    let target = target_beat_milli as f64 / 1000.0;
+    let bpms = bpm::parse_bpm_map(std::str::from_utf8(bpms).unwrap());
+    let stops = bpm::parse_bpm_map(std::str::from_utf8(stops).unwrap());
+    let delays = bpm::parse_bpm_map(std::str::from_utf8(delays).unwrap());
+    let warps = bpm::parse_bpm_map(std::str::from_utf8(warps).unwrap());
+    (bpm::get_elapsed_time(target, &bpms, &stops, &delays, &warps) * 1000.0).floor() as i64
+}
+
 fn assert_elapsed_match(bpms: &[u8], target_beat_milli: i64) {
     let parsed = parse_bpm_map(bpms).unwrap();
     assert_eq!(
@@ -25,6 +41,36 @@ fn assert_elapsed_match(bpms: &[u8], target_beat_milli: i64) {
         rust_elapsed_ms(bpms, target_beat_milli),
         "{} @ {}",
         std::str::from_utf8(bpms).unwrap(),
+        target_beat_milli
+    );
+}
+
+fn assert_event_elapsed_match(
+    bpms: &[u8],
+    stops: &[u8],
+    delays: &[u8],
+    warps: &[u8],
+    target_beat_milli: i64,
+) {
+    let parsed_bpms = parse_bpm_map(bpms).unwrap();
+    let parsed_stops = parse_bpm_map(stops).unwrap();
+    let parsed_delays = parse_bpm_map(delays).unwrap();
+    let parsed_warps = parse_bpm_map(warps).unwrap();
+
+    assert_eq!(
+        elapsed_ms_with_events(
+            &parsed_bpms,
+            &parsed_stops,
+            &parsed_delays,
+            &parsed_warps,
+            target_beat_milli,
+        ),
+        rust_elapsed_ms_with_events(bpms, stops, delays, warps, target_beat_milli),
+        "bpms={} stops={} delays={} warps={} @ {}",
+        std::str::from_utf8(bpms).unwrap(),
+        std::str::from_utf8(stops).unwrap(),
+        std::str::from_utf8(delays).unwrap(),
+        std::str::from_utf8(warps).unwrap(),
         target_beat_milli
     );
 }
@@ -69,6 +115,15 @@ fn computes_bpm_only_elapsed_time() {
     );
     assert_elapsed_match(b"0=120,8=240,16=60", 20000);
     assert_elapsed_match(b"-4=180,4=120", 12000);
+}
+
+#[test]
+fn computes_elapsed_time_with_timing_events() {
+    assert_event_elapsed_match(b"0=120", b"4=1.500", b"", b"", 8000);
+    assert_event_elapsed_match(b"0=120,8=240", b"", b"6=0.250", b"", 12000);
+    assert_event_elapsed_match(b"0=120", b"", b"", b"4=4", 12000);
+    assert_event_elapsed_match(b"0=120,4=240", b"4=1", b"", b"8=4", 16000);
+    assert_event_elapsed_match(b"", b"2=0.500", b"", b"", 6000);
 }
 
 #[test]

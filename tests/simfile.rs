@@ -147,6 +147,49 @@ fn finds_global_timing_tags() {
 }
 
 #[test]
+fn treats_freezes_as_stop_timing_tags() {
+    let data = b"#TITLE:X;
+#FREEZES:16.000=0.250;
+#NOTEDATA:;
+#STEPSTYPE:dance-single;
+#FREEZES:32.000=0.500;
+#NOTES:
+1000
+;";
+    let global_tags = find_global_timing_tags(data).unwrap();
+    let chart_tags = find_chart_timing_tags_by_index(data, 0).unwrap();
+
+    assert_eq!(
+        slice(data, global_tags.stops.data, global_tags.stops.len),
+        b"16.000=0.250"
+    );
+    assert_eq!(
+        slice(data, chart_tags.stops.data, chart_tags.stops.len),
+        b"32.000=0.500"
+    );
+
+    let empty_stops = b"#STOPS:;#FREEZES:16.000=0.250;#NOTES:0000\n;";
+    let tags = find_global_timing_tags(empty_stops).unwrap();
+    assert_eq!(slice(empty_stops, tags.stops.data, tags.stops.len), b"");
+}
+
+#[test]
+fn empty_chart_timing_tag_overrides_global_tag() {
+    let data = b"#STOPS:16.000=0.250;
+#NOTEDATA:;
+#STEPSTYPE:dance-single;
+#STOPS:;
+#NOTES:
+1000
+;";
+    let stops = find_tag_for_chart(data, 0, b"#STOPS:").unwrap();
+    let tags = find_chart_timing_tags_by_index(data, 0).unwrap();
+
+    assert_eq!(slice(data, stops.data, stops.len), b"");
+    assert_eq!(slice(data, tags.stops.data, tags.stops.len), b"");
+}
+
+#[test]
 fn finds_chart_local_bpms() {
     let data = b"#BPMS:0.000=140.000;
 #NOTEDATA:;

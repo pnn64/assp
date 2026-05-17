@@ -32,6 +32,7 @@ The first implemented pieces are:
 - `assp_parse_bpm_map`
 - `assp_bpm_at_beat_milli`
 - `assp_elapsed_ms_bpm_only`
+- `assp_elapsed_ms_with_events`
 - `assp_measure_nps_milli_from_bpms`
 - `assp_last_beat_milli_4`
 - `assp_measure_densities_4`
@@ -73,6 +74,8 @@ beat/BPM pairs, with both fields stored as signed thousandths.
 first fixed-point NPS path from parsed BPM maps and per-measure densities.
 `assp_last_beat_milli_4` finds the last object beat for 4-panel note data, and
 `assp_elapsed_ms_bpm_only` computes BPM-only elapsed time in milliseconds.
+`assp_elapsed_ms_with_events` extends that fixed-point duration path with RSSP's
+BPM, stop, delay, and warp event ordering.
 `assp_stream_counts_from_densities` classifies 16th/20th/24th/32nd stream
 measures, SN breaks, and total break measures from those densities.
 `assp_stream_segments_from_densities` emits stream and break ranges from the
@@ -139,8 +142,8 @@ print chart indexes with step type, difficulty, meter, and description.
 SM `#NOTES:` blocks are also split into their five metadata fields before chart
 rows are passed to the stat counter. Chart reports include RSSP-style chart
 hashes, normalized hash BPMs, peak NPS in thousandths, density-derived stream
-counts, BPM-only duration metrics, token breakdowns, segment breakdowns, and
-note stats.
+counts, fixed-point duration metrics with stops/delays/warps, token
+breakdowns, segment breakdowns, and note stats.
 
 Run the optional Rust parity tests:
 

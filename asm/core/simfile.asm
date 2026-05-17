@@ -849,6 +849,10 @@ find_timing_tags_in_range:
 
     find_timing_tag tag_bpms, tag_bpms_end - tag_bpms, ASSP_TIMING_TAGS_BPMS
     find_timing_tag tag_stops, tag_stops_end - tag_stops, ASSP_TIMING_TAGS_STOPS
+    cmp qword [r15 + ASSP_TIMING_TAGS_STOPS + ASSP_BYTE_SLICE_PTR], 0
+    jne .stops_done
+    find_timing_tag tag_freezes, tag_freezes_end - tag_freezes, ASSP_TIMING_TAGS_STOPS
+.stops_done:
     find_timing_tag tag_delays, tag_delays_end - tag_delays, ASSP_TIMING_TAGS_DELAYS
     find_timing_tag tag_warps, tag_warps_end - tag_warps, ASSP_TIMING_TAGS_WARPS
     find_timing_tag tag_speeds, tag_speeds_end - tag_speeds, ASSP_TIMING_TAGS_SPEEDS
@@ -1056,6 +1060,8 @@ tag_bpms db "#BPMS:"
 tag_bpms_end:
 tag_stops db "#STOPS:"
 tag_stops_end:
+tag_freezes db "#FREEZES:"
+tag_freezes_end:
 tag_delays db "#DELAYS:"
 tag_delays_end:
 tag_warps db "#WARPS:"

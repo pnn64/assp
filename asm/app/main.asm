@@ -16,8 +16,11 @@ extern assp_count_note_stats_4
 extern assp_count_note_charts
 extern assp_find_chart_bpms_by_index
 extern assp_find_chart_by_index
+extern assp_find_chart_timing_tags_by_index
 extern assp_find_global_bpms
+extern assp_find_global_timing_tags
 extern assp_elapsed_ms_bpm_only
+extern assp_elapsed_ms_with_events
 extern assp_last_beat_milli_4
 extern assp_measure_densities_4
 extern assp_measure_nps_milli_from_bpms
@@ -96,6 +99,10 @@ start:
     call prepare_nps
     test eax, eax
     jz fail_nps
+
+    call prepare_timing_events
+    test eax, eax
+    jz fail_duration
 
     call prepare_duration
     test eax, eax
@@ -567,21 +574,91 @@ prepare_nps:
     add rsp, 56
     ret
 
-prepare_duration:
+prepare_timing_events:
     sub rsp, 40
 
-    mov rcx, [chart_info + ASSP_CHART_INFO_NOTES_PTR]
-    mov rdx, [chart_info + ASSP_CHART_INFO_NOTES_LEN]
-    call assp_last_beat_milli_4
+    mov qword [stop_segment_count], 0
+    mov qword [delay_segment_count], 0
+    mov qword [warp_segment_count], 0
+
+    lea rcx, [file_buffer]
+    mov rdx, [file_len]
+    lea r8, [global_timing_tags]
+    call assp_find_global_timing_tags
+    test eax, eax
+    jz .fail
+
+    mov qword [chart_timing_tags + ASSP_TIMING_TAGS_BPMS + ASSP_BYTE_SLICE_PTR], 0
+    mov qword [chart_timing_tags + ASSP_TIMING_TAGS_BPMS + ASSP_BYTE_SLICE_LEN], 0
+    mov qword [chart_timing_tags + ASSP_TIMING_TAGS_STOPS + ASSP_BYTE_SLICE_PTR], 0
+    mov qword [chart_timing_tags + ASSP_TIMING_TAGS_STOPS + ASSP_BYTE_SLICE_LEN], 0
+    mov qword [chart_timing_tags + ASSP_TIMING_TAGS_DELAYS + ASSP_BYTE_SLICE_PTR], 0
+    mov qword [chart_timing_tags + ASSP_TIMING_TAGS_DELAYS + ASSP_BYTE_SLICE_LEN], 0
+    mov qword [chart_timing_tags + ASSP_TIMING_TAGS_WARPS + ASSP_BYTE_SLICE_PTR], 0
+    mov qword [chart_timing_tags + ASSP_TIMING_TAGS_WARPS + ASSP_BYTE_SLICE_LEN], 0
+
+    lea rcx, [file_buffer]
+    mov rdx, [file_len]
+    mov r8, [chart_index]
+    lea r9, [chart_timing_tags]
+    call assp_find_chart_timing_tags_by_index
+
+    mov rax, [chart_timing_tags + ASSP_TIMING_TAGS_STOPS + ASSP_BYTE_SLICE_PTR]
+    test rax, rax
+    jz .global_stops
+    mov rcx, rax
+    mov rdx, [chart_timing_tags + ASSP_TIMING_TAGS_STOPS + ASSP_BYTE_SLICE_LEN]
+    jmp .parse_stops
+.global_stops:
+    mov rcx, [global_timing_tags + ASSP_TIMING_TAGS_STOPS + ASSP_BYTE_SLICE_PTR]
+    mov rdx, [global_timing_tags + ASSP_TIMING_TAGS_STOPS + ASSP_BYTE_SLICE_LEN]
+.parse_stops:
+    lea r8, [stop_segment_buffer]
+    mov r9d, BPM_SEGMENT_CAP
+    call assp_parse_bpm_map
     cmp rax, ASSP_NOT_FOUND
     je .fail
-    mov [last_beat_milli], rax
+    cmp rax, BPM_SEGMENT_CAP
+    ja .fail
+    mov [stop_segment_count], rax
 
-    lea rcx, [bpm_segment_buffer]
-    mov rdx, [bpm_segment_count]
-    mov r8, [last_beat_milli]
-    call assp_elapsed_ms_bpm_only
-    mov [duration_ms], rax
+    mov rax, [chart_timing_tags + ASSP_TIMING_TAGS_DELAYS + ASSP_BYTE_SLICE_PTR]
+    test rax, rax
+    jz .global_delays
+    mov rcx, rax
+    mov rdx, [chart_timing_tags + ASSP_TIMING_TAGS_DELAYS + ASSP_BYTE_SLICE_LEN]
+    jmp .parse_delays
+.global_delays:
+    mov rcx, [global_timing_tags + ASSP_TIMING_TAGS_DELAYS + ASSP_BYTE_SLICE_PTR]
+    mov rdx, [global_timing_tags + ASSP_TIMING_TAGS_DELAYS + ASSP_BYTE_SLICE_LEN]
+.parse_delays:
+    lea r8, [delay_segment_buffer]
+    mov r9d, BPM_SEGMENT_CAP
+    call assp_parse_bpm_map
+    cmp rax, ASSP_NOT_FOUND
+    je .fail
+    cmp rax, BPM_SEGMENT_CAP
+    ja .fail
+    mov [delay_segment_count], rax
+
+    mov rax, [chart_timing_tags + ASSP_TIMING_TAGS_WARPS + ASSP_BYTE_SLICE_PTR]
+    test rax, rax
+    jz .global_warps
+    mov rcx, rax
+    mov rdx, [chart_timing_tags + ASSP_TIMING_TAGS_WARPS + ASSP_BYTE_SLICE_LEN]
+    jmp .parse_warps
+.global_warps:
+    mov rcx, [global_timing_tags + ASSP_TIMING_TAGS_WARPS + ASSP_BYTE_SLICE_PTR]
+    mov rdx, [global_timing_tags + ASSP_TIMING_TAGS_WARPS + ASSP_BYTE_SLICE_LEN]
+.parse_warps:
+    lea r8, [warp_segment_buffer]
+    mov r9d, BPM_SEGMENT_CAP
+    call assp_parse_bpm_map
+    cmp rax, ASSP_NOT_FOUND
+    je .fail
+    cmp rax, BPM_SEGMENT_CAP
+    ja .fail
+    mov [warp_segment_count], rax
 
     mov eax, ASSP_TRUE
     jmp .done
@@ -591,6 +668,57 @@ prepare_duration:
 
 .done:
     add rsp, 40
+    ret
+
+prepare_duration:
+    sub rsp, 80
+
+    mov rcx, [chart_info + ASSP_CHART_INFO_NOTES_PTR]
+    mov rdx, [chart_info + ASSP_CHART_INFO_NOTES_LEN]
+    call assp_last_beat_milli_4
+    cmp rax, ASSP_NOT_FOUND
+    je .fail
+    mov [last_beat_milli], rax
+
+    mov rax, [stop_segment_count]
+    or rax, [delay_segment_count]
+    or rax, [warp_segment_count]
+    jz .bpm_only
+
+    lea rcx, [bpm_segment_buffer]
+    mov rdx, [bpm_segment_count]
+    lea r8, [stop_segment_buffer]
+    mov r9, [stop_segment_count]
+    lea rax, [delay_segment_buffer]
+    mov [rsp + 32], rax
+    mov rax, [delay_segment_count]
+    mov [rsp + 40], rax
+    lea rax, [warp_segment_buffer]
+    mov [rsp + 48], rax
+    mov rax, [warp_segment_count]
+    mov [rsp + 56], rax
+    mov rax, [last_beat_milli]
+    mov [rsp + 64], rax
+    call assp_elapsed_ms_with_events
+    mov [duration_ms], rax
+    jmp .success
+
+.bpm_only:
+    lea rcx, [bpm_segment_buffer]
+    mov rdx, [bpm_segment_count]
+    mov r8, [last_beat_milli]
+    call assp_elapsed_ms_bpm_only
+    mov [duration_ms], rax
+
+.success:
+    mov eax, ASSP_TRUE
+    jmp .done
+
+.fail:
+    xor eax, eax
+
+.done:
+    add rsp, 80
     ret
 
 print_report:
@@ -993,11 +1121,16 @@ file_len resq 1
 file_bytes_read resd 1
 chart_info resb ASSP_CHART_INFO_SIZE
 bpms_slice resb ASSP_BYTE_SLICE_SIZE
+global_timing_tags resb ASSP_TIMING_TAGS_SIZE
+chart_timing_tags resb ASSP_TIMING_TAGS_SIZE
 note_stats resb ASSP_NOTE_STATS_SIZE
 stream_counts resb ASSP_STREAM_COUNTS_SIZE
 num_buffer resb 32
 normalized_bpms_len resq 1
 bpm_segment_count resq 1
+stop_segment_count resq 1
+delay_segment_count resq 1
+warp_segment_count resq 1
 minimized_chart_len resq 1
 nps_count resq 1
 peak_nps_milli resq 1
@@ -1006,6 +1139,9 @@ duration_ms resq 1
 hash_pair resb 32
 bpm_buffer resb BPM_BUFFER_CAP
 bpm_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
+stop_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
+delay_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
+warp_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
 nps_buffer resd DENSITY_CAP
 row_scratch resd ROW_SCRATCH_CAP
 minimized_buffer resb MINIMIZED_BUFFER_CAP
