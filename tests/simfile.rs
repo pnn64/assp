@@ -6,19 +6,39 @@ use assp::{
 
 #[test]
 fn counts_notes_tags() {
-    let data = b"#TITLE:X;#NOTES:0000\n;#NOTES:1000\n;";
-    assert_eq!(count_note_charts(data), 2);
+    let data = b"#TITLE:X;#NOTES:0000\n;#NOTES2:1000\n;#NOTES:0100\n;";
+    assert_eq!(count_note_charts(data), 3);
 }
 
 #[test]
 fn finds_note_data_by_index() {
-    let data = b"#TITLE:X;#NOTES:0000\n;#NOTES:1000\n;";
+    let data = b"#TITLE:X;#NOTES:0000\n;#NOTES2:1000\n;";
     let chart = find_notes_by_index(data, 1).unwrap();
     let start = chart.note_data as usize - data.as_ptr() as usize;
 
     assert_eq!(chart.index, 1);
     assert_eq!(&data[start..start + chart.note_data_len], b"1000\n;");
     assert!(find_notes_by_index(data, 2).is_none());
+}
+
+#[test]
+fn treats_notes2_as_chart_note_data() {
+    let data = b"#TITLE:X;
+#BPMS:0.000=140.000;
+#NOTEDATA:;
+#STEPSTYPE:dance-single;
+#BPMS:0.000=175.000;
+#NOTES2:
+1000
+;";
+    let chart = find_chart_by_index(data, 0).unwrap();
+    let bpms = find_chart_bpms_by_index(data, 0).unwrap();
+
+    assert_eq!(
+        slice(data, chart.note_data, chart.note_data_len),
+        b"\n1000\n;"
+    );
+    assert_eq!(slice(data, bpms.data, bpms.len), b"0.000=175.000");
 }
 
 #[test]
@@ -55,7 +75,7 @@ fn finds_ssc_chart_metadata() {
 #[test]
 fn finds_sm_chart_metadata_and_note_rows() {
     let data = b"#TITLE:X;
-#NOTES:
+#NOTES2:
      dance-single:
      1sts?:
      Beginner:

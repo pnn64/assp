@@ -140,13 +140,14 @@ Run the built executable directly against any `.sm` or `.ssc` file:
 ```
 
 The standalone executable currently scans SSC files for chart metadata and
-`#NOTES:` tags. The second argument is a zero-based chart index, or `list` to
-print chart indexes with step type, difficulty, meter, and description.
-SM `#NOTES:` blocks are also split into their five metadata fields before chart
-rows are passed to the stat counter. Chart reports include RSSP-style chart
-hashes, normalized hash BPMs, peak NPS in thousandths, density-derived stream
-counts, fixed-point duration metrics with stops/delays/warps, token
-breakdowns, segment breakdowns, offset adjustment, and note stats.
+`#NOTES:` / `#NOTES2:` tags. The second argument is a zero-based chart index, or
+`list` to print chart indexes with step type, difficulty, meter, and
+description. SM `#NOTES:` / `#NOTES2:` blocks are also split into their five
+metadata fields before chart rows are passed to the stat counter. Chart reports
+include RSSP-style chart hashes, normalized hash BPMs, peak NPS in thousandths,
+density-derived stream counts, fixed-point duration metrics with
+stops/delays/warps, token breakdowns, segment breakdowns, offset adjustment, and
+note stats.
 
 Run the optional Rust parity tests:
 

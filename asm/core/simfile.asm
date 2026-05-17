@@ -36,8 +36,15 @@ section .text
     cmp byte [%1 + 5], 'S'
     jne %%no
     cmp byte [%1 + 6], ':'
+    je %%notes
+    cmp byte [%1 + 6], '2'
     jne %%no
-    mov eax, ASSP_TRUE
+    cmp byte [%1 + 7], ':'
+    jne %%no
+    mov eax, 8
+    jmp %%done
+%%notes:
+    mov eax, 7
     jmp %%done
 %%no:
     xor eax, eax
@@ -138,11 +145,11 @@ section .text
 %endmacro
 
 ; rcx = simfile bytes, rdx = len.
-; rax = number of #NOTES: tags.
+; rax = number of #NOTES:/#NOTES2: tags.
 assp_count_note_charts:
     test rcx, rcx
     jz .zero
-    cmp rdx, 7
+    cmp rdx, 8
     jb .zero
 
     mov r10, rcx
@@ -150,7 +157,7 @@ assp_count_note_charts:
     xor r8d, r8d
 
 .scan:
-    lea rax, [r10 + 7]
+    lea rax, [r10 + 8]
     cmp rax, r11
     ja .done
 
@@ -158,7 +165,7 @@ assp_count_note_charts:
     test eax, eax
     jz .next
     inc r8
-    add r10, 7
+    add r10, rax
     jmp .scan
 
 .next:
@@ -238,7 +245,7 @@ assp_find_chart_bpms_by_index:
     jz .fail
     test r9, r9
     jz .fail
-    cmp rdx, 7
+    cmp rdx, 8
     jb .fail
 
     mov qword [r9 + ASSP_BYTE_SLICE_PTR], 0
@@ -264,7 +271,7 @@ assp_find_chart_bpms_by_index:
     jmp .scan
 
 .check_notes:
-    lea rax, [rdi + 7]
+    lea rax, [rdi + 8]
     cmp rax, r12
     ja .fail
     is_notes_tag rdi
@@ -274,7 +281,7 @@ assp_find_chart_bpms_by_index:
     cmp r14, r13
     je .found_chart
     inc r14
-    add rdi, 7
+    add rdi, rax
     jmp .scan
 
 .next:
@@ -373,7 +380,7 @@ assp_find_chart_tag_by_index:
     jz .fail
     test rbx, rbx
     jz .fail
-    cmp rdx, 7
+    cmp rdx, 8
     jb .fail
 
     mov qword [rbx + ASSP_BYTE_SLICE_PTR], 0
@@ -398,7 +405,7 @@ assp_find_chart_tag_by_index:
     jmp .scan
 
 .check_notes:
-    lea rax, [rdi + 7]
+    lea rax, [rdi + 8]
     cmp rax, rsi
     ja .fail
     is_notes_tag rdi
@@ -408,7 +415,7 @@ assp_find_chart_tag_by_index:
     cmp r14, r13
     je .found_chart
     inc r14
-    add rdi, 7
+    add rdi, rax
     jmp .scan
 
 .next:
@@ -490,7 +497,7 @@ assp_find_chart_timing_tags_by_index:
     jz .fail
     test r9, r9
     jz .fail
-    cmp rdx, 7
+    cmp rdx, 8
     jb .fail
 
     mov r13, r8
@@ -515,7 +522,7 @@ assp_find_chart_timing_tags_by_index:
     jmp .scan
 
 .check_notes:
-    lea rax, [rdi + 7]
+    lea rax, [rdi + 8]
     cmp rax, rsi
     ja .fail
     is_notes_tag rdi
@@ -525,7 +532,7 @@ assp_find_chart_timing_tags_by_index:
     cmp r14, r13
     je .found_chart
     inc r14
-    add rdi, 7
+    add rdi, rax
     jmp .scan
 
 .next:
@@ -562,7 +569,7 @@ assp_find_notes_by_index:
     jz .fail
     test r9, r9
     jz .fail
-    cmp rdx, 7
+    cmp rdx, 8
     jb .fail
 
     mov qword [r9 + ASSP_CHART_REF_NOTES_PTR], 0
@@ -574,7 +581,7 @@ assp_find_notes_by_index:
     xor ecx, ecx
 
 .scan:
-    lea rax, [r10 + 7]
+    lea rax, [r10 + 8]
     cmp rax, r11
     ja .fail
 
@@ -585,7 +592,7 @@ assp_find_notes_by_index:
     cmp rcx, r8
     je .found
     inc rcx
-    add r10, 7
+    add r10, rax
     jmp .scan
 
 .next:
@@ -593,7 +600,7 @@ assp_find_notes_by_index:
     jmp .scan
 
 .found:
-    lea rax, [r10 + 7]
+    add rax, r10
     mov rdx, rax
 
 .find_end:
@@ -631,7 +638,7 @@ assp_find_chart_by_index:
     jz .fail
     test r9, r9
     jz .fail
-    cmp rdx, 7
+    cmp rdx, 8
     jb .fail
 
     mov rbx, r9
@@ -666,7 +673,7 @@ assp_find_chart_by_index:
     jmp .scan
 
 .check_notes:
-    lea rax, [rdi + 7]
+    lea rax, [rdi + 8]
     cmp rax, r12
     ja .fail
     is_notes_tag rdi
@@ -676,7 +683,7 @@ assp_find_chart_by_index:
     cmp r14, r13
     je .found
     inc r14
-    add rdi, 7
+    add rdi, rax
     jmp .scan
 
 .next:
@@ -684,7 +691,7 @@ assp_find_chart_by_index:
     jmp .scan
 
 .found:
-    lea rsi, [rdi + 7]
+    lea rsi, [rdi + rax]
     mov rdx, rsi
 
 .find_notes_end:
