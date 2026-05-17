@@ -309,7 +309,27 @@ unsafe extern "C" {
         row_scratch: *mut u8,
         scratch_row_cap: usize,
     ) -> usize;
+    fn assp_count_mines_nonfake_8(
+        data: *const u8,
+        len: usize,
+        warps: *const BpmSegment,
+        warp_len: usize,
+        fakes: *const BpmSegment,
+        fake_len: usize,
+        row_scratch: *mut u8,
+        scratch_row_cap: usize,
+    ) -> usize;
     fn assp_count_timing_fakes_4(
+        data: *const u8,
+        len: usize,
+        warps: *const BpmSegment,
+        warp_len: usize,
+        fakes: *const BpmSegment,
+        fake_len: usize,
+        row_scratch: *mut u8,
+        scratch_row_cap: usize,
+    ) -> usize;
+    fn assp_count_timing_fakes_8(
         data: *const u8,
         len: usize,
         warps: *const BpmSegment,
@@ -952,6 +972,28 @@ pub fn count_mines_nonfake_4(
 }
 
 #[must_use]
+pub fn count_mines_nonfake_8(
+    data: &[u8],
+    warps: &[BpmSegment],
+    fakes: &[BpmSegment],
+) -> Option<u64> {
+    let mut scratch = vec![[0; 8]; data.len() / 8 + 1];
+    let count = unsafe {
+        assp_count_mines_nonfake_8(
+            data.as_ptr(),
+            data.len(),
+            warps.as_ptr(),
+            warps.len(),
+            fakes.as_ptr(),
+            fakes.len(),
+            scratch.as_mut_ptr().cast::<u8>(),
+            scratch.len(),
+        )
+    };
+    (count != NOT_FOUND).then_some(count as u64)
+}
+
+#[must_use]
 pub fn count_timing_fakes_4(
     data: &[u8],
     warps: &[BpmSegment],
@@ -960,6 +1002,28 @@ pub fn count_timing_fakes_4(
     let mut scratch = vec![[0; 4]; data.len() / 4 + 1];
     let count = unsafe {
         assp_count_timing_fakes_4(
+            data.as_ptr(),
+            data.len(),
+            warps.as_ptr(),
+            warps.len(),
+            fakes.as_ptr(),
+            fakes.len(),
+            scratch.as_mut_ptr().cast::<u8>(),
+            scratch.len(),
+        )
+    };
+    (count != NOT_FOUND).then_some(count as u64)
+}
+
+#[must_use]
+pub fn count_timing_fakes_8(
+    data: &[u8],
+    warps: &[BpmSegment],
+    fakes: &[BpmSegment],
+) -> Option<u64> {
+    let mut scratch = vec![[0; 8]; data.len() / 8 + 1];
+    let count = unsafe {
+        assp_count_timing_fakes_8(
             data.as_ptr(),
             data.len(),
             warps.as_ptr(),

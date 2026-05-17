@@ -1,7 +1,8 @@
 use assp::{
-    ByteSlice, NoteStats, count_mines_nonfake_4, count_note_stats_4, count_note_stats_8,
-    count_note_stats_minimized_4, count_timing_fakes_4, count_timing_note_stats_no_holds_4,
-    find_chart_by_index, find_chart_timing_tags_by_index, parse_bpm_map,
+    ByteSlice, NoteStats, count_mines_nonfake_4, count_mines_nonfake_8, count_note_stats_4,
+    count_note_stats_8, count_note_stats_minimized_4, count_timing_fakes_4, count_timing_fakes_8,
+    count_timing_note_stats_no_holds_4, find_chart_by_index, find_chart_timing_tags_by_index,
+    parse_bpm_map,
 };
 use rssp_core::{
     bpm,
@@ -205,6 +206,39 @@ M000
 }
 
 #[test]
+fn counts_8_panel_nonfake_mines_after_measure_minimization() {
+    let data = b"
+10000000
+00000000
+0000M000
+00000000
+,
+0000000m
+00000000
+M0000000
+00000000
+;
+";
+    let warps = b"2=1";
+    let fakes = b"4=0.5";
+    let asm_warps = parse_bpm_map(warps).unwrap();
+    let asm_fakes = parse_bpm_map(fakes).unwrap();
+    let rust_warps = bpm::parse_bpm_map(std::str::from_utf8(warps).unwrap());
+    let rust_fakes = bpm::parse_bpm_map(std::str::from_utf8(fakes).unwrap());
+
+    assert_eq!(
+        count_mines_nonfake_8(data, &asm_warps, &asm_fakes).unwrap(),
+        u64::from(bpm::compute_mines_nonfake(
+            data,
+            8,
+            &rust_warps,
+            &rust_fakes
+        ))
+    );
+    assert_eq!(count_mines_nonfake_8(data, &asm_warps, &asm_fakes), Some(1));
+}
+
+#[test]
 fn counts_timing_fakes_after_measure_minimization() {
     let data = b"
 1000
@@ -223,6 +257,53 @@ F000
 
     assert_eq!(count_timing_fakes_4(data, &[], &[]), Some(2));
     assert_eq!(count_timing_fakes_4(data, &warps, &fakes), Some(4));
+}
+
+#[test]
+fn counts_8_panel_timing_fakes_after_measure_minimization() {
+    let data = b"
+10000000
+00000000
+M000F000
+00000000
+,
+F0000001
+00000000
+00001000
+00000000
+;
+";
+    let warps = parse_bpm_map(b"2=1").unwrap();
+    let fakes = parse_bpm_map(b"6=0.5").unwrap();
+
+    let timing = timing_data_from_chart_data(
+        0.0,
+        0.0,
+        Some("0=120"),
+        "0=120",
+        None,
+        "",
+        None,
+        "",
+        Some("2=1"),
+        "",
+        None,
+        "",
+        None,
+        "",
+        Some("6=0.5"),
+        "",
+        TimingFormat::Ssc,
+        false,
+    );
+    let rust = compute_timing_aware_stats(data, 8, &timing);
+
+    assert_eq!(count_timing_fakes_8(data, &[], &[]), Some(2));
+    assert_eq!(
+        count_timing_fakes_8(data, &warps, &fakes).unwrap(),
+        u64::from(rust.fakes)
+    );
+    assert_eq!(count_timing_fakes_8(data, &warps, &fakes), Some(4));
 }
 
 #[test]

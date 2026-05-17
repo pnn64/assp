@@ -56,7 +56,9 @@ The first implemented pieces are:
 - `assp_count_note_stats_4`
 - `assp_count_note_stats_8`
 - `assp_count_mines_nonfake_4`
+- `assp_count_mines_nonfake_8`
 - `assp_count_timing_fakes_4`
+- `assp_count_timing_fakes_8`
 - `assp_count_timing_note_stats_no_holds_4`
 
 `assp_count_note_stats_4` is an initial 4-panel note-data counter. It counts
@@ -72,9 +74,13 @@ phantom hold correction for 8-panel chart data.
 `dance_double` to 8 lanes.
 `assp_count_mines_nonfake_4` minimizes 4-panel note data by measure, then
 counts mine rows outside parsed warp and fake timing ranges.
+`assp_count_mines_nonfake_8` provides the same nonfake mine-row count for
+8-panel chart data.
 `assp_count_timing_fakes_4` minimizes 4-panel note data by measure, then
 counts objects treated as fakes by warp/fake timing ranges, along with literal
 fake notes on judgable rows.
+`assp_count_timing_fakes_8` provides the same timing-fake object count for
+8-panel chart data.
 `assp_count_timing_note_stats_no_holds_4` produces RSSP-style timing-aware
 stats for 4-panel charts with no holds or rolls; the standalone report uses it
 when that fast path applies.
@@ -197,10 +203,10 @@ The standalone executable currently scans SSC files for chart metadata and
 description. SM `#NOTES:` / `#NOTES2:` blocks are also split into their five
 metadata fields before chart rows are passed to the stat counter. The standalone
 report path currently supports `dance-single` charts; `dance-double` lane
-resolution and core 8-lane minimization/density primitives exist, but full
-8-lane report generation is not wired into the executable yet. Chart reports
-include RSSP-style chart hashes, normalized hash BPMs, peak NPS in thousandths,
-density-derived stream counts, fixed-point duration metrics with
+resolution and the core 8-lane analysis primitives exist, but full 8-lane report
+generation is not wired into the executable yet. Chart reports include RSSP-style
+chart hashes, normalized hash BPMs, peak NPS in thousandths, density-derived
+stream counts, fixed-point duration metrics with
 stops/delays/warps, token breakdowns, segment breakdowns, offset adjustment, and
 note stats with nonfake mine and timing-fake counts.
 

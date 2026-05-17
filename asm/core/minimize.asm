@@ -177,8 +177,8 @@ assp_minimize_measure_8:
     jae .done
     mov rdx, r10
     imul rdx, r11
-    mov rax, [rsi + rdx * 8]
-    mov [rbx + r10 * 8], rax
+    mov rcx, [rsi + rdx * 8]
+    mov [rbx + r10 * 8], rcx
     inc r10
     jmp .copy_loop
 
