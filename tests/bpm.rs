@@ -1,4 +1,4 @@
-use assp::{find_bpms_for_chart, normalize_float_digits};
+use assp::{BpmSegment, find_bpms_for_chart, normalize_float_digits, parse_bpm_map};
 use rssp_core::bpm;
 
 fn assert_normalized(input: &[u8]) {
@@ -12,6 +12,20 @@ fn slice_from<'a>(data: &'a [u8], ptr: *const u8, len: usize) -> &'a [u8] {
     &data[start..start + len]
 }
 
+fn rust_bpm_segments(input: &[u8]) -> Vec<BpmSegment> {
+    bpm::parse_bpm_map(std::str::from_utf8(input).unwrap())
+        .into_iter()
+        .map(|(beat, bpm)| BpmSegment {
+            beat_milli: (beat * 1000.0).round() as i64,
+            bpm_milli: (bpm * 1000.0).round() as i64,
+        })
+        .collect()
+}
+
+fn assert_bpm_map(input: &[u8]) {
+    assert_eq!(parse_bpm_map(input).unwrap(), rust_bpm_segments(input));
+}
+
 #[test]
 fn normalizes_decimal_timing_map() {
     assert_normalized(b"");
@@ -19,6 +33,15 @@ fn normalizes_decimal_timing_map() {
     assert_normalized(b"0.000000=175.000000");
     assert_normalized(b"1.2345=2.3454, 2.0004=3.0005");
     assert_normalized(b"bad,1=2,3=x,4=5");
+}
+
+#[test]
+fn parses_bpm_map_like_rssp_core() {
+    assert_bpm_map(b"");
+    assert_bpm_map(b"0=140");
+    assert_bpm_map(b"4.000=175.500, 2.000=120.000");
+    assert_bpm_map(b"bad,1=2,3=x,4=5");
+    assert_bpm_map(b"48r=100.000,96R=200.000");
 }
 
 #[test]
@@ -43,5 +66,31 @@ fn normalizes_fixture_bpms_for_hash_input() {
     assert_eq!(
         std::str::from_utf8(&normalize_float_digits(sm_raw).unwrap()).unwrap(),
         "0.000=140.000"
+    );
+}
+
+#[test]
+fn parses_fixture_bpms_for_timing_input() {
+    let ssc = include_bytes!("../fixtures/camellia_mix.ssc");
+    let sm = include_bytes!("../fixtures/200000_step_challenge.sm");
+
+    let ssc_bpms = find_bpms_for_chart(ssc, 4).unwrap();
+    let ssc_raw = slice_from(ssc, ssc_bpms.data, ssc_bpms.len);
+    assert_eq!(
+        parse_bpm_map(ssc_raw).unwrap(),
+        vec![BpmSegment {
+            beat_milli: 0,
+            bpm_milli: 175000
+        }]
+    );
+
+    let sm_bpms = find_bpms_for_chart(sm, 4).unwrap();
+    let sm_raw = slice_from(sm, sm_bpms.data, sm_bpms.len);
+    assert_eq!(
+        parse_bpm_map(sm_raw).unwrap(),
+        vec![BpmSegment {
+            beat_milli: 0,
+            bpm_milli: 140000
+        }]
     );
 }

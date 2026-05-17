@@ -2,6 +2,7 @@ default rel
 %include "assp.inc"
 
 global assp_normalize_float_digits
+global assp_parse_bpm_map
 
 section .text
 
@@ -411,4 +412,221 @@ emit_byte:
     ret
 .overflow:
     stc
+    ret
+
+; rcx = BPM map bytes, rdx = len, r8 = optional assp_bpm_segment output,
+; r9 = output cap. rax = parsed segment count, or ASSP_NOT_FOUND.
+; Values are signed thousandths. Invalid comma entries are skipped.
+assp_parse_bpm_map:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 64
+
+    test rdx, rdx
+    jz .empty
+    test rcx, rcx
+    jz .invalid
+
+    mov rsi, rcx
+    lea r12, [rcx + rdx]
+    mov rdi, r8
+    mov r13, r9
+    xor r14d, r14d
+
+.entry_loop:
+    cmp rsi, r12
+    jae .sort
+
+    mov r10, rsi
+.find_comma:
+    cmp r10, r12
+    jae .entry_bounds
+    cmp byte [r10], ','
+    je .entry_bounds
+    inc r10
+    jmp .find_comma
+
+.entry_bounds:
+    mov [rsp], r10
+    mov rbx, rsi
+    mov r11, r10
+
+.trim_left:
+    cmp rbx, r11
+    jae .skip_entry
+    cmp byte [rbx], ' '
+    ja .trim_right
+    inc rbx
+    jmp .trim_left
+
+.trim_right:
+    cmp r11, rbx
+    jbe .skip_entry
+    cmp byte [r11 - 1], ' '
+    ja .find_equal
+    dec r11
+    jmp .trim_right
+
+.find_equal:
+    mov rax, rbx
+.equal_loop:
+    cmp rax, r11
+    jae .skip_entry
+    cmp byte [rax], '='
+    je .parse_beat
+    inc rax
+    jmp .equal_loop
+
+.parse_beat:
+    mov [rsp + 8], rax
+    mov [rsp + 16], r11
+    mov rdx, rax
+    xor r15d, r15d
+
+.trim_beat_right:
+    cmp rdx, rbx
+    jbe .skip_entry
+    cmp byte [rdx - 1], ' '
+    ja .check_row_suffix
+    dec rdx
+    jmp .trim_beat_right
+
+.check_row_suffix:
+    cmp byte [rdx - 1], 'r'
+    je .row_suffix
+    cmp byte [rdx - 1], 'R'
+    jne .parse_beat_value
+.row_suffix:
+    mov r15d, ASSP_TRUE
+    dec rdx
+.trim_before_suffix:
+    cmp rdx, rbx
+    jbe .skip_entry
+    cmp byte [rdx - 1], ' '
+    ja .parse_beat_value
+    dec rdx
+    jmp .trim_before_suffix
+
+.parse_beat_value:
+    mov rcx, rbx
+    call parse_dec3
+    cmp rax, ASSP_NOT_FOUND
+    je .skip_entry
+    test edx, edx
+    jz .beat_positive
+    neg rax
+.beat_positive:
+    test r15d, r15d
+    jz .store_beat
+    cqo
+    mov r10d, 48
+    idiv r10
+.store_beat:
+    mov [rsp + 24], rax
+
+    mov rcx, [rsp + 8]
+    inc rcx
+    mov rdx, [rsp + 16]
+    call parse_dec3
+    cmp rax, ASSP_NOT_FOUND
+    je .skip_entry
+    test edx, edx
+    jz .store_bpm
+    neg rax
+.store_bpm:
+    mov [rsp + 32], rax
+
+    test rdi, rdi
+    jz .inc_count
+    cmp r14, r13
+    jae .inc_count
+    mov r10, r14
+    shl r10, 4
+    mov rax, [rsp + 24]
+    mov [rdi + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI], rax
+    mov rax, [rsp + 32]
+    mov [rdi + r10 + ASSP_BPM_SEGMENT_BPM_MILLI], rax
+
+.inc_count:
+    inc r14
+
+.skip_entry:
+    mov rsi, [rsp]
+    cmp rsi, r12
+    jae .sort
+    inc rsi
+    jmp .entry_loop
+
+.empty:
+    xor r14d, r14d
+
+.sort:
+    test rdi, rdi
+    jz .done
+    cmp r14, 2
+    jb .done
+    cmp r14, r13
+    ja .done
+
+    mov r8d, 1
+.sort_outer:
+    cmp r8, r14
+    jae .done
+    mov r10, r8
+    shl r10, 4
+    mov rax, [rdi + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    mov [rsp + 40], rax
+    mov rax, [rdi + r10 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    mov [rsp + 48], rax
+    mov r9, r8
+
+.sort_inner:
+    test r9, r9
+    jz .sort_place
+    mov r10, r9
+    dec r10
+    shl r10, 4
+    mov rax, [rdi + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    cmp rax, [rsp + 40]
+    jle .sort_place
+
+    mov r11, r9
+    shl r11, 4
+    mov [rdi + r11 + ASSP_BPM_SEGMENT_BEAT_MILLI], rax
+    mov rax, [rdi + r10 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    mov [rdi + r11 + ASSP_BPM_SEGMENT_BPM_MILLI], rax
+    dec r9
+    jmp .sort_inner
+
+.sort_place:
+    mov r11, r9
+    shl r11, 4
+    mov rax, [rsp + 40]
+    mov [rdi + r11 + ASSP_BPM_SEGMENT_BEAT_MILLI], rax
+    mov rax, [rsp + 48]
+    mov [rdi + r11 + ASSP_BPM_SEGMENT_BPM_MILLI], rax
+    inc r8
+    jmp .sort_outer
+
+.done:
+    mov rax, r14
+    jmp .pop_done
+
+.invalid:
+    mov rax, ASSP_NOT_FOUND
+
+.pop_done:
+    add rsp, 64
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
     ret

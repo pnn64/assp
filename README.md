@@ -29,6 +29,7 @@ The first implemented pieces are:
 - `assp_find_global_timing_tags`
 - `assp_find_chart_timing_tags_by_index`
 - `assp_normalize_float_digits`
+- `assp_parse_bpm_map`
 - `assp_measure_densities_4`
 - `assp_minimize_measure_4`
 - `assp_minimize_chart_4`
@@ -62,6 +63,8 @@ maps to RSSP's three-decimal hash input format.
 exact-tag extraction for `#TAG:` sections. The timing-tag collectors gather the
 RSSP timing maps currently needed for timing parity work: BPMS, STOPS, DELAYS,
 WARPS, SPEEDS, SCROLLS, and FAKES.
+`assp_parse_bpm_map` parses BPM timing maps into sorted fixed-point
+beat/BPM pairs, with both fields stored as signed thousandths.
 `assp_stream_counts_from_densities` classifies 16th/20th/24th/32nd stream
 measures, SN breaks, and total break measures from those densities.
 `assp_stream_segments_from_densities` emits stream and break ranges from the

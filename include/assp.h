@@ -56,6 +56,11 @@ typedef struct assp_timing_tags {
     assp_byte_slice fakes;
 } assp_timing_tags;
 
+typedef struct assp_bpm_segment {
+    int64_t beat_milli;
+    int64_t bpm_milli;
+} assp_bpm_segment;
+
 typedef struct assp_chart_info {
     const uint8_t *note_data;
     size_t note_data_len;
@@ -147,6 +152,12 @@ size_t assp_normalize_float_digits(
     const uint8_t *data,
     size_t len,
     uint8_t *out,
+    size_t out_cap
+);
+size_t assp_parse_bpm_map(
+    const uint8_t *data,
+    size_t len,
+    assp_bpm_segment *out,
     size_t out_cap
 );
 size_t assp_measure_densities_4(

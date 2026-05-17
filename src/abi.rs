@@ -63,6 +63,13 @@ pub struct TimingTags {
 
 #[repr(C)]
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct BpmSegment {
+    pub beat_milli: i64,
+    pub bpm_milli: i64,
+}
+
+#[repr(C)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct ChartInfo {
     pub note_data: *const u8,
     pub note_data_len: usize,
@@ -153,6 +160,12 @@ unsafe extern "C" {
         data: *const u8,
         len: usize,
         out: *mut u8,
+        out_cap: usize,
+    ) -> usize;
+    fn assp_parse_bpm_map(
+        data: *const u8,
+        len: usize,
+        out: *mut BpmSegment,
         out_cap: usize,
     ) -> usize;
     fn assp_measure_densities_4(
@@ -337,6 +350,24 @@ pub fn normalize_float_digits(data: &[u8]) -> Option<Vec<u8>> {
         let written = unsafe {
             assp_normalize_float_digits(data.as_ptr(), data.len(), out.as_mut_ptr(), out.len())
         };
+        if written == NOT_FOUND {
+            return None;
+        }
+    }
+    Some(out)
+}
+
+#[must_use]
+pub fn parse_bpm_map(data: &[u8]) -> Option<Vec<BpmSegment>> {
+    let count = unsafe { assp_parse_bpm_map(data.as_ptr(), data.len(), std::ptr::null_mut(), 0) };
+    if count == NOT_FOUND {
+        return None;
+    }
+
+    let mut out = vec![BpmSegment::default(); count];
+    if count != 0 {
+        let written =
+            unsafe { assp_parse_bpm_map(data.as_ptr(), data.len(), out.as_mut_ptr(), out.len()) };
         if written == NOT_FOUND {
             return None;
         }
@@ -583,6 +614,12 @@ mod tests {
     fn timing_tags_layout_is_c_abi() {
         assert_eq!(std::mem::size_of::<super::TimingTags>(), 112);
         assert_eq!(std::mem::align_of::<super::TimingTags>(), 8);
+    }
+
+    #[test]
+    fn bpm_segment_layout_is_c_abi() {
+        assert_eq!(std::mem::size_of::<super::BpmSegment>(), 16);
+        assert_eq!(std::mem::align_of::<super::BpmSegment>(), 8);
     }
 
     #[test]
