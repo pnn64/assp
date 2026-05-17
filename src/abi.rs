@@ -780,6 +780,12 @@ pub fn count_note_stats_4(data: &[u8]) -> Option<NoteStats> {
 }
 
 #[must_use]
+pub fn count_note_stats_minimized_4(data: &[u8]) -> Option<NoteStats> {
+    let minimized = minimize_chart_4(data)?;
+    count_note_stats_4(&minimized)
+}
+
+#[must_use]
 pub fn count_mines_nonfake_4(
     data: &[u8],
     warps: &[BpmSegment],

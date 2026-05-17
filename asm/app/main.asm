@@ -79,8 +79,8 @@ start:
     test eax, eax
     jz fail_hash
 
-    mov rcx, [chart_info + ASSP_CHART_INFO_NOTES_PTR]
-    mov rdx, [chart_info + ASSP_CHART_INFO_NOTES_LEN]
+    lea rcx, [minimized_buffer]
+    mov rdx, [minimized_chart_len]
     lea r8, [note_stats]
     call assp_count_note_stats_4
     test eax, eax
