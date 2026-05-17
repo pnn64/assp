@@ -4,6 +4,7 @@ default rel
 global assp_normalize_float_digits
 global assp_parse_bpm_map
 global assp_bpm_at_beat_milli
+global assp_elapsed_ms_bpm_only
 global assp_measure_nps_milli_from_bpms
 
 section .text
@@ -171,6 +172,93 @@ assp_bpm_at_beat_milli:
 .zero:
     xor eax, eax
 .done:
+    ret
+
+; rcx = assp_bpm_segment ptr, rdx = segment count, r8 = target beat_milli.
+; rax = elapsed milliseconds using only BPM changes.
+assp_elapsed_ms_bpm_only:
+    push rbx
+    push rsi
+    push r12
+    push r13
+    push r14
+    push r15
+
+    test rdx, rdx
+    jz .zero
+    test rcx, rcx
+    jz .zero
+    test r8, r8
+    jle .zero
+
+    mov rsi, rdx
+    mov r15, r8
+    xor eax, eax
+    xor r12d, r12d
+    mov r9d, 60000
+    xor r10d, r10d
+
+.loop:
+    cmp r10, rsi
+    jae .tail
+    mov r11, r10
+    shl r11, 4
+    mov r13, [rcx + r11 + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    cmp r13, 0
+    jg .positive_beat
+    mov r9, [rcx + r11 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    inc r10
+    jmp .loop
+
+.positive_beat:
+    cmp r13, r15
+    jg .tail
+    cmp r13, r12
+    jle .set_change
+    test r9, r9
+    jle .set_change
+    mov r14, r13
+    sub r14, r12
+    imul r14, r14, 60000
+    mov rbx, rax
+    mov rax, r14
+    cqo
+    idiv r9
+    add rax, rbx
+
+.set_change:
+    mov r12, r13
+    mov r9, [rcx + r11 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    inc r10
+    jmp .loop
+
+.tail:
+    cmp r15, r12
+    jle .done
+    test r9, r9
+    jle .done
+    mov r14, r15
+    sub r14, r12
+    imul r14, r14, 60000
+    mov rbx, rax
+    mov rax, r14
+    cqo
+    idiv r9
+    add rax, rbx
+    jmp .pop_done
+
+.zero:
+    xor eax, eax
+.done:
+    jmp .pop_done
+
+.pop_done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rsi
+    pop rbx
     ret
 
 ; rcx = u32 densities, rdx = density len, r8 = assp_bpm_segment ptr,

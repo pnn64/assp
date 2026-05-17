@@ -17,6 +17,8 @@ extern assp_count_note_charts
 extern assp_find_chart_bpms_by_index
 extern assp_find_chart_by_index
 extern assp_find_global_bpms
+extern assp_elapsed_ms_bpm_only
+extern assp_last_beat_milli_4
 extern assp_measure_densities_4
 extern assp_measure_nps_milli_from_bpms
 extern assp_minimize_chart_4
@@ -95,6 +97,10 @@ start:
     test eax, eax
     jz fail_nps
 
+    call prepare_duration
+    test eax, eax
+    jz fail_duration
+
     lea rcx, [density_buffer]
     mov rdx, [measure_count]
     lea r8, [stream_counts]
@@ -168,6 +174,12 @@ fail_hash:
 
 fail_nps:
     lea rcx, [msg_nps_fail]
+    call print_z
+    mov ecx, 1
+    call ExitProcess
+
+fail_duration:
+    lea rcx, [msg_duration_fail]
     call print_z
     mov ecx, 1
     call ExitProcess
@@ -555,6 +567,32 @@ prepare_nps:
     add rsp, 56
     ret
 
+prepare_duration:
+    sub rsp, 40
+
+    mov rcx, [chart_info + ASSP_CHART_INFO_NOTES_PTR]
+    mov rdx, [chart_info + ASSP_CHART_INFO_NOTES_LEN]
+    call assp_last_beat_milli_4
+    cmp rax, ASSP_NOT_FOUND
+    je .fail
+    mov [last_beat_milli], rax
+
+    lea rcx, [bpm_segment_buffer]
+    mov rdx, [bpm_segment_count]
+    mov r8, [last_beat_milli]
+    call assp_elapsed_ms_bpm_only
+    mov [duration_ms], rax
+
+    mov eax, ASSP_TRUE
+    jmp .done
+
+.fail:
+    xor eax, eax
+
+.done:
+    add rsp, 40
+    ret
+
 print_report:
     sub rsp, 40
 
@@ -603,6 +641,12 @@ print_report:
     call print_field
     lea rcx, [label_peak_nps_milli]
     mov rdx, [peak_nps_milli]
+    call print_field
+    lea rcx, [label_last_beat_milli]
+    mov rdx, [last_beat_milli]
+    call print_field
+    lea rcx, [label_duration_ms]
+    mov rdx, [duration_ms]
     call print_field
     lea rcx, [label_stream16]
     mov rdx, [stream_counts + ASSP_STREAM_COUNTS_RUN16]
@@ -883,6 +927,7 @@ msg_stats_fail db "assembly note stat counter failed", 13, 10, 0
 msg_density_fail db "chart has too many measures for the density buffer", 13, 10, 0
 msg_hash_fail db "assembly hash pipeline failed", 13, 10, 0
 msg_nps_fail db "assembly nps pipeline failed", 13, 10, 0
+msg_duration_fail db "assembly duration pipeline failed", 13, 10, 0
 msg_breakdown_too_long db "breakdown output exceeded text buffer", 13, 10, 0
 label_file db "file: ", 0
 label_charts db "charts: ", 0
@@ -896,6 +941,8 @@ label_bpm_neutral_hash db "bpm_neutral_hash: ", 0
 label_hash_bpms db "hash_bpms: ", 0
 label_measures db "measures: ", 0
 label_peak_nps_milli db "peak_nps_milli: ", 0
+label_last_beat_milli db "last_beat_milli: ", 0
+label_duration_ms db "duration_ms: ", 0
 label_stream16 db "16th_streams: ", 0
 label_stream20 db "20th_streams: ", 0
 label_stream24 db "24th_streams: ", 0
@@ -954,6 +1001,8 @@ bpm_segment_count resq 1
 minimized_chart_len resq 1
 nps_count resq 1
 peak_nps_milli resq 1
+last_beat_milli resq 1
+duration_ms resq 1
 hash_pair resb 32
 bpm_buffer resb BPM_BUFFER_CAP
 bpm_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE

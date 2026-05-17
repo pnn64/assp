@@ -165,6 +165,11 @@ int64_t assp_bpm_at_beat_milli(
     size_t len,
     int64_t beat_milli
 );
+int64_t assp_elapsed_ms_bpm_only(
+    const assp_bpm_segment *segments,
+    size_t len,
+    int64_t target_beat_milli
+);
 size_t assp_measure_nps_milli_from_bpms(
     const uint32_t *densities,
     size_t density_len,
@@ -178,6 +183,10 @@ size_t assp_measure_densities_4(
     size_t len,
     uint32_t *out,
     size_t out_cap
+);
+size_t assp_last_beat_milli_4(
+    const uint8_t *data,
+    size_t len
 );
 size_t assp_minimize_measure_4(
     const uint8_t *rows,

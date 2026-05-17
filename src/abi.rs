@@ -169,6 +169,11 @@ unsafe extern "C" {
         out_cap: usize,
     ) -> usize;
     fn assp_bpm_at_beat_milli(segments: *const BpmSegment, len: usize, beat_milli: i64) -> i64;
+    fn assp_elapsed_ms_bpm_only(
+        segments: *const BpmSegment,
+        len: usize,
+        target_beat_milli: i64,
+    ) -> i64;
     fn assp_measure_nps_milli_from_bpms(
         densities: *const u32,
         density_len: usize,
@@ -177,6 +182,7 @@ unsafe extern "C" {
         out: *mut u32,
         out_cap: usize,
     ) -> usize;
+    fn assp_last_beat_milli_4(data: *const u8, len: usize) -> usize;
     fn assp_measure_densities_4(
         data: *const u8,
         len: usize,
@@ -390,6 +396,11 @@ pub fn bpm_at_beat_milli(segments: &[BpmSegment], beat_milli: i64) -> i64 {
 }
 
 #[must_use]
+pub fn elapsed_ms_bpm_only(segments: &[BpmSegment], target_beat_milli: i64) -> i64 {
+    unsafe { assp_elapsed_ms_bpm_only(segments.as_ptr(), segments.len(), target_beat_milli) }
+}
+
+#[must_use]
 pub fn measure_nps_milli_from_bpms(densities: &[u32], bpms: &[BpmSegment]) -> Option<Vec<u32>> {
     let count = unsafe {
         assp_measure_nps_milli_from_bpms(
@@ -422,6 +433,12 @@ pub fn measure_nps_milli_from_bpms(densities: &[u32], bpms: &[BpmSegment]) -> Op
         }
     }
     Some(out)
+}
+
+#[must_use]
+pub fn last_beat_milli_4(data: &[u8]) -> Option<usize> {
+    let beat = unsafe { assp_last_beat_milli_4(data.as_ptr(), data.len()) };
+    (beat != NOT_FOUND).then_some(beat)
 }
 
 #[must_use]
