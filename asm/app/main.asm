@@ -13,8 +13,11 @@ extern WriteFile
 
 extern assp_chart_hash_pair
 extern assp_count_mines_nonfake_4
+extern assp_count_mines_nonfake_8
 extern assp_count_note_stats_4
+extern assp_count_note_stats_8
 extern assp_count_timing_fakes_4
+extern assp_count_timing_fakes_8
 extern assp_count_timing_note_stats_no_holds_4
 extern assp_count_note_charts
 extern assp_chart_owns_timing_by_index
@@ -29,10 +32,13 @@ extern assp_find_global_timing_tags
 extern assp_elapsed_ms_bpm_only
 extern assp_elapsed_ms_with_events
 extern assp_last_beat_milli_4
+extern assp_last_beat_milli_8
 extern assp_measure_densities_4
+extern assp_measure_densities_8
 extern assp_measure_nps_milli_from_bpms
 extern assp_measure_nps_milli_with_events
 extern assp_minimize_chart_4
+extern assp_minimize_chart_8
 extern assp_normalize_float_digits
 extern assp_parse_bpm_map
 extern assp_parse_offset_ms
@@ -83,7 +89,11 @@ start:
     mov rdx, [chart_info + ASSP_CHART_INFO_STEP_TYPE_LEN]
     call assp_supported_step_type_lanes
     cmp rax, 4
+    je .supported_lanes
+    cmp rax, 8
     jne fail_lanes
+.supported_lanes:
+    mov [chart_lanes], rax
 
     call prepare_hash
     test eax, eax
@@ -92,7 +102,13 @@ start:
     lea rcx, [minimized_buffer]
     mov rdx, [minimized_chart_len]
     lea r8, [note_stats]
+    cmp qword [chart_lanes], 8
+    je .count_stats_8
     call assp_count_note_stats_4
+    jmp .count_stats_done
+.count_stats_8:
+    call assp_count_note_stats_8
+.count_stats_done:
     test eax, eax
     jz fail_stats
 
@@ -100,7 +116,13 @@ start:
     mov rdx, [chart_info + ASSP_CHART_INFO_NOTES_LEN]
     xor r8d, r8d
     xor r9d, r9d
+    cmp qword [chart_lanes], 8
+    je .measure_density_count_8
     call assp_measure_densities_4
+    jmp .measure_density_count_done
+.measure_density_count_8:
+    call assp_measure_densities_8
+.measure_density_count_done:
     mov [measure_count], rax
     cmp rax, DENSITY_CAP
     ja fail_density
@@ -109,7 +131,13 @@ start:
     mov rdx, [chart_info + ASSP_CHART_INFO_NOTES_LEN]
     lea r8, [density_buffer]
     mov r9d, DENSITY_CAP
+    cmp qword [chart_lanes], 8
+    je .measure_density_fill_8
     call assp_measure_densities_4
+    jmp .measure_density_fill_done
+.measure_density_fill_8:
+    call assp_measure_densities_8
+.measure_density_fill_done:
 
     call prepare_offset
     test eax, eax
@@ -528,7 +556,13 @@ prepare_hash:
     lea rax, [row_scratch]
     mov [rsp + 32], rax
     mov qword [rsp + 40], ROW_SCRATCH_CAP
+    cmp qword [chart_lanes], 8
+    je .measure_minimized_count_8
     call assp_minimize_chart_4
+    jmp .measure_minimized_count_done
+.measure_minimized_count_8:
+    call assp_minimize_chart_8
+.measure_minimized_count_done:
     cmp rax, ASSP_NOT_FOUND
     je .fail
     cmp rax, MINIMIZED_BUFFER_CAP
@@ -542,7 +576,13 @@ prepare_hash:
     lea rax, [row_scratch]
     mov [rsp + 32], rax
     mov qword [rsp + 40], ROW_SCRATCH_CAP
+    cmp qword [chart_lanes], 8
+    je .measure_minimized_fill_8
     call assp_minimize_chart_4
+    jmp .measure_minimized_fill_done
+.measure_minimized_fill_8:
+    call assp_minimize_chart_8
+.measure_minimized_fill_done:
     cmp rax, ASSP_NOT_FOUND
     je .fail
     cmp rax, MINIMIZED_BUFFER_CAP
@@ -809,7 +849,13 @@ prepare_mines_nonfake:
     lea rax, [row_scratch]
     mov [rsp + 48], rax
     mov qword [rsp + 56], ROW_SCRATCH_CAP
+    cmp qword [chart_lanes], 8
+    je .count_8
     call assp_count_mines_nonfake_4
+    jmp .count_done
+.count_8:
+    call assp_count_mines_nonfake_8
+.count_done:
     cmp rax, ASSP_NOT_FOUND
     je .fail
     mov [mines_nonfake], rax
@@ -837,7 +883,13 @@ prepare_timing_fakes:
     lea rax, [row_scratch]
     mov [rsp + 48], rax
     mov qword [rsp + 56], ROW_SCRATCH_CAP
+    cmp qword [chart_lanes], 8
+    je .count_8
     call assp_count_timing_fakes_4
+    jmp .count_done
+.count_8:
+    call assp_count_timing_fakes_8
+.count_done:
     cmp rax, ASSP_NOT_FOUND
     je .fail
     mov [timing_fakes], rax
@@ -853,6 +905,9 @@ prepare_timing_fakes:
 
 prepare_timing_stats_no_holds:
     sub rsp, 88
+
+    cmp qword [chart_lanes], 4
+    jne .success
 
     mov rax, [note_stats + ASSP_NOTE_STATS_HOLDS]
     or rax, [note_stats + ASSP_NOTE_STATS_ROLLS]
@@ -940,7 +995,13 @@ prepare_duration:
 
     mov rcx, [chart_info + ASSP_CHART_INFO_NOTES_PTR]
     mov rdx, [chart_info + ASSP_CHART_INFO_NOTES_LEN]
+    cmp qword [chart_lanes], 8
+    je .last_beat_8
     call assp_last_beat_milli_4
+    jmp .last_beat_done
+.last_beat_8:
+    call assp_last_beat_milli_8
+.last_beat_done:
     cmp rax, ASSP_NOT_FOUND
     je .fail
     mov [last_beat_milli], rax
@@ -1333,7 +1394,7 @@ tag_offset_end:
 msg_header db "assp standalone", 13, 10, 0
 msg_read_fail db "failed to read input file", 13, 10, 0
 msg_notes_fail db "failed to find selected #NOTES chart", 13, 10, 0
-msg_lanes_fail db "unsupported step type; standalone currently supports dance-single only", 13, 10, 0
+msg_lanes_fail db "unsupported step type; standalone currently supports dance-single and dance-double", 13, 10, 0
 msg_stats_fail db "assembly note stat counter failed", 13, 10, 0
 msg_density_fail db "chart has too many measures for the density buffer", 13, 10, 0
 msg_hash_fail db "assembly hash pipeline failed", 13, 10, 0
@@ -1395,6 +1456,7 @@ stdout_handle resq 1
 stdout_written resd 1
 input_path resq 1
 chart_index resq 1
+chart_lanes resq 1
 list_mode resq 1
 chart_count resq 1
 measure_count resq 1
@@ -1435,7 +1497,7 @@ delay_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
 warp_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
 fake_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
 nps_buffer resd DENSITY_CAP
-row_scratch resd ROW_SCRATCH_CAP
+row_scratch resq ROW_SCRATCH_CAP
 minimized_buffer resb MINIMIZED_BUFFER_CAP
 density_buffer resd DENSITY_CAP
 stream_segment_buffer resb DENSITY_CAP * ASSP_STREAM_SEGMENT_SIZE

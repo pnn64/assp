@@ -191,6 +191,12 @@ Run the timing-fake fixture:
 .\assp\target\assp.exe .\assp\fixtures\timing_fakes.ssc 0
 ```
 
+Run the basic dance-double fixture:
+
+```powershell
+.\assp\target\assp.exe .\assp\fixtures\dance_double_basic.ssc 0
+```
+
 Run the metadata-owned timing fixture:
 
 ```powershell
@@ -202,11 +208,10 @@ The standalone executable currently scans SSC files for chart metadata and
 `list` to print chart indexes with step type, difficulty, meter, and
 description. SM `#NOTES:` / `#NOTES2:` blocks are also split into their five
 metadata fields before chart rows are passed to the stat counter. The standalone
-report path currently supports `dance-single` charts; `dance-double` lane
-resolution and the core 8-lane analysis primitives exist, but full 8-lane report
-generation is not wired into the executable yet. Chart reports include RSSP-style
-chart hashes, normalized hash BPMs, peak NPS in thousandths, density-derived
-stream counts, fixed-point duration metrics with
+report path currently supports `dance-single` and `dance-double` charts. Chart
+reports include RSSP-style chart hashes,
+normalized hash BPMs, peak NPS in thousandths, density-derived stream counts,
+fixed-point duration metrics with
 stops/delays/warps, token breakdowns, segment breakdowns, offset adjustment, and
 note stats with nonfake mine and timing-fake counts.
 
