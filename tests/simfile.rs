@@ -48,6 +48,39 @@ fn finds_ssc_chart_metadata() {
     );
 }
 
+#[test]
+fn finds_sm_chart_metadata_and_note_rows() {
+    let data = b"#TITLE:X;
+#NOTES:
+     dance-single:
+     1sts?:
+     Beginner:
+     1:
+     0,0,0,0,0:
+0001
+0000
+;";
+    let chart = find_chart_by_index(data, 0).unwrap();
+
+    assert_eq!(
+        slice(data, chart.step_type, chart.step_type_len),
+        b"dance-single"
+    );
+    assert_eq!(
+        slice(data, chart.description, chart.description_len),
+        b"1sts?"
+    );
+    assert_eq!(
+        slice(data, chart.difficulty, chart.difficulty_len),
+        b"Beginner"
+    );
+    assert_eq!(slice(data, chart.meter, chart.meter_len), b"1");
+    assert_eq!(
+        slice(data, chart.note_data, chart.note_data_len),
+        b"\n0001\n0000\n;"
+    );
+}
+
 fn slice(data: &[u8], ptr: *const u8, len: usize) -> &[u8] {
     let start = ptr as usize - data.as_ptr() as usize;
     &data[start..start + len]

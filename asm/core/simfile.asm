@@ -74,6 +74,34 @@ section .text
     jmp .meta_next
 %endmacro
 
+%macro store_trim_field 2
+    mov rax, r8
+    mov rdx, r12
+%%trim_left:
+    cmp rax, rdx
+    jae %%empty
+    cmp byte [rax], ' '
+    ja %%trim_right
+    inc rax
+    jmp %%trim_left
+%%trim_right:
+    cmp rdx, rax
+    jbe %%empty
+    cmp byte [rdx - 1], ' '
+    ja %%store
+    dec rdx
+    jmp %%trim_right
+%%empty:
+    mov [rbx + %1], rax
+    mov qword [rbx + %2], 0
+    jmp %%done
+%%store:
+    mov [rbx + %1], rax
+    sub rdx, rax
+    mov [rbx + %2], rdx
+%%done:
+%endmacro
+
 ; rcx = simfile bytes, rdx = len.
 ; rax = number of #NOTES: tags.
 assp_count_note_charts:
@@ -239,8 +267,8 @@ assp_find_chart_by_index:
     jmp .scan
 
 .found:
-    lea rax, [rdi + 7]
-    mov rdx, rax
+    lea rsi, [rdi + 7]
+    mov rdx, rsi
 
 .find_notes_end:
     cmp rdx, r12
@@ -252,14 +280,23 @@ assp_find_chart_by_index:
 
 .store_notes:
     inc rdx
-    mov [rbx + ASSP_CHART_INFO_NOTES_PTR], rax
-    sub rdx, rax
+    mov r14, rdx
+    mov r10, rsi
+    mov r11, r14
+    call parse_sm_notes_block
+    test eax, eax
+    jnz .success
+
+    mov [rbx + ASSP_CHART_INFO_NOTES_PTR], rsi
+    mov rdx, r14
+    sub rdx, rsi
     mov [rbx + ASSP_CHART_INFO_NOTES_LEN], rdx
 
     mov r10, r15
     mov r11, rdi
     call parse_chart_meta
 
+.success:
     mov eax, ASSP_TRUE
     jmp .done
 
@@ -390,4 +427,82 @@ parse_chart_meta:
     jmp .meta_loop
 
 .done:
+    ret
+
+; r10 = #NOTES value start, r11 = after terminating ';', rbx = assp_chart_info.
+; eax = 1 when the value is an SM-style colon-field chart block.
+parse_sm_notes_block:
+    mov r8, r10
+    mov r12, r10
+    xor r13d, r13d
+
+.scan:
+    cmp r12, r11
+    jae .fail
+    cmp byte [r12], ';'
+    je .fail
+    cmp byte [r12], ':'
+    jne .next
+
+    mov rax, r12
+    xor ecx, ecx
+.slash_loop:
+    cmp rax, r8
+    jbe .slash_done
+    dec rax
+    cmp byte [rax], '\'
+    jne .slash_done
+    inc ecx
+    jmp .slash_loop
+.slash_done:
+    test ecx, 1
+    jnz .next
+
+    cmp r13d, 0
+    je .field_step_type
+    cmp r13d, 1
+    je .field_desc
+    cmp r13d, 2
+    je .field_difficulty
+    cmp r13d, 3
+    je .field_meter
+    cmp r13d, 4
+    je .field_done
+    jmp .fail
+
+.field_step_type:
+    store_trim_field ASSP_CHART_INFO_STEP_TYPE_PTR, ASSP_CHART_INFO_STEP_TYPE_LEN
+    jmp .advance_field
+
+.field_desc:
+    store_trim_field ASSP_CHART_INFO_DESC_PTR, ASSP_CHART_INFO_DESC_LEN
+    jmp .advance_field
+
+.field_difficulty:
+    store_trim_field ASSP_CHART_INFO_DIFFICULTY_PTR, ASSP_CHART_INFO_DIFFICULTY_LEN
+    jmp .advance_field
+
+.field_meter:
+    store_trim_field ASSP_CHART_INFO_METER_PTR, ASSP_CHART_INFO_METER_LEN
+    jmp .advance_field
+
+.field_done:
+    lea rax, [r12 + 1]
+    mov [rbx + ASSP_CHART_INFO_NOTES_PTR], rax
+    mov rdx, r11
+    sub rdx, rax
+    mov [rbx + ASSP_CHART_INFO_NOTES_LEN], rdx
+    mov eax, ASSP_TRUE
+    ret
+
+.advance_field:
+    inc r13d
+    lea r8, [r12 + 1]
+
+.next:
+    inc r12
+    jmp .scan
+
+.fail:
+    xor eax, eax
     ret

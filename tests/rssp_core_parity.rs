@@ -1,4 +1,4 @@
-use assp::{NoteStats, count_note_stats_4};
+use assp::{NoteStats, count_note_stats_4, find_chart_by_index};
 use rssp_core::stats::minimize_chart_and_count_with_lanes;
 
 fn assert_stats_match_rssp(data: &[u8]) {
@@ -58,4 +58,14 @@ fn active_hold_hands_match_rssp_core() {
 ;
 ",
     );
+}
+
+#[test]
+fn sm_fixture_chart_matches_rssp_core() {
+    let simfile = include_bytes!("../fixtures/200000_step_challenge.sm");
+    let chart = find_chart_by_index(simfile, 0).unwrap();
+    let start = chart.note_data as usize - simfile.as_ptr() as usize;
+    let notes = &simfile[start..start + chart.note_data_len];
+
+    assert_stats_match_rssp(notes);
 }
