@@ -4,8 +4,109 @@ default rel
 global assp_trim_ascii_bytes
 global assp_normalize_label_tag
 global assp_resolve_display_bpm
+global assp_steps_timing_allowed
 
 section .text
+
+; rcx = #VERSION bytes, rdx = len, r8d = nonzero when the file is .sm.
+; eax = 1 when RSSP allows chart-local step timing.
+assp_steps_timing_allowed:
+    test r8d, r8d
+    jnz .true
+    test rdx, rdx
+    jz .false
+    test rcx, rcx
+    jz .false
+
+    mov r10, rcx
+    lea r11, [rcx + rdx]
+
+.trim_left:
+    cmp r10, r11
+    jae .false
+    cmp byte [r10], ' '
+    ja .trim_right
+    inc r10
+    jmp .trim_left
+
+.trim_right:
+    cmp r11, r10
+    jbe .false
+    cmp byte [r11 - 1], ' '
+    ja .sign
+    dec r11
+    jmp .trim_right
+
+.sign:
+    cmp byte [r10], '+'
+    jne .not_plus
+    inc r10
+    cmp r10, r11
+    jae .false
+    jmp .init
+
+.not_plus:
+    cmp byte [r10], '-'
+    je .false
+
+.init:
+    xor r8d, r8d
+    xor r9d, r9d
+    mov edx, -1
+
+.int_loop:
+    cmp r10, r11
+    jae .compare
+    movzx eax, byte [r10]
+    cmp al, '0'
+    jb .maybe_dot
+    cmp al, '9'
+    ja .false
+    mov r9d, ASSP_TRUE
+    cmp al, '0'
+    je .next_int
+    mov r8d, ASSP_TRUE
+.next_int:
+    inc r10
+    jmp .int_loop
+
+.maybe_dot:
+    cmp al, '.'
+    jne .false
+    inc r10
+
+.frac_loop:
+    cmp r10, r11
+    jae .compare
+    movzx eax, byte [r10]
+    cmp al, '0'
+    jb .false
+    cmp al, '9'
+    ja .false
+    mov r9d, ASSP_TRUE
+    cmp edx, -1
+    jne .next_frac
+    sub eax, '0'
+    mov edx, eax
+.next_frac:
+    inc r10
+    jmp .frac_loop
+
+.compare:
+    test r9d, r9d
+    jz .false
+    test r8d, r8d
+    jnz .true
+    cmp edx, 7
+    jae .true
+
+.false:
+    xor eax, eax
+    ret
+
+.true:
+    mov eax, ASSP_TRUE
+    ret
 
 ; rcx = bytes, rdx = len, r8 = optional output bytes, r9 = output byte cap.
 ; rax = bytes required/written, or ASSP_NOT_FOUND.

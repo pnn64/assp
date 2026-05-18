@@ -1,5 +1,5 @@
-#TITLE:Chart Own Metadata Timing;
-#VERSION:0.83;
+#TITLE:Legacy Split Timing Disabled;
+#VERSION:0.69;
 #OFFSET:0.000;
 #BPMS:0.000=120.000;
 #STOPS:1.000=9.000;
@@ -8,7 +8,7 @@
 #STEPSTYPE:dance-single;
 #DIFFICULTY:Challenge;
 #METER:1;
-#LABELS:0.000=local;
+#STOPS:2.000=1.000;
 #NOTES:
 0000
 ,

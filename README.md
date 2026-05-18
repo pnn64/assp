@@ -37,6 +37,7 @@ The first implemented pieces are:
 - `assp_trim_ascii_bytes`
 - `assp_normalize_label_tag`
 - `assp_resolve_display_bpm`
+- `assp_steps_timing_allowed`
 - `assp_parse_tech_notation`
 - `assp_parse_bpm_map`
 - `assp_parse_offset_ms`
@@ -134,6 +135,8 @@ removes ASCII backslash escapes, and drops ASCII control bytes for the
 standalone report's normalized global and selected label fields.
 `assp_resolve_display_bpm` resolves `#DISPLAYBPM` tags to whole-number display
 min/max values with RSSP's fallback behavior.
+`assp_steps_timing_allowed` applies RSSP's `#VERSION` and file-extension gate
+for SSC chart-local timing data.
 `assp_find_global_tag` and `assp_find_chart_tag_by_index` provide generic
 tag extraction for `#TAG:` sections. Implemented simfile tag names are matched
 case-insensitively, following RSSP's parser behavior. The timing-tag collectors
@@ -168,13 +171,15 @@ BPM-only elapsed time in milliseconds.
 `assp_elapsed_ms_with_events` extends that fixed-point duration path with RSSP's
 BPM, stop, delay, and warp event ordering.
 The standalone timing path applies RSSP's chart-local timing ownership rule:
-when an SSC chart defines any local timing tag or offset, global timing maps are
-not mixed into that chart's duration/NPS timing context. Chart-local
-`#TIMESIGNATURES:`, `#LABELS:`, `#TICKCOUNTS:`, and `#COMBOS:` tags also mark
-the chart as owning timing, matching RSSP's timing-data ownership check. The
-standalone report normalizes the selected chart/global metadata scope with that
-same ownership rule, and prints selected normalized timing maps from the same
-chart/global timing scope.
+`.sm` files always allow step timing, while `.ssc` files allow it only when
+`#VERSION` is at least `0.70`. When step timing is allowed and a chart defines
+any local timing tag or offset, global timing maps are not mixed into that
+chart's duration/NPS timing context. Chart-local `#TIMESIGNATURES:`,
+`#LABELS:`, `#TICKCOUNTS:`, and `#COMBOS:` tags also mark the chart as owning
+timing, matching RSSP's timing-data ownership check. The standalone report
+normalizes the selected chart/global metadata scope with that same ownership
+rule, and prints selected normalized timing maps from the same chart/global
+timing scope.
 `assp_stream_counts_from_densities` classifies 16th/20th/24th/32nd stream
 measures, SN breaks, and total break measures from those densities.
 `assp_stream_percentages_centi` computes RSSP-style stream, adjusted stream,
@@ -273,6 +278,12 @@ Run the metadata-owned timing fixture:
 .\assp\target\assp.exe .\assp\fixtures\chart_own_metadata_timing.ssc 0
 ```
 
+Run the legacy SSC split-timing gate fixture:
+
+```powershell
+.\assp\target\assp.exe .\assp\fixtures\legacy_split_timing_disabled.ssc 0
+```
+
 The standalone executable currently scans SSC files for chart metadata and
 `#NOTES:` / `#NOTES2:` tags. The second argument is a zero-based chart index, or
 `list` to print chart indexes with step type, difficulty, meter, and
@@ -280,14 +291,15 @@ description. SM `#NOTES:` / `#NOTES2:` blocks are also split into their five
 metadata fields before chart rows are passed to the stat counter. The standalone
 report path currently supports `dance-single` and `dance-double` charts. Chart
 reports include simfile title/artist/translit metadata, genre, media/artwork
-tags, sample timing tags, chart name, credit/step-artist metadata, parsed tech
-notation, chart-local music/attacks/timing metadata tags, chart-local raw timing
-tags, global attacks/display-BPM tags, resolved display BPM ranges, global raw
-timing tags, RSSP-style chart hashes, normalized global BPM data, normalized
-global timing maps, normalized global/selected timing metadata, normalized hash
-BPMs, normalized selected timing maps, RSSP-compatible hash and step-artist
-aliases, formatted timing BPM/stop/delay/warp/fake maps, global and selected
-timing metadata tags, selected raw timing tags, chart display-BPM tags,
+tags, sample timing tags, SSC version and split-timing allowance, chart name,
+credit/step-artist metadata, parsed tech notation, chart-local
+music/attacks/timing metadata tags, chart-local raw timing tags, global
+attacks/display-BPM tags, resolved display BPM ranges, global raw timing tags,
+RSSP-style chart hashes, normalized global BPM data, normalized global timing
+maps, normalized global/selected timing metadata, normalized hash BPMs,
+normalized selected timing maps, RSSP-compatible hash and step-artist aliases,
+formatted timing BPM/stop/delay/warp/fake maps, global and selected timing
+metadata tags, selected raw timing tags, chart display-BPM tags,
 chart offset seconds, beat-zero timing offsets, timing ownership,
 RSSP-style display BPM aliases,
 min/max/average/median display BPMs, tier BPM, max/peak/median NPS,

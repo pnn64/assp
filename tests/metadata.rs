@@ -1,4 +1,4 @@
-use assp::{find_global_tag, normalize_label_tag, trim_ascii_bytes};
+use assp::{find_global_tag, normalize_label_tag, steps_timing_allowed, trim_ascii_bytes};
 use rssp_core::parse::{clean_tag, decode_bytes, unescape_tag};
 
 fn first_param(bytes: &[u8]) -> &[u8] {
@@ -63,4 +63,16 @@ fn normalizes_fixture_global_time_signatures() {
 
     let asm = trim_ascii_bytes(raw).unwrap();
     assert_eq!(std::str::from_utf8(&asm).unwrap(), "0.000000=4=4");
+}
+
+#[test]
+fn gates_step_timing_like_rssp_core() {
+    assert!(steps_timing_allowed(None, true));
+    assert!(steps_timing_allowed(Some(b"0.70"), false));
+    assert!(steps_timing_allowed(Some(b"0.83"), false));
+    assert!(steps_timing_allowed(Some(b"1.00"), false));
+    assert!(!steps_timing_allowed(None, false));
+    assert!(!steps_timing_allowed(Some(b"0.69"), false));
+    assert!(!steps_timing_allowed(Some(b"0.6999"), false));
+    assert!(!steps_timing_allowed(Some(b"0.8x"), false));
 }

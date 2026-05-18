@@ -170,6 +170,7 @@ unsafe extern "C" {
     fn assp_trim_ascii_bytes(data: *const u8, len: usize, out: *mut u8, out_cap: usize) -> usize;
     fn assp_normalize_label_tag(data: *const u8, len: usize, out: *mut u8, out_cap: usize)
     -> usize;
+    fn assp_steps_timing_allowed(version: *const u8, version_len: usize, is_sm: c_int) -> c_int;
     fn assp_resolve_display_bpm(
         tag: *const u8,
         tag_len: usize,
@@ -632,6 +633,12 @@ pub fn normalize_label_tag(data: &[u8]) -> Option<Vec<u8>> {
         }
     }
     Some(out)
+}
+
+#[must_use]
+pub fn steps_timing_allowed(version: Option<&[u8]>, is_sm: bool) -> bool {
+    let version = version.unwrap_or_default();
+    unsafe { assp_steps_timing_allowed(version.as_ptr(), version.len(), c_int::from(is_sm)) != 0 }
 }
 
 #[must_use]

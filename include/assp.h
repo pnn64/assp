@@ -175,6 +175,11 @@ size_t assp_normalize_label_tag(
     uint8_t *out,
     size_t out_cap
 );
+int32_t assp_steps_timing_allowed(
+    const uint8_t *version,
+    size_t version_len,
+    int32_t is_sm
+);
 int32_t assp_resolve_display_bpm(
     const uint8_t *tag,
     size_t tag_len,

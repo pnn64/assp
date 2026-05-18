@@ -58,6 +58,7 @@ extern assp_parse_offset_ms
 extern assp_parse_tech_notation
 extern assp_normalize_label_tag
 extern assp_resolve_display_bpm
+extern assp_steps_timing_allowed
 extern assp_trim_ascii_bytes
 extern assp_stream_counts_from_densities
 extern assp_stream_percentages_centi
@@ -529,6 +530,40 @@ read_file:
     add rsp, 72
     ret
 
+input_path_is_sm:
+    mov r10, [input_path]
+    test r10, r10
+    jz .false
+    mov r11, r10
+
+.scan:
+    cmp byte [r11], 0
+    je .check_len
+    inc r11
+    jmp .scan
+
+.check_len:
+    mov rax, r11
+    sub rax, r10
+    cmp rax, 3
+    jb .false
+    cmp byte [r11 - 3], '.'
+    jne .false
+    mov al, [r11 - 2]
+    or al, 20h
+    cmp al, 's'
+    jne .false
+    mov al, [r11 - 1]
+    or al, 20h
+    cmp al, 'm'
+    jne .false
+    mov eax, ASSP_TRUE
+    ret
+
+.false:
+    xor eax, eax
+    ret
+
 print_chart_list:
     push r12
     sub rsp, 40
@@ -921,6 +956,8 @@ prepare_timing_events:
     call assp_chart_owns_timing_by_index
     test eax, eax
     jz .select_bpms
+    cmp qword [timing_allow_steps], 0
+    je .select_bpms
 
 .set_own_timing:
     mov qword [chart_has_own_timing], ASSP_TRUE
@@ -1506,6 +1543,10 @@ prepare_global_metadata:
     mov qword [sample_start_slice + ASSP_BYTE_SLICE_LEN], 0
     mov qword [sample_length_slice + ASSP_BYTE_SLICE_PTR], 0
     mov qword [sample_length_slice + ASSP_BYTE_SLICE_LEN], 0
+    mov qword [version_slice + ASSP_BYTE_SLICE_PTR], 0
+    mov qword [version_slice + ASSP_BYTE_SLICE_LEN], 0
+    mov qword [timing_format_sm], 0
+    mov qword [timing_allow_steps], 0
     mov qword [global_attacks_slice + ASSP_BYTE_SLICE_PTR], 0
     mov qword [global_attacks_slice + ASSP_BYTE_SLICE_LEN], 0
     mov qword [global_display_bpm_slice + ASSP_BYTE_SLICE_PTR], 0
@@ -1630,6 +1671,22 @@ prepare_global_metadata:
     lea rax, [sample_length_slice]
     mov [rsp + 32], rax
     call assp_find_global_tag
+
+    lea rcx, [file_buffer]
+    mov rdx, [file_len]
+    lea r8, [tag_version]
+    mov r9d, tag_version_end - tag_version
+    lea rax, [version_slice]
+    mov [rsp + 32], rax
+    call assp_find_global_tag
+
+    call input_path_is_sm
+    mov [timing_format_sm], rax
+    mov rcx, [version_slice + ASSP_BYTE_SLICE_PTR]
+    mov rdx, [version_slice + ASSP_BYTE_SLICE_LEN]
+    mov r8d, eax
+    call assp_steps_timing_allowed
+    mov [timing_allow_steps], rax
 
     lea rcx, [file_buffer]
     mov rdx, [file_len]
@@ -1975,6 +2032,9 @@ prepare_offset:
     mov [offset_ms], rax
 
 .chart_offset:
+    cmp qword [timing_allow_steps], 0
+    je .success
+
     mov qword [offset_slice + ASSP_BYTE_SLICE_PTR], 0
     mov qword [offset_slice + ASSP_BYTE_SLICE_LEN], 0
 
@@ -2134,6 +2194,16 @@ print_report:
     mov rdx, [sample_length_slice + ASSP_BYTE_SLICE_PTR]
     mov r8, [sample_length_slice + ASSP_BYTE_SLICE_LEN]
     call print_slice_field
+    lea rcx, [label_version]
+    mov rdx, [version_slice + ASSP_BYTE_SLICE_PTR]
+    mov r8, [version_slice + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+    lea rcx, [label_timing_format_sm]
+    mov rdx, [timing_format_sm]
+    call print_field
+    lea rcx, [label_steps_timing_allowed]
+    mov rdx, [timing_allow_steps]
+    call print_field
 
     lea rcx, [label_chart]
     mov rdx, [chart_index]
@@ -3257,6 +3327,8 @@ tag_sample_start db "#SAMPLESTART:"
 tag_sample_start_end:
 tag_sample_length db "#SAMPLELENGTH:"
 tag_sample_length_end:
+tag_version db "#VERSION:"
+tag_version_end:
 tag_time_signatures db "#TIMESIGNATURES:"
 tag_time_signatures_end:
 tag_labels db "#LABELS:"
@@ -3300,6 +3372,9 @@ label_cdtitle db "cdtitle: ", 0
 label_jacket db "jacket: ", 0
 label_sample_start db "sample_start: ", 0
 label_sample_length db "sample_length: ", 0
+label_version db "version: ", 0
+label_timing_format_sm db "timing_format_sm: ", 0
+label_steps_timing_allowed db "steps_timing_allowed: ", 0
 label_charts db "charts: ", 0
 label_chart db "chart: ", 0
 label_step_type db "step_type: ", 0
@@ -3509,6 +3584,7 @@ cdtitle_slice resb ASSP_BYTE_SLICE_SIZE
 jacket_slice resb ASSP_BYTE_SLICE_SIZE
 sample_start_slice resb ASSP_BYTE_SLICE_SIZE
 sample_length_slice resb ASSP_BYTE_SLICE_SIZE
+version_slice resb ASSP_BYTE_SLICE_SIZE
 global_attacks_slice resb ASSP_BYTE_SLICE_SIZE
 global_display_bpm_slice resb ASSP_BYTE_SLICE_SIZE
 global_time_signatures_slice resb ASSP_BYTE_SLICE_SIZE
@@ -3584,6 +3660,8 @@ median_bpm_centi resq 1
 mines_nonfake resq 1
 timing_fakes resq 1
 chart_has_own_timing resq 1
+timing_format_sm resq 1
+timing_allow_steps resq 1
 duration_ms resq 1
 hash_pair resb 32
 tech_notation_buffer resb TECH_BUFFER_CAP
