@@ -1829,6 +1829,29 @@ pub fn step_parity_prepare_hold_rows_4(
 }
 
 #[must_use]
+pub fn step_parity_count_hold_rows_4(
+    data: &[u8],
+    input_row_seconds: &[f32],
+    input_row_ms: &[i32],
+    input_row_beats: &[f32],
+    state_cap: usize,
+) -> Option<TechCounts> {
+    let rows =
+        step_parity_prepare_hold_rows_4(data, input_row_seconds, input_row_ms, input_row_beats)?;
+    step_parity_count_prepared_rows_4(
+        &rows.note_counts,
+        &rows.tech_masks,
+        &rows.note_masks,
+        &rows.hold_masks,
+        &rows.mine_masks,
+        &rows.prev_row_live_holds,
+        &rows.row_seconds,
+        &rows.row_ms,
+        state_cap,
+    )
+}
+
+#[must_use]
 pub fn step_parity_action_flags_4(
     initial: &StepParityState4,
     result: &StepParityState4,

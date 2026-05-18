@@ -5,14 +5,14 @@ use assp::{
     calculate_step_tech_counts_from_placements_4, count_step_tech_brackets_minimized_4,
     count_step_tech_brackets_minimized_8, parse_tech_notation, step_parity_action_cost_4,
     step_parity_action_flags_4, step_parity_basic_action_costs_4,
-    step_parity_bracket_tap_action_costs_4, step_parity_count_prepared_rows_4,
-    step_parity_distance_action_costs_4, step_parity_elapsed_action_costs_4,
-    step_parity_hold_head_ends_4, step_parity_orientation_action_costs_4,
-    step_parity_permutations_4, step_parity_place_rows_4, step_parity_prepare_hold_rows_4,
-    step_parity_prepare_tap_rows_4, step_parity_result_state_holds_4,
-    step_parity_result_state_no_holds_4, step_parity_row_best_candidates_4,
-    step_parity_row_key_candidates_4, step_parity_row_transitions_4,
-    step_parity_switch_action_costs_4,
+    step_parity_bracket_tap_action_costs_4, step_parity_count_hold_rows_4,
+    step_parity_count_prepared_rows_4, step_parity_distance_action_costs_4,
+    step_parity_elapsed_action_costs_4, step_parity_hold_head_ends_4,
+    step_parity_orientation_action_costs_4, step_parity_permutations_4, step_parity_place_rows_4,
+    step_parity_prepare_hold_rows_4, step_parity_prepare_tap_rows_4,
+    step_parity_result_state_holds_4, step_parity_result_state_no_holds_4,
+    step_parity_row_best_candidates_4, step_parity_row_key_candidates_4,
+    step_parity_row_transitions_4, step_parity_switch_action_costs_4,
 };
 use std::collections::HashSet;
 
@@ -1179,6 +1179,91 @@ fn ignores_hold_heads_without_tails_in_hold_row_preparer() {
     assert_eq!(rows.prev_row_live_holds, [0]);
     assert_eq!(rows.row_seconds, [0.5]);
     assert_eq!(rows.row_ms, [500]);
+}
+
+#[test]
+fn collapses_same_second_hold_rows_like_rssp_counter() {
+    let rows = step_parity_prepare_hold_rows_4(
+        b"2000\n0100\n3000\n;\n",
+        &[0.0, 0.0, 1.0],
+        &[0, 0, 1000],
+        &[0.0, 0.5, 1.0],
+    )
+    .unwrap();
+
+    assert_eq!(rows.note_counts, [2]);
+    assert_eq!(rows.tech_masks, [0b0011]);
+    assert_eq!(rows.note_masks, [0b0011]);
+    assert_eq!(rows.hold_masks, [0]);
+    assert_eq!(rows.prev_row_live_holds, [0]);
+    assert_eq!(rows.row_seconds, [0.0]);
+    assert_eq!(rows.row_ms, [0]);
+}
+
+#[test]
+fn counts_hold_prepared_rows_after_step_parity_backtracking() {
+    let rows = step_parity_prepare_hold_rows_4(
+        b"2000\n0100\n3100\n1000\n;\n",
+        &[0.0, 0.5, 1.0, 1.5],
+        &[0, 500, 1000, 1500],
+        &[0.0, 0.5, 1.0, 1.5],
+    )
+    .unwrap();
+    let placements = expected_place_rows(
+        &rows.note_counts,
+        &rows.note_masks,
+        &rows.hold_masks,
+        &rows.mine_masks,
+        &rows.prev_row_live_holds,
+        &rows.row_seconds,
+    );
+    let expected = placement_counts(
+        &rows.tech_masks,
+        &rows.note_counts,
+        &rows.row_ms,
+        &placements,
+    );
+
+    let actual = step_parity_count_prepared_rows_4(
+        &rows.note_counts,
+        &rows.tech_masks,
+        &rows.note_masks,
+        &rows.hold_masks,
+        &rows.mine_masks,
+        &rows.prev_row_live_holds,
+        &rows.row_seconds,
+        &rows.row_ms,
+        256,
+    )
+    .unwrap();
+
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn counts_hold_rows_through_prepare_and_backtrack_wrapper() {
+    let data = b"2000\n0100\n3100\n1000\n;\n";
+    let seconds = [0.0, 0.5, 1.0, 1.5];
+    let row_ms = [0, 500, 1000, 1500];
+    let beats = [0.0, 0.5, 1.0, 1.5];
+    let rows = step_parity_prepare_hold_rows_4(data, &seconds, &row_ms, &beats).unwrap();
+    let expected = step_parity_count_prepared_rows_4(
+        &rows.note_counts,
+        &rows.tech_masks,
+        &rows.note_masks,
+        &rows.hold_masks,
+        &rows.mine_masks,
+        &rows.prev_row_live_holds,
+        &rows.row_seconds,
+        &rows.row_ms,
+        256,
+    )
+    .unwrap();
+
+    assert_eq!(
+        step_parity_count_hold_rows_4(data, &seconds, &row_ms, &beats, 256),
+        Some(expected)
+    );
 }
 
 #[test]
