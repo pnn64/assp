@@ -18,6 +18,7 @@ extern assp_count_note_stats_4
 extern assp_count_note_stats_8
 extern assp_count_timing_fakes_4
 extern assp_count_timing_fakes_8
+extern assp_count_timing_segments
 extern assp_count_timing_note_stats_4
 extern assp_count_timing_note_stats_8
 extern assp_count_timing_note_stats_no_holds_4
@@ -801,6 +802,9 @@ prepare_timing_events:
     mov qword [delay_segment_count], 0
     mov qword [warp_segment_count], 0
     mov qword [fake_segment_count], 0
+    mov qword [stop_report_count], 0
+    mov qword [delay_report_count], 0
+    mov qword [warp_report_count], 0
 
     lea rcx, [file_buffer]
     mov rdx, [file_len]
@@ -868,6 +872,10 @@ prepare_timing_events:
     mov rcx, [global_timing_tags + ASSP_TIMING_TAGS_STOPS + ASSP_BYTE_SLICE_PTR]
     mov rdx, [global_timing_tags + ASSP_TIMING_TAGS_STOPS + ASSP_BYTE_SLICE_LEN]
 .parse_stops:
+    lea r8, [stop_report_count]
+    call count_timing_report_segments
+    test eax, eax
+    jz .fail
     lea r8, [stop_segment_buffer]
     mov r9d, BPM_SEGMENT_CAP
     call assp_parse_bpm_map
@@ -886,6 +894,10 @@ prepare_timing_events:
     mov rcx, [global_timing_tags + ASSP_TIMING_TAGS_DELAYS + ASSP_BYTE_SLICE_PTR]
     mov rdx, [global_timing_tags + ASSP_TIMING_TAGS_DELAYS + ASSP_BYTE_SLICE_LEN]
 .parse_delays:
+    lea r8, [delay_report_count]
+    call count_timing_report_segments
+    test eax, eax
+    jz .fail
     lea r8, [delay_segment_buffer]
     mov r9d, BPM_SEGMENT_CAP
     call assp_parse_bpm_map
@@ -904,6 +916,10 @@ prepare_timing_events:
     mov rcx, [global_timing_tags + ASSP_TIMING_TAGS_WARPS + ASSP_BYTE_SLICE_PTR]
     mov rdx, [global_timing_tags + ASSP_TIMING_TAGS_WARPS + ASSP_BYTE_SLICE_LEN]
 .parse_warps:
+    lea r8, [warp_report_count]
+    call count_timing_report_segments
+    test eax, eax
+    jz .fail
     lea r8, [warp_segment_buffer]
     mov r9d, BPM_SEGMENT_CAP
     call assp_parse_bpm_map
@@ -931,6 +947,30 @@ prepare_timing_events:
     ja .fail
     mov [fake_segment_count], rax
 
+    mov eax, ASSP_TRUE
+    jmp .done
+
+.fail:
+    xor eax, eax
+
+.done:
+    add rsp, 56
+    ret
+
+count_timing_report_segments:
+    sub rsp, 56
+
+    mov [rsp + 32], rcx
+    mov [rsp + 40], rdx
+    mov [rsp + 48], r8
+    call assp_count_timing_segments
+    cmp rax, ASSP_NOT_FOUND
+    je .fail
+
+    mov r8, [rsp + 48]
+    mov [r8], rax
+    mov rcx, [rsp + 32]
+    mov rdx, [rsp + 40]
     mov eax, ASSP_TRUE
     jmp .done
 
@@ -1292,6 +1332,15 @@ print_report:
     lea rcx, [label_duration_ms]
     mov rdx, [duration_ms]
     call print_field
+    lea rcx, [label_stops]
+    mov rdx, [stop_report_count]
+    call print_field
+    lea rcx, [label_delays]
+    mov rdx, [delay_report_count]
+    call print_field
+    lea rcx, [label_warps]
+    mov rdx, [warp_report_count]
+    call print_field
     lea rcx, [label_stream16]
     mov rdx, [stream_counts + ASSP_STREAM_COUNTS_RUN16]
     call print_field
@@ -1649,6 +1698,9 @@ label_median_nps db "median_nps: ", 0
 label_tier_bpm db "tier_bpm: ", 0
 label_last_beat_milli db "last_beat_milli: ", 0
 label_duration_ms db "duration_ms: ", 0
+label_stops db "stops: ", 0
+label_delays db "delays: ", 0
+label_warps db "warps: ", 0
 label_stream16 db "16th_streams: ", 0
 label_stream20 db "20th_streams: ", 0
 label_stream24 db "24th_streams: ", 0
@@ -1721,6 +1773,9 @@ stop_segment_count resq 1
 delay_segment_count resq 1
 warp_segment_count resq 1
 fake_segment_count resq 1
+stop_report_count resq 1
+delay_report_count resq 1
+warp_report_count resq 1
 minimized_chart_len resq 1
 nps_count resq 1
 peak_nps_milli resq 1

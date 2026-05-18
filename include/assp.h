@@ -98,6 +98,7 @@ typedef struct assp_stream_token {
 
 uint32_t assp_version(void);
 size_t assp_find_byte(const uint8_t *data, size_t len, uint32_t byte);
+size_t assp_count_timing_segments(const uint8_t *data, size_t len);
 size_t assp_count_note_charts(const uint8_t *data, size_t len);
 size_t assp_supported_step_type_lanes(const uint8_t *data, size_t len);
 int32_t assp_find_notes_by_index(
