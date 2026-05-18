@@ -12,6 +12,7 @@ global assp_step_parity_elapsed_action_costs_4
 global assp_step_parity_switch_action_costs_4
 global assp_step_parity_bracket_tap_action_costs_4
 global assp_step_parity_distance_action_costs_4
+global assp_step_parity_orientation_action_costs_4
 
 section .text
 
@@ -1488,6 +1489,212 @@ assp_step_parity_distance_action_costs_4:
     xor eax, eax
     ret
 
+; rcx = initial, rdx = result, r8 = hit[5],
+; r9 = out assp_step_parity_orientation_costs4.
+; eax = 1 on success, 0 on invalid pointers.
+assp_step_parity_orientation_action_costs_4:
+    test rcx, rcx
+    jz .fail_no_stack
+    test rdx, rdx
+    jz .fail_no_stack
+    test r8, r8
+    jz .fail_no_stack
+    test r9, r9
+    jz .fail_no_stack
+
+    sub rsp, 72
+    xor eax, eax
+    mov [r9 + ASSP_STEP_PARITY_ORIENTATION_COSTS4_TWISTED_FOOT], eax
+    mov [r9 + ASSP_STEP_PARITY_ORIENTATION_COSTS4_FACING], eax
+    mov [r9 + ASSP_STEP_PARITY_ORIENTATION_COSTS4_SPIN], eax
+    mov [r9 + ASSP_STEP_PARITY_ORIENTATION_COSTS4_TOTAL], eax
+    xorps xmm0, xmm0
+
+.twisted_foot:
+    movsx r10d, byte [r8 + 1]
+    movsx r11d, byte [r8 + 2]
+    call orientation_pair_idx_4
+    lea r10, [rel dance_single_pair_avg_x2]
+    movzx eax, byte [r10 + rax]
+    mov [rsp], eax
+
+    movsx r10d, byte [r8 + 3]
+    movsx r11d, byte [r8 + 4]
+    call orientation_pair_idx_4
+    lea r10, [rel dance_single_pair_avg_x2]
+    movzx eax, byte [r10 + rax]
+    cmp eax, [rsp]
+    jl .facing
+
+    movsx r10d, byte [r8 + 3]
+    movsx r11d, byte [r8 + 4]
+    call orientation_backward_4
+    test eax, eax
+    jnz .store_twisted_foot
+    movsx r10d, byte [r8 + 1]
+    movsx r11d, byte [r8 + 2]
+    call orientation_backward_4
+    test eax, eax
+    jz .facing
+
+.store_twisted_foot:
+    movss xmm1, [rel cost_twisted_foot_weight]
+    movss [r9 + ASSP_STEP_PARITY_ORIENTATION_COSTS4_TWISTED_FOOT], xmm1
+    addss xmm0, xmm1
+
+.facing:
+    movsx eax, byte [rdx + ASSP_STEP_PARITY_STATE4_WHERE_FEET + 1]
+    mov [rsp], eax
+    movsx eax, byte [rdx + ASSP_STEP_PARITY_STATE4_WHERE_FEET + 2]
+    test eax, eax
+    jns .store_result_left_toe
+    mov eax, [rsp]
+.store_result_left_toe:
+    mov [rsp + 4], eax
+    movsx eax, byte [rdx + ASSP_STEP_PARITY_STATE4_WHERE_FEET + 3]
+    mov [rsp + 8], eax
+    movsx eax, byte [rdx + ASSP_STEP_PARITY_STATE4_WHERE_FEET + 4]
+    test eax, eax
+    jns .store_result_right_toe
+    mov eax, [rsp + 8]
+.store_result_right_toe:
+    mov [rsp + 12], eax
+
+    xorps xmm1, xmm1
+    mov r10d, [rsp]
+    mov r11d, [rsp + 8]
+    call orientation_pair_idx_4
+    lea r10, [rel dance_single_facing_x4]
+    addss xmm1, [r10 + rax * 4]
+    mov r10d, [rsp + 4]
+    mov r11d, [rsp + 12]
+    call orientation_pair_idx_4
+    lea r10, [rel dance_single_facing_x4]
+    addss xmm1, [r10 + rax * 4]
+    mov r10d, [rsp]
+    mov r11d, [rsp + 4]
+    call orientation_pair_idx_4
+    lea r10, [rel dance_single_facing_y4]
+    addss xmm1, [r10 + rax * 4]
+    mov r10d, [rsp + 8]
+    mov r11d, [rsp + 12]
+    call orientation_pair_idx_4
+    lea r10, [rel dance_single_facing_y4]
+    addss xmm1, [r10 + rax * 4]
+    mulss xmm1, [rel cost_facing_weight]
+    movss [r9 + ASSP_STEP_PARITY_ORIENTATION_COSTS4_FACING], xmm1
+    addss xmm0, xmm1
+
+.spin:
+    movsx r10d, byte [rcx + ASSP_STEP_PARITY_STATE4_WHERE_FEET + 1]
+    movsx r11d, byte [rcx + ASSP_STEP_PARITY_STATE4_WHERE_FEET + 2]
+    call orientation_pair_avg_4
+    mov [rsp + 16], eax
+    mov [rsp + 20], r11d
+    movsx r10d, byte [rcx + ASSP_STEP_PARITY_STATE4_WHERE_FEET + 3]
+    movsx r11d, byte [rcx + ASSP_STEP_PARITY_STATE4_WHERE_FEET + 4]
+    call orientation_pair_avg_4
+    mov [rsp + 24], eax
+    mov [rsp + 28], r11d
+    mov r10d, [rsp]
+    mov r11d, [rsp + 4]
+    call orientation_pair_avg_4
+    mov [rsp + 32], eax
+    mov [rsp + 36], r11d
+    mov r10d, [rsp + 8]
+    mov r11d, [rsp + 12]
+    call orientation_pair_avg_4
+    mov [rsp + 40], eax
+    mov [rsp + 44], r11d
+
+    mov eax, [rsp + 40]
+    cmp eax, [rsp + 32]
+    jge .finish
+    mov eax, [rsp + 24]
+    cmp eax, [rsp + 16]
+    jge .finish
+    mov eax, [rsp + 44]
+    cmp eax, [rsp + 36]
+    jl .spin_right_lower
+    jg .spin_right_higher
+    jmp .finish
+
+.spin_right_lower:
+    mov eax, [rsp + 28]
+    cmp eax, [rsp + 20]
+    jg .store_spin
+    jmp .finish
+
+.spin_right_higher:
+    mov eax, [rsp + 28]
+    cmp eax, [rsp + 20]
+    jge .finish
+
+.store_spin:
+    movss xmm1, [rel cost_spin_weight]
+    movss [r9 + ASSP_STEP_PARITY_ORIENTATION_COSTS4_SPIN], xmm1
+    addss xmm0, xmm1
+
+.finish:
+    movss [r9 + ASSP_STEP_PARITY_ORIENTATION_COSTS4_TOTAL], xmm0
+    add rsp, 72
+    mov eax, ASSP_TRUE
+    ret
+
+.fail_no_stack:
+    xor eax, eax
+    ret
+
+; r10d/r11d = signed column ids. eax = pair table index.
+orientation_pair_idx_4:
+    test r10d, r10d
+    js .left_invalid
+    cmp r10d, 4
+    jb .left_ok
+.left_invalid:
+    mov r10d, 4
+.left_ok:
+    test r11d, r11d
+    js .right_invalid
+    cmp r11d, 4
+    jb .right_ok
+.right_invalid:
+    mov r11d, 4
+.right_ok:
+    lea eax, [r10 + r10 * 4]
+    add eax, r11d
+    ret
+
+; r10d/r11d = heel/toe columns. eax = boolean toe y < heel y.
+orientation_backward_4:
+    test r10d, r10d
+    js .no
+    cmp r10d, 4
+    jae .no
+    test r11d, r11d
+    js .no
+    cmp r11d, 4
+    jae .no
+    lea rax, [rel dance_single_col_y2]
+    movzx r10d, byte [rax + r10]
+    movzx r11d, byte [rax + r11]
+    xor eax, eax
+    cmp r11d, r10d
+    setl al
+    ret
+.no:
+    xor eax, eax
+    ret
+
+; r10d/r11d = signed column ids. eax = avg x2, r11d = avg y2.
+orientation_pair_avg_4:
+    call orientation_pair_idx_4
+    lea r10, [rel dance_single_pair_avg_y2]
+    movzx r11d, byte [r10 + rax]
+    lea r10, [rel dance_single_pair_avg_x2]
+    movzx eax, byte [r10 + rax]
+    ret
+
 section .rdata
 cost_mine_weight dd 10000.0
 cost_bracket_jack_weight dd 20.0
@@ -1505,9 +1712,37 @@ cost_sideswitch_weight dd 130.0
 cost_hold_switch_weight dd 55.0
 cost_distance_weight dd 6.0
 cost_big_movement_other_part_factor dd 0.2
+cost_twisted_foot_weight dd 100000.0
+cost_facing_weight dd 2.0
+cost_spin_weight dd 1000.0
 cost_one dd 1.0
 dance_single_distances4:
     dd 0.0, 1.4142135623730951, 1.4142135623730951, 2.0
     dd 1.4142135623730951, 0.0, 2.0, 1.4142135623730951
     dd 1.4142135623730951, 2.0, 0.0, 1.4142135623730951
     dd 2.0, 1.4142135623730951, 1.4142135623730951, 0.0
+dance_single_col_y2 db 2, 0, 4, 2
+dance_single_pair_avg_x2:
+    db 0, 1, 1, 2, 0
+    db 1, 2, 2, 3, 2
+    db 1, 2, 2, 3, 2
+    db 2, 3, 3, 4, 4
+    db 0, 2, 2, 4, 0
+dance_single_pair_avg_y2:
+    db 2, 1, 3, 2, 2
+    db 1, 0, 2, 1, 0
+    db 3, 2, 4, 3, 4
+    db 2, 1, 3, 2, 2
+    db 2, 0, 4, 2, 0
+dance_single_facing_x4:
+    dd 0.0, 0.0, 0.0, 0.0, 0.0
+    dd 8.246923447, 0.0, 0.0, 0.0, 0.0
+    dd 8.246923447, 0.0, 0.0, 0.0, 0.0
+    dd 100.0, 8.246923447, 8.246923447, 0.0, 0.0
+    dd 0.0, 0.0, 0.0, 0.0, 0.0
+dance_single_facing_y4:
+    dd 0.0, 8.246923447, 0.0, 0.0, 0.0
+    dd 0.0, 0.0, 0.0, 0.0, 0.0
+    dd 8.246923447, 100.0, 0.0, 8.246923447, 0.0
+    dd 0.0, 8.246923447, 0.0, 0.0, 0.0
+    dd 0.0, 0.0, 0.0, 0.0, 0.0

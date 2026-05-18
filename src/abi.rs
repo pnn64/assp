@@ -112,6 +112,15 @@ pub struct StepParityDistanceCosts4 {
     pub total: f32,
 }
 
+#[repr(C)]
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
+pub struct StepParityOrientationCosts4 {
+    pub twisted_foot: f32,
+    pub facing: f32,
+    pub spin: f32,
+    pub total: f32,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct StepParityTransition4 {
     pub placement: [u8; 4],
@@ -406,6 +415,12 @@ unsafe extern "C" {
         hold_mask: u32,
         elapsed_seconds: *const f32,
         out: *mut StepParityDistanceCosts4,
+    ) -> c_int;
+    fn assp_step_parity_orientation_action_costs_4(
+        initial: *const StepParityState4,
+        result: *const StepParityState4,
+        hit: *const i8,
+        out: *mut StepParityOrientationCosts4,
     ) -> c_int;
     fn assp_parse_bpm_map(
         data: *const u8,
@@ -1350,6 +1365,19 @@ pub fn step_parity_distance_action_costs_4(
 }
 
 #[must_use]
+pub fn step_parity_orientation_action_costs_4(
+    initial: &StepParityState4,
+    result: &StepParityState4,
+    hit: &[i8; 5],
+) -> Option<StepParityOrientationCosts4> {
+    let mut out = StepParityOrientationCosts4::default();
+    let ok = unsafe {
+        assp_step_parity_orientation_action_costs_4(initial, result, hit.as_ptr(), &mut out)
+    };
+    (ok != 0).then_some(out)
+}
+
+#[must_use]
 pub fn parse_bpm_map(data: &[u8]) -> Option<Vec<BpmSegment>> {
     let count = unsafe { assp_parse_bpm_map(data.as_ptr(), data.len(), std::ptr::null_mut(), 0) };
     if count == NOT_FOUND {
@@ -2224,8 +2252,8 @@ pub fn count_timing_note_stats_no_holds_8(
 mod tests {
     use super::{
         NoteStats, StepParityActionFlags4, StepParityBasicCosts4, StepParityBracketTapCosts4,
-        StepParityDistanceCosts4, StepParityElapsedCosts4, StepParityState4,
-        StepParitySwitchCosts4, TechCounts,
+        StepParityDistanceCosts4, StepParityElapsedCosts4, StepParityOrientationCosts4,
+        StepParityState4, StepParitySwitchCosts4, TechCounts,
     };
 
     #[test]
@@ -2280,6 +2308,12 @@ mod tests {
     fn step_parity_distance_costs4_layout_is_c_abi() {
         assert_eq!(std::mem::size_of::<StepParityDistanceCosts4>(), 12);
         assert_eq!(std::mem::align_of::<StepParityDistanceCosts4>(), 4);
+    }
+
+    #[test]
+    fn step_parity_orientation_costs4_layout_is_c_abi() {
+        assert_eq!(std::mem::size_of::<StepParityOrientationCosts4>(), 16);
+        assert_eq!(std::mem::align_of::<StepParityOrientationCosts4>(), 4);
     }
 
     #[test]

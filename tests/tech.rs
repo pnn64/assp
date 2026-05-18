@@ -1,13 +1,15 @@
 use assp::{
     StepParityActionFlags4, StepParityBasicCosts4, StepParityBracketTapCosts4,
-    StepParityDistanceCosts4, StepParityElapsedCosts4, StepParityState4, StepParitySwitchCosts4,
-    TechCounts, calculate_step_tech_counts_from_placements_4, count_step_tech_brackets_minimized_4,
+    StepParityDistanceCosts4, StepParityElapsedCosts4, StepParityOrientationCosts4,
+    StepParityState4, StepParitySwitchCosts4, TechCounts,
+    calculate_step_tech_counts_from_placements_4, count_step_tech_brackets_minimized_4,
     count_step_tech_brackets_minimized_8, parse_tech_notation, step_parity_action_flags_4,
     step_parity_basic_action_costs_4, step_parity_bracket_tap_action_costs_4,
     step_parity_distance_action_costs_4, step_parity_elapsed_action_costs_4,
-    step_parity_permutations_4, step_parity_result_state_holds_4,
-    step_parity_result_state_no_holds_4, step_parity_row_key_candidates_4,
-    step_parity_row_transitions_4, step_parity_switch_action_costs_4,
+    step_parity_orientation_action_costs_4, step_parity_permutations_4,
+    step_parity_result_state_holds_4, step_parity_result_state_no_holds_4,
+    step_parity_row_key_candidates_4, step_parity_row_transitions_4,
+    step_parity_switch_action_costs_4,
 };
 use std::collections::HashSet;
 
@@ -458,6 +460,119 @@ fn expected_distance_costs(
         hold_switch,
         big_movement,
         total: hold_switch + big_movement,
+    }
+}
+
+fn expected_orientation_costs(
+    initial: StepParityState4,
+    result: StepParityState4,
+    hit: [i8; 5],
+) -> StepParityOrientationCosts4 {
+    #[derive(Clone, Copy, Default)]
+    struct Point {
+        x: f32,
+        y: f32,
+    }
+
+    const COLS: [Point; 4] = [
+        Point { x: 0.0, y: 1.0 },
+        Point { x: 1.0, y: 0.0 },
+        Point { x: 1.0, y: 2.0 },
+        Point { x: 2.0, y: 1.0 },
+    ];
+
+    let avg_point = |a: i8, b: i8| -> Point {
+        match (a >= 0, b >= 0) {
+            (false, false) => Point::default(),
+            (false, true) => COLS[b as usize],
+            (true, false) => COLS[a as usize],
+            (true, true) => {
+                let a = COLS[a as usize];
+                let b = COLS[b as usize];
+                Point {
+                    x: (a.x + b.x) / 2.0,
+                    y: (a.y + b.y) / 2.0,
+                }
+            }
+        }
+    };
+
+    let facing_penalty = |v: f32| -> f32 {
+        let base = -(v.min(0.0));
+        if base > 0.0 {
+            ((base as f64).powf(1.8) * 100.0) as f32
+        } else {
+            0.0
+        }
+    };
+
+    let facing = |a: i8, b: i8, x_axis: bool| -> f32 {
+        if a < 0 || b < 0 || a == b {
+            return 0.0;
+        }
+        let a = COLS[a as usize];
+        let b = COLS[b as usize];
+        let dx = b.x - a.x;
+        let dy = b.y - a.y;
+        let dist = (dx * dx + dy * dy).sqrt();
+        if dist == 0.0 {
+            return 0.0;
+        }
+        let n = if x_axis { dx / dist } else { dy / dist };
+        let mut m = (n as f64).powf(4.0) as f32;
+        if n <= 0.0 {
+            m = -m;
+        }
+        facing_penalty(m)
+    };
+
+    let left_pos = avg_point(hit[1], hit[2]);
+    let right_pos = avg_point(hit[3], hit[4]);
+    let crossed = right_pos.x < left_pos.x;
+    let backward = |heel: i8, toe: i8| -> bool {
+        heel >= 0 && toe >= 0 && COLS[toe as usize].y < COLS[heel as usize].y
+    };
+    let twisted_foot = if !crossed && (backward(hit[3], hit[4]) || backward(hit[1], hit[2])) {
+        100_000.0
+    } else {
+        0.0
+    };
+
+    let lh = result.where_feet_are[1];
+    let mut lt = result.where_feet_are[2];
+    let rh = result.where_feet_are[3];
+    let mut rt = result.where_feet_are[4];
+    if lt < 0 {
+        lt = lh;
+    }
+    if rt < 0 {
+        rt = rh;
+    }
+    let facing_cost = (facing(lh, rh, true)
+        + facing(lt, rt, true)
+        + facing(lh, lt, false)
+        + facing(rh, rt, false))
+        * 2.0;
+
+    let prev_left = avg_point(initial.where_feet_are[1], initial.where_feet_are[2]);
+    let prev_right = avg_point(initial.where_feet_are[3], initial.where_feet_are[4]);
+    let left = avg_point(lh, lt);
+    let right = avg_point(rh, rt);
+    let spin = if right.x < left.x
+        && prev_right.x < prev_left.x
+        && ((right.y < left.y && prev_right.y > prev_left.y)
+            || (right.y > left.y && prev_right.y < prev_left.y))
+    {
+        1000.0
+    } else {
+        0.0
+    };
+
+    StepParityOrientationCosts4 {
+        twisted_foot,
+        facing: facing_cost,
+        spin,
+        total: twisted_foot + facing_cost + spin,
     }
 }
 
@@ -1085,6 +1200,53 @@ fn calculates_distance_action_cost_terms_like_rssp_core() {
             step_parity_distance_action_costs_4(&initial, &result, &hit, hold_mask, elapsed)
                 .unwrap(),
             expected_distance_costs(initial, result, hit, hold_mask, elapsed)
+        );
+    }
+}
+
+#[test]
+fn calculates_orientation_action_cost_terms_like_rssp_core() {
+    let cases = [
+        (
+            StepParityState4::default(),
+            StepParityState4::default(),
+            [-1, 2, 1, 3, -1],
+        ),
+        (
+            StepParityState4::default(),
+            StepParityState4::default(),
+            [-1, 3, -1, 2, 1],
+        ),
+        (
+            StepParityState4::default(),
+            StepParityState4 {
+                where_feet_are: [-1, 3, -1, 0, -1],
+                ..StepParityState4::default()
+            },
+            [-1, -1, -1, -1, -1],
+        ),
+        (
+            StepParityState4 {
+                where_feet_are: [-1, 3, -1, 1, -1],
+                ..StepParityState4::default()
+            },
+            StepParityState4 {
+                where_feet_are: [-1, 3, -1, 2, -1],
+                ..StepParityState4::default()
+            },
+            [-1, -1, -1, -1, -1],
+        ),
+        (
+            StepParityState4::default(),
+            StepParityState4::default(),
+            [-1, 3, -1, 2, 1],
+        ),
+    ];
+
+    for (initial, result, hit) in cases {
+        assert_eq!(
+            step_parity_orientation_action_costs_4(&initial, &result, &hit).unwrap(),
+            expected_orientation_costs(initial, result, hit)
         );
     }
 }

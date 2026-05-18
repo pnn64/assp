@@ -55,6 +55,7 @@ The first implemented pieces are:
 - `assp_step_parity_switch_action_costs_4`
 - `assp_step_parity_bracket_tap_action_costs_4`
 - `assp_step_parity_distance_action_costs_4`
+- `assp_step_parity_orientation_action_costs_4`
 - `assp_parse_bpm_map`
 - `assp_parse_offset_ms`
 - `assp_bpm_display_range`
@@ -234,8 +235,9 @@ masks.
 tap penalty, including the elapsed-time jack penalty when the bracketed foot
 pair moved on the previous row.
 `assp_step_parity_distance_action_costs_4` ports RSSP's 4-panel dance-single
-distance terms for hold switches and large foot movements. The remaining
-layout-dependent parity scoring terms are twisted foot, facing, and spin.
+distance terms for hold switches and large foot movements.
+`assp_step_parity_orientation_action_costs_4` ports RSSP's 4-panel
+dance-single orientation terms: twisted foot, facing, and spin.
 `assp_chart_owns_timing_by_index` checks the RSSP chart-local timing ownership
 predicate for SSC `#NOTEDATA` blocks.
 `assp_parse_bpm_map` parses BPM timing maps into sorted fixed-point

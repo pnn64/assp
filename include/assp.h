@@ -162,6 +162,13 @@ typedef struct assp_step_parity_distance_costs4 {
     float total;
 } assp_step_parity_distance_costs4;
 
+typedef struct assp_step_parity_orientation_costs4 {
+    float twisted_foot;
+    float facing;
+    float spin;
+    float total;
+} assp_step_parity_orientation_costs4;
+
 typedef struct assp_chart_ref {
     const uint8_t *note_data;
     size_t note_data_len;
@@ -456,6 +463,12 @@ int32_t assp_step_parity_distance_action_costs_4(
     uint32_t hold_mask,
     const float *elapsed_seconds,
     assp_step_parity_distance_costs4 *out
+);
+int32_t assp_step_parity_orientation_action_costs_4(
+    const assp_step_parity_state4 *initial,
+    const assp_step_parity_state4 *result,
+    const int8_t *hit,
+    assp_step_parity_orientation_costs4 *out
 );
 size_t assp_parse_bpm_map(
     const uint8_t *data,
