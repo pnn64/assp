@@ -4119,6 +4119,8 @@ print_stream_sequences_field:
     mov [rsp + 40], r8
     mov qword [rsp + 48], 0
     call print_z
+    lea rcx, [open_bracket]
+    call print_z
 
 .loop:
     mov rax, [rsp + 48]
@@ -4134,28 +4136,35 @@ print_stream_sequences_field:
     imul r10, ASSP_STREAM_SEGMENT_SIZE
     add r10, [rsp + 32]
     mov [rsp + 56], r10
+    lea rcx, [stream_sequence_start_key]
+    call print_z
+    mov r10, [rsp + 56]
     mov rcx, [r10 + ASSP_STREAM_SEGMENT_START]
     call print_u64
-    lea rcx, [minus]
+    lea rcx, [stream_sequence_end_key]
     call print_z
     mov r10, [rsp + 56]
     mov rcx, [r10 + ASSP_STREAM_SEGMENT_END]
     call print_u64
-    lea rcx, [colon]
+    lea rcx, [stream_sequence_break_key]
     call print_z
     mov r10, [rsp + 56]
     cmp qword [r10 + ASSP_STREAM_SEGMENT_IS_BREAK], 0
-    je .stream
-    lea rcx, [break_text]
+    je .false
+    lea rcx, [true_text]
     jmp .print_kind
-.stream:
-    lea rcx, [stream_text]
+.false:
+    lea rcx, [false_text]
 .print_kind:
+    call print_z
+    lea rcx, [close_brace]
     call print_z
     inc qword [rsp + 48]
     jmp .loop
 
 .newline:
+    lea rcx, [close_bracket]
+    call print_z
     lea rcx, [newline]
     call print_z
     add rsp, 88
@@ -4819,6 +4828,12 @@ comma db ",", 0
 equals db "=", 0
 minus db "-", 0
 colon db ":", 0
+open_bracket db "[", 0
+close_bracket db "]", 0
+close_brace db "}", 0
+stream_sequence_start_key db '{"stream_start":', 0
+stream_sequence_end_key db ',"stream_end":', 0
+stream_sequence_break_key db ',"is_break":', 0
 dot db ".", 0
 zero_digit db "0", 0
 milli_to_six_tail db "000", 0
@@ -4826,8 +4841,6 @@ minute_suffix db "m ", 0
 second_suffix db "s", 0
 true_text db "true", 0
 false_text db "false", 0
-stream_text db "stream", 0
-break_text db "break", 0
 newline db 13, 10, 0
 
 section .bss
