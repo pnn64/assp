@@ -234,9 +234,9 @@ placements into the post-parity 4-panel tech-count stage, so caller-prepared
 rows can now exercise the same DP-to-count path that chart row construction
 will use.
 `assp_step_parity_prepare_tap_rows_4` starts chart row construction for
-already-minimized 4-panel tap/lift rows. It emits the prepared row masks,
-counts, and caller-provided row times for the DP-to-count bridge, while
-rejecting hold, mine, and fake rows until those RSSP cases are ported.
+already-minimized 4-panel tap/lift/mine rows. It emits the prepared row masks,
+counts, mine masks, and caller-provided row times for the DP-to-count bridge,
+while rejecting hold and fake rows until those RSSP cases are ported.
 `assp_step_parity_action_flags_4` ports the boolean prelude used by RSSP's
 `calc_action_cost`: moved-left/right, prior non-holding foot movement,
 did-jump, and left/right jack detection from resolved parity states and hit

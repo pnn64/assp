@@ -2507,7 +2507,102 @@ assp_step_parity_count_prepared_rows_4:
     pop rbx
     ret
 
-%macro prepare_tap_row4_col 2
+%macro prepare_flush_current4 0
+    cmp qword [rsp + 16], 0
+    je %%done
+    mov rax, [rsp]
+    cmp rax, [rsp + 272]
+    jae .fail
+
+    mov ecx, [rsp + 40]
+    mov [r15 + rax], cl
+    mov ecx, [rsp + 44]
+    mov [rbx + rax], cl
+    mov ecx, [rsp + 48]
+    mov [rdi + rax], cl
+    mov byte [rbp + rax], 0
+    mov rdx, [rsp + 240]
+    mov ecx, [rsp + 36]
+    mov [rdx + rax], cl
+    mov rdx, [rsp + 248]
+    mov byte [rdx + rax], 0
+    mov rdx, [rsp + 256]
+    mov ecx, [rsp + 24]
+    mov [rdx + rax * 4], ecx
+    mov rdx, [rsp + 264]
+    mov ecx, [rsp + 28]
+    mov [rdx + rax * 4], ecx
+    inc qword [rsp]
+    mov qword [rsp + 16], 0
+%%done:
+%endmacro
+
+%macro prepare_reset_current4 0
+    mov qword [rsp + 16], 1
+    mov eax, [rsp + 56]
+    mov [rsp + 24], eax
+    mov eax, [rsp + 60]
+    mov [rsp + 28], eax
+    mov eax, [rsp + 32]
+    mov [rsp + 36], eax
+    mov dword [rsp + 32], 0
+    mov dword [rsp + 40], 0
+    mov dword [rsp + 44], 0
+    mov dword [rsp + 48], 0
+%endmacro
+
+%macro prepare_ensure_current4 0
+    cmp qword [rsp + 16], 0
+    je %%reset
+    mov eax, [rsp + 56]
+    cmp eax, [rsp + 24]
+    je %%done
+    prepare_flush_current4
+%%reset:
+    prepare_reset_current4
+%%done:
+%endmacro
+
+%macro prepare_add_note4 2
+    prepare_ensure_current4
+    test dword [rsp + 44], %1
+    jnz %%seen
+    inc dword [rsp + 40]
+%%seen:
+    or dword [rsp + 44], %1
+%if %2
+    or dword [rsp + 48], %1
+%endif
+%endmacro
+
+%macro prepare_add_mine4 1
+    mov eax, [rsp + 56]
+    and eax, 7fffffffh
+    cmp qword [rsp + 16], 0
+    je %%pending
+    mov ecx, [rsp + 56]
+    cmp ecx, [rsp + 24]
+    jne %%pending
+    cmp qword [rsp], 0
+    je %%pending
+    test eax, eax
+    jz %%clear_next
+    or dword [rsp + 36], %1
+    jmp %%done
+%%clear_next:
+    and dword [rsp + 36], ~%1
+    jmp %%done
+%%pending:
+    test eax, eax
+    jz %%clear_pending
+    or dword [rsp + 32], %1
+    jmp %%done
+%%clear_pending:
+    and dword [rsp + 32], ~%1
+%%done:
+%endmacro
+
+%macro prepare_process_char4 2
     mov al, [rsi + %1]
     cmp al, '0'
     je %%done
@@ -2515,19 +2610,18 @@ assp_step_parity_count_prepared_rows_4:
     je %%tap
     cmp al, 'L'
     je %%lift
-    mov rax, ASSP_NOT_FOUND
-    jmp %%end
+    cmp al, 'M'
+    je %%mine
+    jmp .fail
 %%tap:
-    or r8d, %2
-    or r9d, %2
-    inc r10d
+    prepare_add_note4 %2, 1
     jmp %%done
 %%lift:
-    or r8d, %2
-    inc r10d
+    prepare_add_note4 %2, 0
+    jmp %%done
+%%mine:
+    prepare_add_mine4 %2
 %%done:
-    xor eax, eax
-%%end:
 %endmacro
 
 ; rcx = minimized 4-panel note-data, rdx = byte length,
@@ -2553,16 +2647,16 @@ assp_step_parity_prepare_tap_rows_4:
     push r14
     push r15
     push rbp
-    sub rsp, 32
+    sub rsp, 96
 
     mov rsi, rcx
     mov r12, rdx
     mov r13, r8
     mov r14, r9
-    mov r15, [rsp + 144]
-    mov rbx, [rsp + 152]
-    mov rdi, [rsp + 160]
-    mov rbp, [rsp + 168]
+    mov r15, [rsp + 208]
+    mov rbx, [rsp + 216]
+    mov rdi, [rsp + 224]
+    mov rbp, [rsp + 232]
 
     test r12, r12
     jz .init
@@ -2588,19 +2682,26 @@ assp_step_parity_prepare_tap_rows_4:
     jz .fail
     test rbp, rbp
     jz .fail
-    cmp qword [rsp + 176], 0
+    cmp qword [rsp + 240], 0
     je .fail
-    cmp qword [rsp + 184], 0
+    cmp qword [rsp + 248], 0
     je .fail
-    cmp qword [rsp + 192], 0
+    cmp qword [rsp + 256], 0
     je .fail
-    cmp qword [rsp + 200], 0
+    cmp qword [rsp + 264], 0
     je .fail
-    cmp qword [rsp + 208], 0
+    cmp qword [rsp + 272], 0
     je .fail
 
     lea r12, [rsi + r12]
-    xor r11d, r11d
+    mov qword [rsp], 0
+    mov qword [rsp + 8], 0
+    mov qword [rsp + 16], 0
+    mov dword [rsp + 32], 0
+    mov dword [rsp + 36], 0
+    mov dword [rsp + 40], 0
+    mov dword [rsp + 44], 0
+    mov dword [rsp + 48], 0
 
 .line_loop:
     cmp rsi, r12
@@ -2625,9 +2726,9 @@ assp_step_parity_prepare_tap_rows_4:
 .line_start:
     mov al, [rsi]
     cmp al, '/'
-    je .line_done
+    je .skip_to_next_line
     cmp al, ','
-    je .line_done
+    je .measure_done
     cmp al, ';'
     je .success
 
@@ -2635,47 +2736,30 @@ assp_step_parity_prepare_tap_rows_4:
     cmp rax, r12
     ja .success
 
-    xor r8d, r8d
-    xor r9d, r9d
-    xor r10d, r10d
-    prepare_tap_row4_col 0, 1
-    cmp rax, ASSP_NOT_FOUND
-    je .fail
-    prepare_tap_row4_col 1, 2
-    cmp rax, ASSP_NOT_FOUND
-    je .fail
-    prepare_tap_row4_col 2, 4
-    cmp rax, ASSP_NOT_FOUND
-    je .fail
-    prepare_tap_row4_col 3, 8
-    cmp rax, ASSP_NOT_FOUND
-    je .fail
+    cmp dword [rsi], 30303030h
+    je .row_done
 
-    test r8d, r8d
-    jz .line_done
-    cmp r11, [rsp + 136]
+    mov rax, [rsp + 8]
+    cmp rax, [rsp + 200]
     jae .fail
-    cmp r11, [rsp + 208]
-    jae .fail
+    mov ecx, [r13 + rax * 4]
+    mov [rsp + 56], ecx
+    mov ecx, [r14 + rax * 4]
+    mov [rsp + 60], ecx
+    inc qword [rsp + 8]
 
-    mov [r15 + r11], r10b
-    mov [rbx + r11], r8b
-    mov [rdi + r11], r9b
-    mov byte [rbp + r11], 0
-    mov rax, [rsp + 176]
-    mov byte [rax + r11], 0
-    mov rax, [rsp + 184]
-    mov byte [rax + r11], 0
-    movss xmm0, [r13 + r11 * 4]
-    mov rax, [rsp + 192]
-    movss [rax + r11 * 4], xmm0
-    mov eax, [r14 + r11 * 4]
-    mov rcx, [rsp + 200]
-    mov [rcx + r11 * 4], eax
-    inc r11
+    prepare_process_char4 0, 1
+    prepare_process_char4 1, 2
+    prepare_process_char4 2, 4
+    prepare_process_char4 3, 8
 
-.line_done:
+.row_done:
     add rsi, 4
+    jmp .skip_to_next_line
+
+.measure_done:
+    inc rsi
+    jmp .line_loop
 
 .skip_to_next_line:
     cmp rsi, r12
@@ -2691,14 +2775,15 @@ assp_step_parity_prepare_tap_rows_4:
     jmp .skip_to_next_line
 
 .success:
-    mov rax, r11
+    prepare_flush_current4
+    mov rax, [rsp]
     jmp .done
 
 .fail:
     mov rax, ASSP_NOT_FOUND
 
 .done:
-    add rsp, 32
+    add rsp, 96
     pop rbp
     pop r15
     pop r14

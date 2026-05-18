@@ -1087,6 +1087,35 @@ fn prepares_tap_rows_from_minimized_note_data() {
 }
 
 #[test]
+fn prepares_same_row_mines_with_tap_rows() {
+    let rows = step_parity_prepare_tap_rows_4(b"M100\n;\n", &[0.125], &[125]).unwrap();
+
+    assert_eq!(rows.note_counts, [1]);
+    assert_eq!(rows.tech_masks, [0b0010]);
+    assert_eq!(rows.note_masks, [0b0010]);
+    assert_eq!(rows.hold_masks, [0]);
+    assert_eq!(rows.mine_masks, [0b0001]);
+    assert_eq!(rows.prev_row_live_holds, [0]);
+    assert_eq!(rows.row_seconds, [0.125]);
+    assert_eq!(rows.row_ms, [125]);
+}
+
+#[test]
+fn carries_mine_only_rows_to_next_tap_row() {
+    let rows =
+        step_parity_prepare_tap_rows_4(b"M000\n0100\n;\n", &[0.125, 0.25], &[125, 250]).unwrap();
+
+    assert_eq!(rows.note_counts, [1]);
+    assert_eq!(rows.tech_masks, [0b0010]);
+    assert_eq!(rows.note_masks, [0b0010]);
+    assert_eq!(rows.hold_masks, [0]);
+    assert_eq!(rows.mine_masks, [0b0001]);
+    assert_eq!(rows.prev_row_live_holds, [0]);
+    assert_eq!(rows.row_seconds, [0.25]);
+    assert_eq!(rows.row_ms, [250]);
+}
+
+#[test]
 fn rejects_unsupported_rows_in_tap_row_preparer() {
     assert!(step_parity_prepare_tap_rows_4(b"2000\n;\n", &[0.0], &[0]).is_none());
     assert!(step_parity_prepare_tap_rows_4(b"1000\n;\n", &[], &[]).is_none());
