@@ -19,7 +19,7 @@ extern assp_count_gimmick_speed_segments
 extern assp_count_note_stats_4
 extern assp_count_note_stats_8
 extern assp_count_anchors_minimized_4
-extern assp_count_basic_patterns_minimized_4
+extern assp_count_default_patterns_minimized_4
 extern assp_count_facing_steps_minimized_4
 extern assp_count_timing_fakes_4
 extern assp_count_timing_fakes_8
@@ -221,7 +221,7 @@ start:
     test eax, eax
     jz fail_stats
 
-    call prepare_basic_patterns
+    call prepare_default_patterns
     test eax, eax
     jz fail_stats
 
@@ -932,21 +932,26 @@ prepare_equally_spaced:
     add rsp, 40
     ret
 
-prepare_basic_patterns:
+prepare_default_patterns:
     sub rsp, 40
 
-    mov qword [basic_pattern_counts + 0], 0
-    mov qword [basic_pattern_counts + 8], 0
-    mov qword [basic_pattern_counts + 16], 0
-    mov qword [basic_pattern_counts + 24], 0
+    xor r8d, r8d
+    lea r9, [default_pattern_counts]
+.zero_loop:
+    cmp r8d, ASSP_PATTERN_COUNT
+    jae .zero_done
+    mov dword [r9 + r8 * 4], 0
+    inc r8d
+    jmp .zero_loop
 
+.zero_done:
     cmp qword [chart_lanes], 4
     jne .success
 
     lea rcx, [minimized_buffer]
     mov rdx, [minimized_chart_len]
-    lea r8, [basic_pattern_counts]
-    call assp_count_basic_patterns_minimized_4
+    lea r8, [default_pattern_counts]
+    call assp_count_default_patterns_minimized_4
     test eax, eax
     jz .fail
 
@@ -2772,46 +2777,96 @@ print_report:
     mov rdx, [equally_spaced_measures]
     call print_field
     lea rcx, [label_candles]
-    mov edx, [basic_pattern_counts + ASSP_BASIC_PATTERNS_CANDLE_LEFT]
-    add edx, [basic_pattern_counts + ASSP_BASIC_PATTERNS_CANDLE_RIGHT]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_CANDLE_LEFT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_CANDLE_RIGHT * 4]
     call print_field
     lea rcx, [label_candle_left]
-    mov edx, [basic_pattern_counts + ASSP_BASIC_PATTERNS_CANDLE_LEFT]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_CANDLE_LEFT * 4]
     call print_field
     lea rcx, [label_candle_right]
-    mov edx, [basic_pattern_counts + ASSP_BASIC_PATTERNS_CANDLE_RIGHT]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_CANDLE_RIGHT * 4]
     call print_field
     lea rcx, [label_boxes]
-    mov edx, [basic_pattern_counts + ASSP_BASIC_PATTERNS_BOX_LR]
-    add edx, [basic_pattern_counts + ASSP_BASIC_PATTERNS_BOX_UD]
-    add edx, [basic_pattern_counts + ASSP_BASIC_PATTERNS_BOX_LD]
-    add edx, [basic_pattern_counts + ASSP_BASIC_PATTERNS_BOX_LU]
-    add edx, [basic_pattern_counts + ASSP_BASIC_PATTERNS_BOX_RD]
-    add edx, [basic_pattern_counts + ASSP_BASIC_PATTERNS_BOX_RU]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_BOX_LR * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_BOX_UD * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_BOX_CORNER_LD * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_BOX_CORNER_LU * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_BOX_CORNER_RD * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_BOX_CORNER_RU * 4]
     call print_field
     lea rcx, [label_box_lr]
-    mov edx, [basic_pattern_counts + ASSP_BASIC_PATTERNS_BOX_LR]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_BOX_LR * 4]
     call print_field
     lea rcx, [label_box_ud]
-    mov edx, [basic_pattern_counts + ASSP_BASIC_PATTERNS_BOX_UD]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_BOX_UD * 4]
     call print_field
     lea rcx, [label_box_corner]
-    mov edx, [basic_pattern_counts + ASSP_BASIC_PATTERNS_BOX_LD]
-    add edx, [basic_pattern_counts + ASSP_BASIC_PATTERNS_BOX_LU]
-    add edx, [basic_pattern_counts + ASSP_BASIC_PATTERNS_BOX_RD]
-    add edx, [basic_pattern_counts + ASSP_BASIC_PATTERNS_BOX_RU]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_BOX_CORNER_LD * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_BOX_CORNER_LU * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_BOX_CORNER_RD * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_BOX_CORNER_RU * 4]
     call print_field
     lea rcx, [label_box_ld]
-    mov edx, [basic_pattern_counts + ASSP_BASIC_PATTERNS_BOX_LD]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_BOX_CORNER_LD * 4]
     call print_field
     lea rcx, [label_box_lu]
-    mov edx, [basic_pattern_counts + ASSP_BASIC_PATTERNS_BOX_LU]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_BOX_CORNER_LU * 4]
     call print_field
     lea rcx, [label_box_rd]
-    mov edx, [basic_pattern_counts + ASSP_BASIC_PATTERNS_BOX_RD]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_BOX_CORNER_RD * 4]
     call print_field
     lea rcx, [label_box_ru]
-    mov edx, [basic_pattern_counts + ASSP_BASIC_PATTERNS_BOX_RU]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_BOX_CORNER_RU * 4]
+    call print_field
+    lea rcx, [label_towers]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_TOWER_LR * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_TOWER_UD * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_TOWER_CORNER_LD * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_TOWER_CORNER_LU * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_TOWER_CORNER_RD * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_TOWER_CORNER_RU * 4]
+    call print_field
+    lea rcx, [label_tower_lr]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_TOWER_LR * 4]
+    call print_field
+    lea rcx, [label_tower_ud]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_TOWER_UD * 4]
+    call print_field
+    lea rcx, [label_tower_corner]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_TOWER_CORNER_LD * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_TOWER_CORNER_LU * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_TOWER_CORNER_RD * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_TOWER_CORNER_RU * 4]
+    call print_field
+    lea rcx, [label_tower_ld]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_TOWER_CORNER_LD * 4]
+    call print_field
+    lea rcx, [label_tower_lu]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_TOWER_CORNER_LU * 4]
+    call print_field
+    lea rcx, [label_tower_rd]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_TOWER_CORNER_RD * 4]
+    call print_field
+    lea rcx, [label_tower_ru]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_TOWER_CORNER_RU * 4]
+    call print_field
+    lea rcx, [label_triangles]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_TRIANGLE_LDL * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_TRIANGLE_LUL * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_TRIANGLE_RDR * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_TRIANGLE_RUR * 4]
+    call print_field
+    lea rcx, [label_triangle_ldl]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_TRIANGLE_LDL * 4]
+    call print_field
+    lea rcx, [label_triangle_lul]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_TRIANGLE_LUL * 4]
+    call print_field
+    lea rcx, [label_triangle_rdr]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_TRIANGLE_RDR * 4]
+    call print_field
+    lea rcx, [label_triangle_rur]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_TRIANGLE_RUR * 4]
     call print_field
     lea rcx, [label_anchors]
     mov edx, [anchor_counts + 0]
@@ -3743,6 +3798,19 @@ label_box_ld db "box_ld: ", 0
 label_box_lu db "box_lu: ", 0
 label_box_rd db "box_rd: ", 0
 label_box_ru db "box_ru: ", 0
+label_towers db "towers: ", 0
+label_tower_lr db "tower_lr: ", 0
+label_tower_ud db "tower_ud: ", 0
+label_tower_corner db "tower_corner: ", 0
+label_tower_ld db "tower_ld: ", 0
+label_tower_lu db "tower_lu: ", 0
+label_tower_rd db "tower_rd: ", 0
+label_tower_ru db "tower_ru: ", 0
+label_triangles db "triangles: ", 0
+label_triangle_ldl db "triangle_ldl: ", 0
+label_triangle_lul db "triangle_lul: ", 0
+label_triangle_rdr db "triangle_rdr: ", 0
+label_triangle_rur db "triangle_rur: ", 0
 label_anchors db "anchors: ", 0
 label_anchor_left db "anchor_left: ", 0
 label_anchor_down db "anchor_down: ", 0
@@ -3972,7 +4040,7 @@ warp_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
 fake_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
 nps_buffer resd DENSITY_CAP
 equally_spaced_buffer resb DENSITY_CAP
-basic_pattern_counts resb ASSP_BASIC_PATTERNS_SIZE
+default_pattern_counts resd ASSP_PATTERN_COUNT
 anchor_counts resd 4
 facing_counts resd 2
 row_scratch resq ROW_SCRATCH_CAP
