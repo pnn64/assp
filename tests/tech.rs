@@ -8,8 +8,9 @@ use assp::{
     step_parity_bracket_tap_action_costs_4, step_parity_distance_action_costs_4,
     step_parity_elapsed_action_costs_4, step_parity_orientation_action_costs_4,
     step_parity_permutations_4, step_parity_result_state_holds_4,
-    step_parity_result_state_no_holds_4, step_parity_row_key_candidates_4,
-    step_parity_row_transitions_4, step_parity_switch_action_costs_4,
+    step_parity_result_state_no_holds_4, step_parity_row_best_candidates_4,
+    step_parity_row_key_candidates_4, step_parity_row_transitions_4,
+    step_parity_switch_action_costs_4,
 };
 use std::collections::HashSet;
 
@@ -651,6 +652,50 @@ fn expected_action_costs(
     out
 }
 
+#[allow(clippy::too_many_arguments)]
+fn expected_best_row_candidates(
+    initial_states: &[StepParityState4],
+    initial_costs: &[f32],
+    note_count: u8,
+    note_mask: u8,
+    hold_mask: u8,
+    mine_mask: u8,
+    side_mask: u8,
+    prev_row_has_live_hold: bool,
+    elapsed: f32,
+) -> Vec<(u32, [u8; 4], StepParityState4, [i8; 5], u32, f32)> {
+    let active_mask = note_mask | hold_mask;
+    let mut out: Vec<(u32, [u8; 4], StepParityState4, [i8; 5], u32, f32)> = Vec::new();
+    for (pred, initial) in initial_states.iter().copied().enumerate() {
+        for placement in expected_permutations_4(active_mask) {
+            let (state, hit, key) =
+                expected_result_state(initial, placement, active_mask, hold_mask);
+            let action = expected_action_costs(
+                initial,
+                state,
+                placement,
+                hit,
+                note_count,
+                active_mask,
+                hold_mask,
+                mine_mask,
+                side_mask,
+                prev_row_has_live_hold,
+                elapsed,
+            );
+            let cost = initial_costs[pred] + action.total;
+            if let Some(existing) = out.iter_mut().find(|candidate| candidate.4 == key) {
+                if cost < existing.5 {
+                    *existing = (pred as u32, placement, state, hit, key, cost);
+                }
+            } else {
+                out.push((pred as u32, placement, state, hit, key, cost));
+            }
+        }
+    }
+    out
+}
+
 #[test]
 fn parses_known_tech_list_like_rssp_core() {
     const KNOWN: &str = concat!(
@@ -810,7 +855,7 @@ fn dedupes_row_candidates_by_state_key_like_rssp_row_map() {
         },
     ];
 
-    let note_mask = 0b0101;
+    let note_mask = 0b0101u8;
     let hold_mask = 0b0000;
     let mut seen = HashSet::new();
     let mut expected = Vec::new();
@@ -839,6 +884,75 @@ fn dedupes_row_candidates_by_state_key_like_rssp_row_map() {
 
     assert!(expected.len() < initial_states.len() * expected_permutations_4(note_mask).len());
     assert_eq!(actual, expected);
+}
+
+#[test]
+fn selects_best_row_candidates_by_state_key_like_rssp_dp() {
+    let initial_states = [StepParityState4::default(), StepParityState4::default()];
+    let initial_costs = [50.0f32, 1.0];
+    let note_mask = 0b0101u8;
+    let hold_mask = 0;
+    let note_count = note_mask.count_ones() as u8;
+    let mine_mask = 0;
+    let side_mask = note_mask & 0b1001;
+    let elapsed = 0.25f32;
+    let expected = expected_best_row_candidates(
+        &initial_states,
+        &initial_costs,
+        note_count,
+        note_mask,
+        hold_mask,
+        mine_mask,
+        side_mask,
+        false,
+        elapsed,
+    );
+
+    let actual: Vec<_> = step_parity_row_best_candidates_4(
+        &initial_states,
+        &initial_costs,
+        note_count,
+        note_mask,
+        hold_mask,
+        mine_mask,
+        side_mask,
+        false,
+        elapsed,
+    )
+    .unwrap()
+    .into_iter()
+    .map(|c| {
+        (
+            c.predecessor,
+            c.transition.placement,
+            c.transition.state,
+            c.transition.hit,
+            c.transition.key,
+            c.cost,
+        )
+    })
+    .collect();
+
+    assert!(actual.iter().all(|candidate| candidate.0 == 1));
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn rejects_row_best_candidates_with_mismatched_costs() {
+    assert!(
+        step_parity_row_best_candidates_4(
+            &[StepParityState4::default()],
+            &[],
+            1,
+            1,
+            0,
+            0,
+            1,
+            false,
+            0.25
+        )
+        .is_none()
+    );
 }
 
 #[test]

@@ -141,6 +141,18 @@ pub struct StepParityActionCosts4 {
     pub total: f32,
 }
 
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct StepParityRowCostCtx4 {
+    pub note_count: u32,
+    pub note_mask: u32,
+    pub hold_mask: u32,
+    pub mine_mask: u32,
+    pub side_mask: u32,
+    pub prev_row_has_live_hold: c_int,
+    pub elapsed_seconds: *const f32,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct StepParityTransition4 {
     pub placement: [u8; 4],
@@ -153,6 +165,13 @@ pub struct StepParityTransition4 {
 pub struct StepParityRowCandidate4 {
     pub predecessor: u32,
     pub transition: StepParityTransition4,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct StepParityScoredRowCandidate4 {
+    pub predecessor: u32,
+    pub transition: StepParityTransition4,
+    pub cost: f32,
 }
 
 #[repr(C)]
@@ -456,6 +475,19 @@ unsafe extern "C" {
         elapsed_seconds: *const f32,
         out: *mut StepParityActionCosts4,
     ) -> c_int;
+    fn assp_step_parity_row_best_candidates_4(
+        initial_states: *const StepParityState4,
+        initial_costs: *const f32,
+        initial_state_count: usize,
+        row_ctx: *const StepParityRowCostCtx4,
+        out_predecessors: *mut u32,
+        out_placements: *mut u8,
+        out_states: *mut StepParityState4,
+        out_hits: *mut i8,
+        out_keys: *mut u32,
+        out_costs: *mut f32,
+        out_cap: usize,
+    ) -> usize;
     fn assp_parse_bpm_map(
         data: *const u8,
         len: usize,
@@ -1274,6 +1306,86 @@ pub fn step_parity_row_key_candidates_4(
                     ],
                     key: keys[i],
                 },
+            })
+            .collect(),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+#[must_use]
+pub fn step_parity_row_best_candidates_4(
+    initial_states: &[StepParityState4],
+    initial_costs: &[f32],
+    note_count: u8,
+    note_mask: u8,
+    hold_mask: u8,
+    mine_mask: u8,
+    side_mask: u8,
+    prev_row_has_live_hold: bool,
+    elapsed_seconds: f32,
+) -> Option<Vec<StepParityScoredRowCandidate4>> {
+    if initial_states.len() != initial_costs.len() {
+        return None;
+    }
+
+    let cap = initial_states.len().saturating_mul(24);
+    let elapsed = elapsed_seconds;
+    let ctx = StepParityRowCostCtx4 {
+        note_count: u32::from(note_count),
+        note_mask: u32::from(note_mask),
+        hold_mask: u32::from(hold_mask),
+        mine_mask: u32::from(mine_mask),
+        side_mask: u32::from(side_mask),
+        prev_row_has_live_hold: c_int::from(prev_row_has_live_hold),
+        elapsed_seconds: &elapsed,
+    };
+    let mut predecessors = vec![0u32; cap];
+    let mut placements = vec![0u8; cap.saturating_mul(4)];
+    let mut states = vec![StepParityState4::default(); cap];
+    let mut hits = vec![0i8; cap.saturating_mul(5)];
+    let mut keys = vec![0u32; cap];
+    let mut costs = vec![0.0f32; cap];
+    let count = unsafe {
+        assp_step_parity_row_best_candidates_4(
+            initial_states.as_ptr(),
+            initial_costs.as_ptr(),
+            initial_states.len(),
+            &ctx,
+            predecessors.as_mut_ptr(),
+            placements.as_mut_ptr(),
+            states.as_mut_ptr(),
+            hits.as_mut_ptr(),
+            keys.as_mut_ptr(),
+            costs.as_mut_ptr(),
+            cap,
+        )
+    };
+    if count == NOT_FOUND {
+        return None;
+    }
+
+    Some(
+        (0..count)
+            .map(|i| StepParityScoredRowCandidate4 {
+                predecessor: predecessors[i],
+                transition: StepParityTransition4 {
+                    placement: [
+                        placements[i * 4],
+                        placements[i * 4 + 1],
+                        placements[i * 4 + 2],
+                        placements[i * 4 + 3],
+                    ],
+                    state: states[i],
+                    hit: [
+                        hits[i * 5],
+                        hits[i * 5 + 1],
+                        hits[i * 5 + 2],
+                        hits[i * 5 + 3],
+                        hits[i * 5 + 4],
+                    ],
+                    key: keys[i],
+                },
+                cost: costs[i],
             })
             .collect(),
     )
@@ -2321,7 +2433,8 @@ mod tests {
     use super::{
         NoteStats, StepParityActionCosts4, StepParityActionFlags4, StepParityBasicCosts4,
         StepParityBracketTapCosts4, StepParityDistanceCosts4, StepParityElapsedCosts4,
-        StepParityOrientationCosts4, StepParityState4, StepParitySwitchCosts4, TechCounts,
+        StepParityOrientationCosts4, StepParityRowCostCtx4, StepParityState4,
+        StepParitySwitchCosts4, TechCounts,
     };
 
     #[test]
@@ -2388,6 +2501,12 @@ mod tests {
     fn step_parity_action_costs4_layout_is_c_abi() {
         assert_eq!(std::mem::size_of::<StepParityActionCosts4>(), 60);
         assert_eq!(std::mem::align_of::<StepParityActionCosts4>(), 4);
+    }
+
+    #[test]
+    fn step_parity_row_cost_ctx4_layout_is_c_abi() {
+        assert_eq!(std::mem::size_of::<StepParityRowCostCtx4>(), 32);
+        assert_eq!(std::mem::align_of::<StepParityRowCostCtx4>(), 8);
     }
 
     #[test]
