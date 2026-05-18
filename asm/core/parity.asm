@@ -6,6 +6,7 @@ global assp_step_parity_result_state_no_holds_4
 global assp_step_parity_result_state_holds_4
 global assp_step_parity_row_transitions_4
 global assp_step_parity_row_key_candidates_4
+global assp_step_parity_action_flags_4
 
 section .text
 
@@ -826,4 +827,106 @@ assp_step_parity_row_key_candidates_4:
     pop rdi
     pop rsi
     pop rbx
+    ret
+
+; rcx = initial assp_step_parity_state4, rdx = result state,
+; r8 = hit[5], r9 = out assp_step_parity_action_flags4.
+; eax = 1 on success, 0 on invalid pointers.
+assp_step_parity_action_flags_4:
+    test rcx, rcx
+    jz .fail
+    test rdx, rdx
+    jz .fail
+    test r8, r8
+    jz .fail
+    test r9, r9
+    jz .fail
+
+    mov dword [r9], 0
+    mov dword [r9 + 3], 0
+
+    movzx eax, byte [rcx + ASSP_STEP_PARITY_STATE4_MOVED_MASK]
+    movzx r10d, byte [rcx + ASSP_STEP_PARITY_STATE4_HOLDING_MASK]
+    not r10d
+    and eax, r10d
+    mov r10d, eax
+
+    test r10b, 3
+    setnz byte [r9 + ASSP_STEP_PARITY_ACTION_FLAGS4_LEFT_MOVED_NOT_HOLDING]
+    test r10b, 12
+    setnz byte [r9 + ASSP_STEP_PARITY_ACTION_FLAGS4_RIGHT_MOVED_NOT_HOLDING]
+
+    movzx eax, byte [rdx + ASSP_STEP_PARITY_STATE4_MOVED_MASK]
+    test al, 3
+    setnz byte [r9 + ASSP_STEP_PARITY_ACTION_FLAGS4_MOVED_LEFT]
+    test al, 12
+    setnz byte [r9 + ASSP_STEP_PARITY_ACTION_FLAGS4_MOVED_RIGHT]
+
+    mov al, [r9 + ASSP_STEP_PARITY_ACTION_FLAGS4_LEFT_MOVED_NOT_HOLDING]
+    and al, [r9 + ASSP_STEP_PARITY_ACTION_FLAGS4_RIGHT_MOVED_NOT_HOLDING]
+    mov [r9 + ASSP_STEP_PARITY_ACTION_FLAGS4_DID_JUMP], al
+
+    test al, al
+    jnz .success
+
+    cmp byte [r9 + ASSP_STEP_PARITY_ACTION_FLAGS4_MOVED_LEFT], 0
+    je .check_right
+    cmp byte [r9 + ASSP_STEP_PARITY_ACTION_FLAGS4_LEFT_MOVED_NOT_HOLDING], 0
+    je .check_right
+    mov r10d, 1
+    call action_check_jack_foot_4
+    test eax, eax
+    jnz .left_jacked
+    mov r10d, 2
+    call action_check_jack_foot_4
+    test eax, eax
+    jz .check_right
+
+.left_jacked:
+    mov byte [r9 + ASSP_STEP_PARITY_ACTION_FLAGS4_JACKED_LEFT], 1
+
+.check_right:
+    cmp byte [r9 + ASSP_STEP_PARITY_ACTION_FLAGS4_MOVED_RIGHT], 0
+    je .success
+    cmp byte [r9 + ASSP_STEP_PARITY_ACTION_FLAGS4_RIGHT_MOVED_NOT_HOLDING], 0
+    je .success
+    mov r10d, 3
+    call action_check_jack_foot_4
+    test eax, eax
+    jnz .right_jacked
+    mov r10d, 4
+    call action_check_jack_foot_4
+    test eax, eax
+    jz .success
+
+.right_jacked:
+    mov byte [r9 + ASSP_STEP_PARITY_ACTION_FLAGS4_JACKED_RIGHT], 1
+
+.success:
+    mov eax, ASSP_TRUE
+    ret
+
+.fail:
+    xor eax, eax
+    ret
+
+; rcx = initial, rdx = result, r8 = hit[5], r10d = foot id.
+; eax = boolean. Clobbers r11.
+action_check_jack_foot_4:
+    movsx eax, byte [r8 + r10]
+    test eax, eax
+    js .no
+    cmp eax, 4
+    jae .no
+    cmp [rcx + ASSP_STEP_PARITY_STATE4_COMBINED + rax], r10b
+    jne .no
+    lea r11d, [r10d - 1]
+    movzx eax, byte [rdx + ASSP_STEP_PARITY_STATE4_HOLDING_MASK]
+    bt eax, r11d
+    jc .no
+    mov eax, ASSP_TRUE
+    ret
+
+.no:
+    xor eax, eax
     ret

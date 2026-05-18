@@ -1,7 +1,8 @@
 use assp::{
-    StepParityState4, TechCounts, calculate_step_tech_counts_from_placements_4,
-    count_step_tech_brackets_minimized_4, count_step_tech_brackets_minimized_8,
-    parse_tech_notation, step_parity_permutations_4, step_parity_result_state_holds_4,
+    StepParityActionFlags4, StepParityState4, TechCounts,
+    calculate_step_tech_counts_from_placements_4, count_step_tech_brackets_minimized_4,
+    count_step_tech_brackets_minimized_8, parse_tech_notation, step_parity_action_flags_4,
+    step_parity_permutations_4, step_parity_result_state_holds_4,
     step_parity_result_state_no_holds_4, step_parity_row_key_candidates_4,
     step_parity_row_transitions_4,
 };
@@ -166,6 +167,40 @@ fn expected_result_state(
         hit,
         key,
     )
+}
+
+fn expected_action_flags(
+    initial: StepParityState4,
+    result: StepParityState4,
+    hit: [i8; 5],
+) -> StepParityActionFlags4 {
+    let left_moved_not_holding = initial.moved_mask & !initial.holding_mask & 0b0011 != 0;
+    let right_moved_not_holding = initial.moved_mask & !initial.holding_mask & 0b1100 != 0;
+    let moved_left = result.moved_mask & 0b0011 != 0;
+    let moved_right = result.moved_mask & 0b1100 != 0;
+    let did_jump = left_moved_not_holding && right_moved_not_holding;
+
+    let did_jack = |heel: u8, toe: u8, moved: bool, moved_not_holding: bool| {
+        if did_jump || !moved || !moved_not_holding {
+            return false;
+        }
+        [heel, toe].into_iter().any(|foot| {
+            let col = hit[foot as usize];
+            col >= 0
+                && initial.combined_columns[col as usize] == foot
+                && result.holding_mask & (1 << (foot - 1)) == 0
+        })
+    };
+
+    StepParityActionFlags4 {
+        moved_left: u8::from(moved_left),
+        moved_right: u8::from(moved_right),
+        did_jump: u8::from(did_jump),
+        jacked_left: u8::from(did_jack(1, 2, moved_left, left_moved_not_holding)),
+        jacked_right: u8::from(did_jack(3, 4, moved_right, right_moved_not_holding)),
+        left_moved_not_holding: u8::from(left_moved_not_holding),
+        right_moved_not_holding: u8::from(right_moved_not_holding),
+    }
 }
 
 #[test]
@@ -356,6 +391,65 @@ fn dedupes_row_candidates_by_state_key_like_rssp_row_map() {
 
     assert!(expected.len() < initial_states.len() * expected_permutations_4(note_mask).len());
     assert_eq!(actual, expected);
+}
+
+#[test]
+fn calculates_action_flags_like_rssp_cost_prelude() {
+    let cases = [
+        (
+            StepParityState4 {
+                combined_columns: [1, 0, 0, 0],
+                moved_mask: 0b0001,
+                ..StepParityState4::default()
+            },
+            [1, 0, 0, 0],
+            0b0001,
+            0,
+        ),
+        (
+            StepParityState4 {
+                combined_columns: [1, 0, 3, 0],
+                moved_mask: 0b0101,
+                ..StepParityState4::default()
+            },
+            [1, 0, 3, 0],
+            0b0101,
+            0,
+        ),
+        (
+            StepParityState4 {
+                combined_columns: [0, 0, 3, 0],
+                moved_mask: 0b0100,
+                holding_mask: 0b0100,
+                ..StepParityState4::default()
+            },
+            [0, 0, 3, 0],
+            0b0100,
+            0b0100,
+        ),
+        (
+            StepParityState4 {
+                combined_columns: [0, 0, 3, 0],
+                moved_mask: 0b0100,
+                ..StepParityState4::default()
+            },
+            [0, 0, 3, 0],
+            0b0100,
+            0,
+        ),
+    ];
+
+    for (initial, placement, active_mask, hold_mask) in cases {
+        let (result, hit, _) = if hold_mask == 0 {
+            step_parity_result_state_no_holds_4(&initial, &placement, active_mask).unwrap()
+        } else {
+            step_parity_result_state_holds_4(&initial, &placement, active_mask, hold_mask).unwrap()
+        };
+        assert_eq!(
+            step_parity_action_flags_4(&initial, &result, &hit).unwrap(),
+            expected_action_flags(initial, result, hit)
+        );
+    }
 }
 
 #[test]

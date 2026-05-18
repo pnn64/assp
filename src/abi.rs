@@ -58,6 +58,18 @@ pub struct StepParityState4 {
     pub holding_mask: u8,
 }
 
+#[repr(C)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct StepParityActionFlags4 {
+    pub moved_left: u8,
+    pub moved_right: u8,
+    pub did_jump: u8,
+    pub jacked_left: u8,
+    pub jacked_right: u8,
+    pub left_moved_not_holding: u8,
+    pub right_moved_not_holding: u8,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct StepParityTransition4 {
     pub placement: [u8; 4],
@@ -308,6 +320,12 @@ unsafe extern "C" {
         out_keys: *mut u32,
         out_cap: usize,
     ) -> usize;
+    fn assp_step_parity_action_flags_4(
+        initial: *const StepParityState4,
+        result: *const StepParityState4,
+        hit: *const i8,
+        out: *mut StepParityActionFlags4,
+    ) -> c_int;
     fn assp_parse_bpm_map(
         data: *const u8,
         len: usize,
@@ -1129,6 +1147,17 @@ pub fn step_parity_row_key_candidates_4(
             })
             .collect(),
     )
+}
+
+#[must_use]
+pub fn step_parity_action_flags_4(
+    initial: &StepParityState4,
+    result: &StepParityState4,
+    hit: &[i8; 5],
+) -> Option<StepParityActionFlags4> {
+    let mut out = StepParityActionFlags4::default();
+    let ok = unsafe { assp_step_parity_action_flags_4(initial, result, hit.as_ptr(), &mut out) };
+    (ok != 0).then_some(out)
 }
 
 #[must_use]
@@ -2004,7 +2033,7 @@ pub fn count_timing_note_stats_no_holds_8(
 
 #[cfg(test)]
 mod tests {
-    use super::{NoteStats, StepParityState4, TechCounts};
+    use super::{NoteStats, StepParityActionFlags4, StepParityState4, TechCounts};
 
     #[test]
     fn note_stats_layout_is_c_abi() {
@@ -2022,6 +2051,12 @@ mod tests {
     fn step_parity_state4_layout_is_c_abi() {
         assert_eq!(std::mem::size_of::<StepParityState4>(), 12);
         assert_eq!(std::mem::align_of::<StepParityState4>(), 1);
+    }
+
+    #[test]
+    fn step_parity_action_flags4_layout_is_c_abi() {
+        assert_eq!(std::mem::size_of::<StepParityActionFlags4>(), 7);
+        assert_eq!(std::mem::align_of::<StepParityActionFlags4>(), 1);
     }
 
     #[test]

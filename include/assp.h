@@ -120,6 +120,16 @@ typedef struct assp_step_parity_state4 {
     uint8_t holding_mask;
 } assp_step_parity_state4;
 
+typedef struct assp_step_parity_action_flags4 {
+    uint8_t moved_left;
+    uint8_t moved_right;
+    uint8_t did_jump;
+    uint8_t jacked_left;
+    uint8_t jacked_right;
+    uint8_t left_moved_not_holding;
+    uint8_t right_moved_not_holding;
+} assp_step_parity_action_flags4;
+
 typedef struct assp_chart_ref {
     const uint8_t *note_data;
     size_t note_data_len;
@@ -369,6 +379,12 @@ size_t assp_step_parity_row_key_candidates_4(
     int8_t *out_hits,
     uint32_t *out_keys,
     size_t out_cap
+);
+int32_t assp_step_parity_action_flags_4(
+    const assp_step_parity_state4 *initial,
+    const assp_step_parity_state4 *result,
+    const int8_t *hit,
+    assp_step_parity_action_flags4 *out
 );
 size_t assp_parse_bpm_map(
     const uint8_t *data,
