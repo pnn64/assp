@@ -4,6 +4,7 @@ default rel
 global assp_trim_ascii_bytes
 global assp_normalize_label_tag
 global assp_resolve_display_bpm
+global assp_chart_name_tag_allowed
 global assp_steps_timing_allowed
 
 section .text
@@ -98,6 +99,112 @@ assp_steps_timing_allowed:
     test r8d, r8d
     jnz .true
     cmp edx, 7
+    jae .true
+
+.false:
+    xor eax, eax
+    ret
+
+.true:
+    mov eax, ASSP_TRUE
+    ret
+
+; rcx = #VERSION bytes, rdx = len, r8d = nonzero when the file is .sm.
+; eax = 1 when RSSP keeps #CHARTNAME/#DESCRIPTION as modern SSC fields.
+assp_chart_name_tag_allowed:
+    test r8d, r8d
+    jnz .true
+    test rdx, rdx
+    jz .true
+    test rcx, rcx
+    jz .true
+
+    mov r10, rcx
+    lea r11, [rcx + rdx]
+
+.trim_left:
+    cmp r10, r11
+    jae .true
+    cmp byte [r10], ' '
+    ja .trim_right
+    inc r10
+    jmp .trim_left
+
+.trim_right:
+    cmp r11, r10
+    jbe .true
+    cmp byte [r11 - 1], ' '
+    ja .sign
+    dec r11
+    jmp .trim_right
+
+.sign:
+    cmp byte [r10], '+'
+    jne .not_plus
+    inc r10
+    cmp r10, r11
+    jae .true
+    jmp .init
+
+.not_plus:
+    cmp byte [r10], '-'
+    je .false
+
+.init:
+    xor r8d, r8d
+    xor r9d, r9d
+    xor edx, edx
+    xor ecx, ecx
+
+.int_loop:
+    cmp r10, r11
+    jae .compare
+    movzx eax, byte [r10]
+    cmp al, '0'
+    jb .maybe_dot
+    cmp al, '9'
+    ja .true
+    mov r9d, ASSP_TRUE
+    cmp al, '0'
+    je .next_int
+    mov r8d, ASSP_TRUE
+.next_int:
+    inc r10
+    jmp .int_loop
+
+.maybe_dot:
+    cmp al, '.'
+    jne .true
+    inc r10
+
+.frac_loop:
+    cmp r10, r11
+    jae .compare
+    movzx eax, byte [r10]
+    cmp al, '0'
+    jb .true
+    cmp al, '9'
+    ja .true
+    mov r9d, ASSP_TRUE
+    cmp ecx, 2
+    jae .next_frac
+    sub eax, '0'
+    test ecx, ecx
+    jnz .second_frac
+    imul eax, eax, 10
+.second_frac:
+    add edx, eax
+    inc ecx
+.next_frac:
+    inc r10
+    jmp .frac_loop
+
+.compare:
+    test r9d, r9d
+    jz .true
+    test r8d, r8d
+    jnz .true
+    cmp edx, 74
     jae .true
 
 .false:

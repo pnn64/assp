@@ -6,6 +6,8 @@
 
 #NOTEDATA:;
 #STEPSTYPE:dance-single;
+#DESCRIPTION:legacy desc;
+#CHARTNAME:modern chart name;
 #DIFFICULTY:Challenge;
 #METER:1;
 #STOPS:2.000=1.000;

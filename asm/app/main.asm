@@ -57,6 +57,7 @@ extern assp_parse_bpm_map
 extern assp_parse_offset_ms
 extern assp_parse_tech_notation
 extern assp_normalize_label_tag
+extern assp_chart_name_tag_allowed
 extern assp_resolve_display_bpm
 extern assp_steps_timing_allowed
 extern assp_trim_ascii_bytes
@@ -1547,6 +1548,7 @@ prepare_global_metadata:
     mov qword [version_slice + ASSP_BYTE_SLICE_LEN], 0
     mov qword [timing_format_sm], 0
     mov qword [timing_allow_steps], 0
+    mov qword [chart_name_tag_allowed], 0
     mov qword [global_attacks_slice + ASSP_BYTE_SLICE_PTR], 0
     mov qword [global_attacks_slice + ASSP_BYTE_SLICE_LEN], 0
     mov qword [global_display_bpm_slice + ASSP_BYTE_SLICE_PTR], 0
@@ -1687,6 +1689,11 @@ prepare_global_metadata:
     mov r8d, eax
     call assp_steps_timing_allowed
     mov [timing_allow_steps], rax
+    mov rcx, [version_slice + ASSP_BYTE_SLICE_PTR]
+    mov rdx, [version_slice + ASSP_BYTE_SLICE_LEN]
+    mov r8d, [timing_format_sm]
+    call assp_chart_name_tag_allowed
+    mov [chart_name_tag_allowed], rax
 
     lea rcx, [file_buffer]
     mov rdx, [file_len]
@@ -1987,8 +1994,15 @@ prepare_tech_notation:
     mov qword [tech_notation_len], 0
     mov rcx, [step_artist_slice + ASSP_BYTE_SLICE_PTR]
     mov rdx, [step_artist_slice + ASSP_BYTE_SLICE_LEN]
+    cmp qword [chart_name_tag_allowed], 0
+    je .legacy_description
     mov r8, [chart_info + ASSP_CHART_INFO_DESC_PTR]
     mov r9, [chart_info + ASSP_CHART_INFO_DESC_LEN]
+    jmp .parse
+.legacy_description:
+    lea r8, [newline]
+    xor r9d, r9d
+.parse:
     lea rax, [tech_notation_buffer]
     mov [rsp + 32], rax
     mov qword [rsp + 40], TECH_BUFFER_CAP
@@ -2204,6 +2218,9 @@ print_report:
     lea rcx, [label_steps_timing_allowed]
     mov rdx, [timing_allow_steps]
     call print_field
+    lea rcx, [label_chart_name_tag_allowed]
+    mov rdx, [chart_name_tag_allowed]
+    call print_field
 
     lea rcx, [label_chart]
     mov rdx, [chart_index]
@@ -2225,12 +2242,26 @@ print_report:
     mov r8, [chart_info + ASSP_CHART_INFO_METER_LEN]
     call print_slice_field
     lea rcx, [label_description]
+    cmp qword [chart_name_tag_allowed], 0
+    je .legacy_description
     mov rdx, [chart_info + ASSP_CHART_INFO_DESC_PTR]
     mov r8, [chart_info + ASSP_CHART_INFO_DESC_LEN]
+    jmp .print_description
+.legacy_description:
+    lea rdx, [newline]
+    xor r8d, r8d
+.print_description:
     call print_slice_field
     lea rcx, [label_chart_name]
+    cmp qword [chart_name_tag_allowed], 0
+    je .legacy_chart_name
     mov rdx, [chart_name_slice + ASSP_BYTE_SLICE_PTR]
     mov r8, [chart_name_slice + ASSP_BYTE_SLICE_LEN]
+    jmp .print_chart_name
+.legacy_chart_name:
+    mov rdx, [chart_info + ASSP_CHART_INFO_DESC_PTR]
+    mov r8, [chart_info + ASSP_CHART_INFO_DESC_LEN]
+.print_chart_name:
     call print_slice_field
     lea rcx, [label_step_artist]
     mov rdx, [step_artist_slice + ASSP_BYTE_SLICE_PTR]
@@ -3375,6 +3406,7 @@ label_sample_length db "sample_length: ", 0
 label_version db "version: ", 0
 label_timing_format_sm db "timing_format_sm: ", 0
 label_steps_timing_allowed db "steps_timing_allowed: ", 0
+label_chart_name_tag_allowed db "chart_name_tag_allowed: ", 0
 label_charts db "charts: ", 0
 label_chart db "chart: ", 0
 label_step_type db "step_type: ", 0
@@ -3662,6 +3694,7 @@ timing_fakes resq 1
 chart_has_own_timing resq 1
 timing_format_sm resq 1
 timing_allow_steps resq 1
+chart_name_tag_allowed resq 1
 duration_ms resq 1
 hash_pair resb 32
 tech_notation_buffer resb TECH_BUFFER_CAP

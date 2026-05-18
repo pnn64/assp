@@ -1,4 +1,7 @@
-use assp::{find_global_tag, normalize_label_tag, steps_timing_allowed, trim_ascii_bytes};
+use assp::{
+    chart_name_tag_allowed, find_global_tag, normalize_label_tag, steps_timing_allowed,
+    trim_ascii_bytes,
+};
 use rssp_core::parse::{clean_tag, decode_bytes, unescape_tag};
 
 fn first_param(bytes: &[u8]) -> &[u8] {
@@ -75,4 +78,17 @@ fn gates_step_timing_like_rssp_core() {
     assert!(!steps_timing_allowed(Some(b"0.69"), false));
     assert!(!steps_timing_allowed(Some(b"0.6999"), false));
     assert!(!steps_timing_allowed(Some(b"0.8x"), false));
+}
+
+#[test]
+fn gates_chart_name_tags_like_rssp_core() {
+    assert!(chart_name_tag_allowed(None, true));
+    assert!(chart_name_tag_allowed(None, false));
+    assert!(chart_name_tag_allowed(Some(b"0.74"), false));
+    assert!(chart_name_tag_allowed(Some(b"0.83"), false));
+    assert!(chart_name_tag_allowed(Some(b"0.8"), false));
+    assert!(chart_name_tag_allowed(Some(b"0.8x"), false));
+    assert!(!chart_name_tag_allowed(Some(b"0.73"), false));
+    assert!(!chart_name_tag_allowed(Some(b"0.7"), false));
+    assert!(!chart_name_tag_allowed(Some(b"0"), false));
 }
