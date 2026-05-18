@@ -12,6 +12,7 @@ extern ReadFile
 extern WriteFile
 
 extern assp_chart_hash_pair
+extern assp_md5_hex
 extern assp_count_mines_nonfake_4
 extern assp_count_mines_nonfake_8
 extern assp_count_gimmick_scroll_segments
@@ -97,6 +98,10 @@ start:
     call read_file
     test eax, eax
     jz fail_read
+
+    call prepare_file_md5
+    test eax, eax
+    jz fail_hash
 
     cmp qword [list_mode], 0
     je .run_chart
@@ -354,6 +359,26 @@ fail_tech:
     call print_z
     mov ecx, 1
     call ExitProcess
+
+prepare_file_md5:
+    sub rsp, 40
+
+    lea rcx, [file_buffer]
+    mov rdx, [file_len]
+    lea r8, [file_md5_hash]
+    call assp_md5_hex
+    test eax, eax
+    jz .fail
+
+    mov eax, ASSP_TRUE
+    jmp .done
+
+.fail:
+    xor eax, eax
+
+.done:
+    add rsp, 40
+    ret
 
 init_stdout:
     sub rsp, 40
@@ -2626,6 +2651,10 @@ print_report:
     lea rdx, [display_bpm_slice]
     lea r8, [global_display_bpm_slice]
     call print_chart_or_global_tag_by_len
+    lea rcx, [label_file_md5_hash]
+    lea rdx, [file_md5_hash]
+    mov r8d, 32
+    call print_slice_field
     lea rcx, [label_hash]
     lea rdx, [hash_pair]
     mov r8d, 16
@@ -4326,6 +4355,7 @@ label_selected_normalized_speeds db "selected_normalized_speeds: ", 0
 label_selected_normalized_scrolls db "selected_normalized_scrolls: ", 0
 label_global_display_bpm db "global_display_bpm: ", 0
 label_selected_display_bpm db "selected_display_bpm: ", 0
+label_file_md5_hash db "file_md5_hash: ", 0
 label_offset db "offset: ", 0
 label_chart_offset_seconds db "chart_offset_seconds: ", 0
 label_beat0_offset_seconds db "beat0_offset_seconds: ", 0
@@ -4709,6 +4739,7 @@ timing_format_sm resq 1
 timing_allow_steps resq 1
 chart_name_tag_allowed resq 1
 duration_ms resq 1
+file_md5_hash resb 32
 hash_pair resb 32
 tech_notation_buffer resb TECH_BUFFER_CAP
 normalized_time_signatures_buffer resb METADATA_BUFFER_CAP

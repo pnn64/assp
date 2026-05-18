@@ -70,6 +70,7 @@ The first implemented pieces are:
 - `assp_minimize_chart_8`
 - `assp_sha1_short_hex2`
 - `assp_chart_hash_pair`
+- `assp_md5_hex`
 - `assp_stream_counts_from_densities`
 - `assp_stream_percentages_centi`
 - `assp_stream_segments_from_densities`
@@ -142,6 +143,8 @@ note data using caller-provided scratch storage.
 concatenated byte slices, used by chart hashing.
 `assp_chart_hash_pair` writes RSSP's normal and BPM-neutral short SHA1 hashes
 for minimized chart data.
+`assp_md5_hex` writes a full lowercase MD5 hex digest for RSSP-compatible
+`file_md5_hash` report output.
 `assp_find_global_bpms` and `assp_find_chart_bpms_by_index` select the raw BPM
 tag used for chart hashing, and `assp_normalize_float_digits` converts timing
 maps to RSSP's three-decimal hash input format.
@@ -324,7 +327,7 @@ parsed tech notation, chart-local
 music/attacks/timing metadata tags, chart-local raw timing tags, global
 attacks/display-BPM tags, resolved display BPM ranges, global raw timing tags,
 RSSP-style chart hashes, normalized global BPM data, normalized global timing
-maps, normalized global/selected timing metadata, normalized hash BPMs,
+maps, file MD5 hashes, normalized global/selected timing metadata, normalized hash BPMs,
 normalized selected timing maps, RSSP-compatible hash and step-artist aliases,
 formatted timing BPM/stop/delay/warp/fake maps, global and selected timing
 metadata tags, selected raw timing tags, chart display-BPM tags,

@@ -1,5 +1,5 @@
 use assp::{
-    chart_hash_pair, find_bpms_for_chart, find_chart_by_index, minimize_chart_4,
+    chart_hash_pair, find_bpms_for_chart, find_chart_by_index, md5_hex, minimize_chart_4,
     normalize_float_digits, sha1_short_hex2,
 };
 use rssp_core::hash::{compute_chart_hash, compute_chart_hash_pair};
@@ -50,6 +50,23 @@ fn sha1_short_hex_matches_known_vectors() {
     assert_eq!(
         std::str::from_utf8(&sha1_short_hex2(b"abc", b"").unwrap()).unwrap(),
         "a9993e364706816a"
+    );
+}
+
+#[test]
+fn md5_hex_matches_known_vectors() {
+    assert_eq!(
+        std::str::from_utf8(&md5_hex(b"").unwrap()).unwrap(),
+        "d41d8cd98f00b204e9800998ecf8427e"
+    );
+    assert_eq!(
+        std::str::from_utf8(&md5_hex(b"abc").unwrap()).unwrap(),
+        "900150983cd24fb0d6963f7d28e17f72"
+    );
+    assert_eq!(
+        std::str::from_utf8(&md5_hex(b"The quick brown fox jumps over the lazy dog").unwrap())
+            .unwrap(),
+        "9e107d9d372bb6826bd81d3542a419d6"
     );
 }
 

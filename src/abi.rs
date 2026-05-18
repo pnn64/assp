@@ -366,6 +366,7 @@ unsafe extern "C" {
         normalized_bpms_len: usize,
         out32: *mut u8,
     ) -> c_int;
+    fn assp_md5_hex(data: *const u8, len: usize, out32: *mut u8) -> c_int;
     fn assp_stream_counts_from_densities(
         densities: *const u32,
         len: usize,
@@ -1304,6 +1305,13 @@ pub fn chart_hash_pair(chart_data: &[u8], normalized_bpms: &[u8]) -> Option<([u8
     hash.copy_from_slice(&out[..16]);
     neutral.copy_from_slice(&out[16..]);
     Some((hash, neutral))
+}
+
+#[must_use]
+pub fn md5_hex(data: &[u8]) -> Option<[u8; 32]> {
+    let mut out = [0; 32];
+    let ok = unsafe { assp_md5_hex(data.as_ptr(), data.len(), out.as_mut_ptr()) };
+    (ok != 0).then_some(out)
 }
 
 #[must_use]
