@@ -1801,6 +1801,34 @@ print_report:
     lea rdx, [fake_segment_buffer]
     mov r8, [fake_segment_count]
     call print_bpm_segments_field
+    cmp qword [chart_has_own_timing], 0
+    je .selected_speeds_global
+    lea rcx, [label_selected_speeds]
+    mov rdx, [chart_timing_tags + ASSP_TIMING_TAGS_SPEEDS + ASSP_BYTE_SLICE_PTR]
+    mov r8, [chart_timing_tags + ASSP_TIMING_TAGS_SPEEDS + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+    jmp .selected_scrolls
+.selected_speeds_global:
+    lea rcx, [label_selected_speeds]
+    mov rdx, [global_timing_tags + ASSP_TIMING_TAGS_SPEEDS + ASSP_BYTE_SLICE_PTR]
+    mov r8, [global_timing_tags + ASSP_TIMING_TAGS_SPEEDS + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+
+.selected_scrolls:
+    cmp qword [chart_has_own_timing], 0
+    je .selected_scrolls_global
+    lea rcx, [label_selected_scrolls]
+    mov rdx, [chart_timing_tags + ASSP_TIMING_TAGS_SCROLLS + ASSP_BYTE_SLICE_PTR]
+    mov r8, [chart_timing_tags + ASSP_TIMING_TAGS_SCROLLS + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+    jmp .selected_scrolls_done
+.selected_scrolls_global:
+    lea rcx, [label_selected_scrolls]
+    mov rdx, [global_timing_tags + ASSP_TIMING_TAGS_SCROLLS + ASSP_BYTE_SLICE_PTR]
+    mov r8, [global_timing_tags + ASSP_TIMING_TAGS_SCROLLS + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+
+.selected_scrolls_done:
     lea rcx, [label_offset]
     mov rdx, [offset_ms]
     call print_fixed3_field
@@ -2566,6 +2594,8 @@ label_stops_formatted db "stops_formatted: ", 0
 label_delays_formatted db "delays_formatted: ", 0
 label_warps_formatted db "warps_formatted: ", 0
 label_fakes_formatted db "fakes_formatted: ", 0
+label_selected_speeds db "selected_speeds: ", 0
+label_selected_scrolls db "selected_scrolls: ", 0
 label_offset db "offset: ", 0
 label_chart_offset_seconds db "chart_offset_seconds: ", 0
 label_beat0_offset_seconds db "beat0_offset_seconds: ", 0
