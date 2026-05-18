@@ -31,6 +31,18 @@ fn assert_brackets_match_rssp(data: &[u8], lanes: usize, counts: TechCounts) {
     assert_only_brackets(counts, expected.brackets);
 }
 
+fn assert_basic_tech_match_rssp(data: &[u8], lanes: usize, counts: TechCounts) {
+    let expected = rssp_core::step_parity::analyze_lanes(data, &[(0.0, 120.0)], 0.0, lanes);
+    assert_eq!(
+        counts,
+        TechCounts {
+            crossovers: expected.crossovers,
+            brackets: expected.brackets,
+            ..TechCounts::default()
+        }
+    );
+}
+
 #[test]
 fn parses_known_tech_list_like_rssp_core() {
     const KNOWN: &str = concat!(
@@ -70,6 +82,32 @@ fn counts_single_panel_timing_hold_fixture_bracket_like_rssp_core() {
     let data = b"2000\n0000\n0100\n3000\n,\n4000\n0000\n0011\n3000\n";
     let counts = count_step_tech_brackets_minimized_4(data).unwrap();
     assert_brackets_match_rssp(data, 4, counts);
+}
+
+#[test]
+fn counts_single_panel_three_row_crossovers_like_rssp_core() {
+    for data in [
+        b"1000\n0100\n0001\n".as_slice(),
+        b"0001\n0100\n1000\n".as_slice(),
+        b"1000\n0010\n0001\n".as_slice(),
+        b"0001\n0010\n1000\n".as_slice(),
+    ] {
+        let counts = count_step_tech_brackets_minimized_4(data).unwrap();
+        assert_basic_tech_match_rssp(data, 4, counts);
+    }
+}
+
+#[test]
+fn skips_single_panel_non_crossover_tap_patterns_like_rssp_core() {
+    for data in [
+        b"0100\n1000\n0001\n".as_slice(),
+        b"0010\n0001\n1000\n".as_slice(),
+        b"1000\n0100\n0010\n0001\n".as_slice(),
+        b"0001\n0010\n0100\n1000\n".as_slice(),
+    ] {
+        let counts = count_step_tech_brackets_minimized_4(data).unwrap();
+        assert_basic_tech_match_rssp(data, 4, counts);
+    }
 }
 
 #[test]

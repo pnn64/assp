@@ -69,6 +69,7 @@ section .text
     push r13
     push r14
     push r15
+    sub rsp, 48
 
     test r8, r8
     jz %%fail
@@ -89,6 +90,11 @@ section .text
     lea rdi, [rcx + rdx]
     xor r12d, r12d
     xor r15d, r15d
+    mov qword [rsp], 0
+    mov qword [rsp + 8], 0
+    mov qword [rsp + 16], 0
+    mov qword [rsp + 24], 0
+    mov qword [rsp + 32], 0
 
 %%line_loop:
     cmp rsi, rdi
@@ -136,6 +142,40 @@ section .text
 
     test r13d, r13d
     jz %%update_holds
+    mov eax, [rsp]
+    inc eax
+    mov [rsp], eax
+    cmp eax, 1
+    je %%simple_store_first
+    cmp eax, 2
+    je %%simple_store_second
+    cmp eax, 3
+    je %%simple_store_third
+    mov dword [rsp + 8], ASSP_TRUE
+    jmp %%simple_check_row
+
+%%simple_store_first:
+    mov [rsp + 16], r13d
+    jmp %%simple_check_row
+
+%%simple_store_second:
+    mov [rsp + 24], r13d
+    jmp %%simple_check_row
+
+%%simple_store_third:
+    mov [rsp + 32], r13d
+
+%%simple_check_row:
+    cmp r14d, 1
+    je %%simple_check_hold
+    mov dword [rsp + 8], ASSP_TRUE
+
+%%simple_check_hold:
+    test r15d, r15d
+    jz %%seen_check
+    mov dword [rsp + 8], ASSP_TRUE
+
+%%seen_check:
     test r12d, r12d
     jnz %%count_row
     mov r12d, ASSP_TRUE
@@ -161,6 +201,9 @@ section .text
     update_hold_lane 6, 64
     update_hold_lane 7, 128
 %endif
+    test r15d, r15d
+    jz %%row_done
+    mov dword [rsp + 8], ASSP_TRUE
 
 %%row_done:
     add rsi, %2
@@ -179,6 +222,19 @@ section .text
     jmp %%skip_to_next_line
 
 %%success:
+%if %2 == 4
+    cmp dword [rsp], 3
+    jne %%return_true
+    cmp dword [rsp + 8], 0
+    jne %%return_true
+    mov ecx, [rsp + 16]
+    mov edx, [rsp + 24]
+    mov r8d, [rsp + 32]
+    call count_simple_crossovers_4
+    add [rbx + ASSP_TECH_COUNTS_CROSSOVERS], eax
+%endif
+
+%%return_true:
     mov eax, ASSP_TRUE
     jmp %%done
 
@@ -186,6 +242,7 @@ section .text
     xor eax, eax
 
 %%done:
+    add rsp, 48
     pop r15
     pop r14
     pop r13
@@ -198,6 +255,40 @@ section .text
 
 ASSP_COUNT_STEP_TECH_BRACKETS_MINIMIZED assp_count_step_tech_brackets_minimized_4, 4, count_brackets_4
 ASSP_COUNT_STEP_TECH_BRACKETS_MINIMIZED assp_count_step_tech_brackets_minimized_8, 8, count_brackets_8
+
+; ecx = first single-note mask, edx = second mask, r8d = third mask.
+; eax = 1 when the exact three-row tap sequence is a basic single-panel crossover.
+count_simple_crossovers_4:
+    xor eax, eax
+    cmp ecx, 1
+    je .left_to_right
+    cmp ecx, 8
+    je .right_to_left
+    ret
+
+.left_to_right:
+    cmp r8d, 8
+    jne .done
+    cmp edx, 2
+    je .found
+    cmp edx, 4
+    je .found
+    ret
+
+.right_to_left:
+    cmp r8d, 1
+    jne .done
+    cmp edx, 2
+    je .found
+    cmp edx, 4
+    je .found
+    ret
+
+.found:
+    mov eax, 1
+
+.done:
+    ret
 
 ; ecx = active note mask, eax = disjoint bracketable pair count.
 count_brackets_4:
