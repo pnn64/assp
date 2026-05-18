@@ -1650,6 +1650,10 @@ print_report:
     mov rdx, [step_artist_slice + ASSP_BYTE_SLICE_PTR]
     mov r8, [step_artist_slice + ASSP_BYTE_SLICE_LEN]
     call print_slice_field
+    lea rcx, [label_step_artists]
+    mov rdx, [step_artist_slice + ASSP_BYTE_SLICE_PTR]
+    mov r8, [step_artist_slice + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
     lea rcx, [label_chart_music]
     mov rdx, [chart_music_slice + ASSP_BYTE_SLICE_PTR]
     mov r8, [chart_music_slice + ASSP_BYTE_SLICE_LEN]
@@ -1678,7 +1682,23 @@ print_report:
     lea rdx, [hash_pair]
     mov r8d, 16
     call print_slice_field
+    lea rcx, [label_sha1]
+    lea rdx, [hash_pair]
+    mov r8d, 16
+    call print_slice_field
+    lea rcx, [label_sha1_hash]
+    lea rdx, [hash_pair]
+    mov r8d, 16
+    call print_slice_field
     lea rcx, [label_bpm_neutral_hash]
+    lea rdx, [hash_pair + 16]
+    mov r8d, 16
+    call print_slice_field
+    lea rcx, [label_bpm_neutral_sha1]
+    lea rdx, [hash_pair + 16]
+    mov r8d, 16
+    call print_slice_field
+    lea rcx, [label_bpm_neutral_sha1_hash]
     lea rdx, [hash_pair + 16]
     mov r8d, 16
     call print_slice_field
@@ -2241,6 +2261,7 @@ label_rating db "rating: ", 0
 label_description db "description: ", 0
 label_chart_name db "chart_name: ", 0
 label_step_artist db "step_artist: ", 0
+label_step_artists db "step_artists: ", 0
 label_chart_music db "chart_music: ", 0
 label_chart_attacks db "chart_attacks: ", 0
 label_chart_time_signatures db "chart_time_signatures: ", 0
@@ -2248,7 +2269,11 @@ label_chart_labels db "chart_labels: ", 0
 label_chart_tickcounts db "chart_tickcounts: ", 0
 label_chart_combos db "chart_combos: ", 0
 label_hash db "hash: ", 0
+label_sha1 db "sha1: ", 0
+label_sha1_hash db "sha1_hash: ", 0
 label_bpm_neutral_hash db "bpm_neutral_hash: ", 0
+label_bpm_neutral_sha1 db "bpm_neutral_sha1: ", 0
+label_bpm_neutral_sha1_hash db "bpm_neutral_sha1_hash: ", 0
 label_hash_bpms db "hash_bpms: ", 0
 label_offset db "offset: ", 0
 label_chart_offset_seconds db "chart_offset_seconds: ", 0
