@@ -110,6 +110,9 @@ start:
     mov [chart_lanes], rax
 
     call prepare_global_metadata
+    call prepare_global_bpm_data
+    test eax, eax
+    jz fail_hash
     call prepare_chart_metadata
 
     call prepare_hash
@@ -534,6 +537,42 @@ print_chart_list:
 .done:
     add rsp, 40
     pop r12
+    ret
+
+prepare_global_bpm_data:
+    sub rsp, 40
+
+    mov qword [global_bpms_len], 0
+    mov qword [bpms_slice + ASSP_BYTE_SLICE_PTR], 0
+    mov qword [bpms_slice + ASSP_BYTE_SLICE_LEN], 0
+
+    lea rcx, [file_buffer]
+    mov rdx, [file_len]
+    lea r8, [bpms_slice]
+    call assp_find_global_bpms
+    test eax, eax
+    jz .success
+
+    mov rcx, [bpms_slice + ASSP_BYTE_SLICE_PTR]
+    mov rdx, [bpms_slice + ASSP_BYTE_SLICE_LEN]
+    lea r8, [global_bpm_buffer]
+    mov r9d, BPM_BUFFER_CAP
+    call assp_normalize_float_digits
+    cmp rax, ASSP_NOT_FOUND
+    je .fail
+    cmp rax, BPM_BUFFER_CAP
+    ja .fail
+    mov [global_bpms_len], rax
+
+.success:
+    mov eax, ASSP_TRUE
+    jmp .done
+
+.fail:
+    xor eax, eax
+
+.done:
+    add rsp, 40
     ret
 
 prepare_hash:
@@ -1706,6 +1745,10 @@ print_report:
     lea rdx, [bpm_buffer]
     mov r8, [normalized_bpms_len]
     call print_slice_field
+    lea rcx, [label_bpm_data]
+    lea rdx, [global_bpm_buffer]
+    mov r8, [global_bpms_len]
+    call print_slice_field
     lea rcx, [label_offset]
     mov rdx, [offset_ms]
     call print_fixed3_field
@@ -2315,6 +2358,7 @@ label_bpm_neutral_hash db "bpm_neutral_hash: ", 0
 label_bpm_neutral_sha1 db "bpm_neutral_sha1: ", 0
 label_bpm_neutral_sha1_hash db "bpm_neutral_sha1_hash: ", 0
 label_hash_bpms db "hash_bpms: ", 0
+label_bpm_data db "bpm_data: ", 0
 label_offset db "offset: ", 0
 label_chart_offset_seconds db "chart_offset_seconds: ", 0
 label_chart_has_own_timing db "chart_has_own_timing: ", 0
@@ -2445,6 +2489,7 @@ note_stats resb ASSP_NOTE_STATS_SIZE
 stream_counts resb ASSP_STREAM_COUNTS_SIZE
 num_buffer resb 32
 normalized_bpms_len resq 1
+global_bpms_len resq 1
 bpm_segment_count resq 1
 stop_segment_count resq 1
 delay_segment_count resq 1
@@ -2477,6 +2522,7 @@ chart_has_own_timing resq 1
 duration_ms resq 1
 hash_pair resb 32
 bpm_buffer resb BPM_BUFFER_CAP
+global_bpm_buffer resb BPM_BUFFER_CAP
 bpm_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
 stop_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
 delay_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
