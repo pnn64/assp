@@ -351,11 +351,25 @@ if ($CompareRssp -or $CompareAllCharts -or $CompareFixtures) {
         }
     }
 
+    function Test-TechSliceComparable($techCounts) {
+        if ($null -eq $techCounts) {
+            return $false
+        }
+        return ([int64]$techCounts.crossovers -eq 0) -and
+            ([int64]$techCounts.footswitches -eq 0) -and
+            ([int64]$techCounts.up_footswitches -eq 0) -and
+            ([int64]$techCounts.down_footswitches -eq 0) -and
+            ([int64]$techCounts.sideswitches -eq 0) -and
+            ([int64]$techCounts.jacks -eq 0) -and
+            ([int64]$techCounts.doublesteps -eq 0) -and
+            ([int64]$techCounts.brackets -gt 0)
+    }
+
     $failures = New-Object System.Collections.Generic.List[string]
     foreach ($fixturePath in $fixturePaths) {
         $resolvedFixture = (Resolve-Path $fixturePath).Path
         $fixtureName = Split-Path -Leaf $resolvedFixture
-        $jsonText = & cargo run --quiet --manifest-path $rsspManifest --bin rssp -- $resolvedFixture --json --skip-tech
+        $jsonText = & cargo run --quiet --manifest-path $rsspManifest --bin rssp -- $resolvedFixture --json
         if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
         }
@@ -402,6 +416,16 @@ if ($CompareRssp -or $CompareAllCharts -or $CompareFixtures) {
             Compare-Text "rating" ([string]$chartJson.chart_info.rating)
             Compare-Text "step_artists" ([string]$chartJson.chart_info.step_artists)
             Compare-Text "tech_notation" ([string]$chartJson.chart_info.tech_notation)
+            if (Test-TechSliceComparable $chartJson.tech_counts) {
+                Compare-Int "crossovers" ([int64]$chartJson.tech_counts.crossovers)
+                Compare-Int "footswitches" ([int64]$chartJson.tech_counts.footswitches)
+                Compare-Int "up_footswitches" ([int64]$chartJson.tech_counts.up_footswitches)
+                Compare-Int "down_footswitches" ([int64]$chartJson.tech_counts.down_footswitches)
+                Compare-Int "sideswitches" ([int64]$chartJson.tech_counts.sideswitches)
+                Compare-Int "jacks" ([int64]$chartJson.tech_counts.jacks)
+                Compare-Int "brackets" ([int64]$chartJson.tech_counts.brackets)
+                Compare-Int "doublesteps" ([int64]$chartJson.tech_counts.doublesteps)
+            }
             Compare-Text "sha1" ([string]$chartJson.chart_info.sha1)
             Compare-Text "bpm_neutral_sha1" ([string]$chartJson.chart_info.bpm_neutral_sha1)
 

@@ -1,4 +1,7 @@
-use assp::parse_tech_notation;
+use assp::{
+    TechCounts, count_step_tech_brackets_minimized_4, count_step_tech_brackets_minimized_8,
+    parse_tech_notation,
+};
 
 fn parse(credit: &str, description: &str) -> String {
     String::from_utf8(parse_tech_notation(credit.as_bytes(), description.as_bytes()).unwrap())
@@ -10,6 +13,22 @@ fn assert_matches_rssp(credit: &str, description: &str) {
         parse(credit, description),
         rssp_core::tech::parse_tech_notation(credit, description)
     );
+}
+
+fn assert_only_brackets(counts: TechCounts, brackets: u32) {
+    assert_eq!(
+        counts,
+        TechCounts {
+            brackets,
+            ..TechCounts::default()
+        }
+    );
+}
+
+fn assert_brackets_match_rssp(data: &[u8], lanes: usize, counts: TechCounts) {
+    let expected = rssp_core::step_parity::analyze_lanes(data, &[(0.0, 120.0)], 0.0, lanes);
+    assert_eq!(counts.brackets, expected.brackets);
+    assert_only_brackets(counts, expected.brackets);
 }
 
 #[test]
@@ -44,4 +63,25 @@ fn parses_concatenated_chunks_with_longest_prefixes_like_rssp_core() {
 #[test]
 fn combines_credit_and_description_like_rssp_core() {
     assert_matches_rssp("STR+ FS-", "BXF,24ths 32nds");
+}
+
+#[test]
+fn counts_single_panel_timing_hold_fixture_bracket_like_rssp_core() {
+    let data = b"2000\n0000\n0100\n3000\n,\n4000\n0000\n0011\n3000\n";
+    let counts = count_step_tech_brackets_minimized_4(data).unwrap();
+    assert_brackets_match_rssp(data, 4, counts);
+}
+
+#[test]
+fn skips_single_panel_first_row_brackets_like_rssp_core() {
+    let counts = count_step_tech_brackets_minimized_4(b"0011\n").unwrap();
+    assert_only_brackets(counts, 0);
+}
+
+#[test]
+fn counts_double_panel_timing_hold_fixture_bracket_like_rssp_core() {
+    let data =
+        b"20000000\n00000000\n01000000\n30000000\n,\n00004000\n00000000\n00110000\n00003000\n";
+    let counts = count_step_tech_brackets_minimized_8(data).unwrap();
+    assert_brackets_match_rssp(data, 8, counts);
 }

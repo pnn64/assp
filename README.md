@@ -41,6 +41,8 @@ The first implemented pieces are:
 - `assp_chart_name_tag_allowed`
 - `assp_resolve_difficulty_label`
 - `assp_parse_tech_notation`
+- `assp_count_step_tech_brackets_minimized_4`
+- `assp_count_step_tech_brackets_minimized_8`
 - `assp_parse_bpm_map`
 - `assp_parse_offset_ms`
 - `assp_bpm_display_range`
@@ -171,6 +173,12 @@ STOPS, DELAYS, WARPS, SPEEDS, SCROLLS, and FAKES.
 `assp_parse_tech_notation` extracts RSSP's known compact tech notation tokens
 from chart credit and description text with the same greedy longest-prefix
 rules, `No Tech` skipping, and measure-data filtering.
+`assp_count_step_tech_brackets_minimized_4` and
+`assp_count_step_tech_brackets_minimized_8` start the RSSP step-parity
+tech-count port. They emit the `tech_counts` ABI and currently match bracket
+counts for fixture charts where RSSP reports positive brackets and the other
+parity counters are zero. Full crossovers, footswitches, sideswitches, jacks,
+and doublesteps still require the full parity DP port.
 `assp_chart_owns_timing_by_index` checks the RSSP chart-local timing ownership
 predicate for SSC `#NOTEDATA` blocks.
 `assp_parse_bpm_map` parses BPM timing maps into sorted fixed-point
@@ -349,7 +357,8 @@ built, and only to execute the local RSSP reference CLI. They check chart
 metadata, SHA1 hashes, matrix/tier BPM, NPS summary and per-measure vectors,
 song and chart artist metadata, timing metadata, formatted timing maps,
 breakdown strings, arrow counts, mono/candle stats, default pattern counts,
-gimmick counts, stream metrics, and stream sequence ranges.
+gimmick counts, stream metrics, stream sequence ranges, and the current
+positive bracket-only tech-count slice.
 
 The standalone executable currently scans SSC files for chart metadata and
 `#NOTES:` / `#NOTES2:` tags. The second argument is a zero-based chart index, or
@@ -403,4 +412,4 @@ standalone executable build path.
 2. Bring over RSSP's chart minimization and stat counting.
 3. Add `.sm` / `.ssc` section extraction.
 4. Expand timing extraction beyond BPM tags.
-5. Continue pattern and tech-count parity.
+5. Port the full step-parity DP for remaining tech counts.
