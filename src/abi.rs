@@ -153,6 +153,38 @@ pub struct StepParityRowCostCtx4 {
     pub elapsed_seconds: *const f32,
 }
 
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct StepParityPreparedRows4 {
+    pub note_counts: *const u8,
+    pub tech_masks: *const u8,
+    pub note_masks: *const u8,
+    pub hold_masks: *const u8,
+    pub mine_masks: *const u8,
+    pub prev_row_live_holds: *const u8,
+    pub row_seconds: *const f32,
+    pub row_ms: *const i32,
+    pub row_count: usize,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct StepParityWorkspace4 {
+    pub out_placements: *mut u8,
+    pub out_placement_cap: usize,
+    pub prev_states: *mut StepParityState4,
+    pub prev_costs: *mut f32,
+    pub next_states: *mut StepParityState4,
+    pub next_costs: *mut f32,
+    pub predecessors: *mut u32,
+    pub placements: *mut u8,
+    pub hits: *mut i8,
+    pub keys: *mut u32,
+    pub backtrack_placements: *mut u8,
+    pub backtrack_predecessors: *mut u32,
+    pub state_cap: usize,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct StepParityTransition4 {
     pub placement: [u8; 4],
@@ -510,6 +542,11 @@ unsafe extern "C" {
         backtrack_predecessors: *mut u32,
         state_cap: usize,
     ) -> usize;
+    fn assp_step_parity_count_prepared_rows_4(
+        rows: *const StepParityPreparedRows4,
+        workspace: *mut StepParityWorkspace4,
+        out: *mut TechCounts,
+    ) -> c_int;
     fn assp_parse_bpm_map(
         data: *const u8,
         len: usize,
@@ -1490,6 +1527,81 @@ pub fn step_parity_place_rows_4(
             .map(|row| [row[0], row[1], row[2], row[3]])
             .collect(),
     )
+}
+
+#[must_use]
+pub fn step_parity_count_prepared_rows_4(
+    note_counts: &[u8],
+    tech_masks: &[u8],
+    note_masks: &[u8],
+    hold_masks: &[u8],
+    mine_masks: &[u8],
+    prev_row_live_holds: &[u8],
+    row_seconds: &[f32],
+    row_ms: &[i32],
+    state_cap: usize,
+) -> Option<TechCounts> {
+    let row_count = note_counts.len();
+    if tech_masks.len() != row_count
+        || note_masks.len() != row_count
+        || hold_masks.len() != row_count
+        || mine_masks.len() != row_count
+        || prev_row_live_holds.len() != row_count
+        || row_seconds.len() != row_count
+        || row_ms.len() != row_count
+    {
+        return None;
+    }
+    if row_count != 0 && state_cap == 0 {
+        return None;
+    }
+
+    let output_len = row_count.checked_mul(4)?;
+    let scratch_placements_len = state_cap.checked_mul(4)?;
+    let scratch_hits_len = state_cap.checked_mul(5)?;
+    let backtrack_count = row_count.checked_mul(state_cap)?;
+    let backtrack_placements_len = backtrack_count.checked_mul(4)?;
+
+    let mut out_placements = vec![0u8; output_len];
+    let mut prev_states = vec![StepParityState4::default(); state_cap];
+    let mut prev_costs = vec![0.0f32; state_cap];
+    let mut next_states = vec![StepParityState4::default(); state_cap];
+    let mut next_costs = vec![0.0f32; state_cap];
+    let mut predecessors = vec![0u32; state_cap];
+    let mut placements = vec![0u8; scratch_placements_len];
+    let mut hits = vec![0i8; scratch_hits_len];
+    let mut keys = vec![0u32; state_cap];
+    let mut backtrack_placements = vec![0u8; backtrack_placements_len];
+    let mut backtrack_predecessors = vec![0u32; backtrack_count];
+    let rows = StepParityPreparedRows4 {
+        note_counts: note_counts.as_ptr(),
+        tech_masks: tech_masks.as_ptr(),
+        note_masks: note_masks.as_ptr(),
+        hold_masks: hold_masks.as_ptr(),
+        mine_masks: mine_masks.as_ptr(),
+        prev_row_live_holds: prev_row_live_holds.as_ptr(),
+        row_seconds: row_seconds.as_ptr(),
+        row_ms: row_ms.as_ptr(),
+        row_count,
+    };
+    let mut workspace = StepParityWorkspace4 {
+        out_placements: out_placements.as_mut_ptr(),
+        out_placement_cap: out_placements.len(),
+        prev_states: prev_states.as_mut_ptr(),
+        prev_costs: prev_costs.as_mut_ptr(),
+        next_states: next_states.as_mut_ptr(),
+        next_costs: next_costs.as_mut_ptr(),
+        predecessors: predecessors.as_mut_ptr(),
+        placements: placements.as_mut_ptr(),
+        hits: hits.as_mut_ptr(),
+        keys: keys.as_mut_ptr(),
+        backtrack_placements: backtrack_placements.as_mut_ptr(),
+        backtrack_predecessors: backtrack_predecessors.as_mut_ptr(),
+        state_cap,
+    };
+    let mut out = TechCounts::default();
+    let ok = unsafe { assp_step_parity_count_prepared_rows_4(&rows, &mut workspace, &mut out) };
+    (ok != 0).then_some(out)
 }
 
 #[must_use]
@@ -2534,8 +2646,8 @@ mod tests {
     use super::{
         NoteStats, StepParityActionCosts4, StepParityActionFlags4, StepParityBasicCosts4,
         StepParityBracketTapCosts4, StepParityDistanceCosts4, StepParityElapsedCosts4,
-        StepParityOrientationCosts4, StepParityRowCostCtx4, StepParityState4,
-        StepParitySwitchCosts4, TechCounts,
+        StepParityOrientationCosts4, StepParityPreparedRows4, StepParityRowCostCtx4,
+        StepParityState4, StepParitySwitchCosts4, StepParityWorkspace4, TechCounts,
     };
 
     #[test]
@@ -2608,6 +2720,18 @@ mod tests {
     fn step_parity_row_cost_ctx4_layout_is_c_abi() {
         assert_eq!(std::mem::size_of::<StepParityRowCostCtx4>(), 32);
         assert_eq!(std::mem::align_of::<StepParityRowCostCtx4>(), 8);
+    }
+
+    #[test]
+    fn step_parity_prepared_rows4_layout_is_c_abi() {
+        assert_eq!(std::mem::size_of::<StepParityPreparedRows4>(), 72);
+        assert_eq!(std::mem::align_of::<StepParityPreparedRows4>(), 8);
+    }
+
+    #[test]
+    fn step_parity_workspace4_layout_is_c_abi() {
+        assert_eq!(std::mem::size_of::<StepParityWorkspace4>(), 104);
+        assert_eq!(std::mem::align_of::<StepParityWorkspace4>(), 8);
     }
 
     #[test]

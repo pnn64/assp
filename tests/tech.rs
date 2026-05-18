@@ -5,12 +5,12 @@ use assp::{
     calculate_step_tech_counts_from_placements_4, count_step_tech_brackets_minimized_4,
     count_step_tech_brackets_minimized_8, parse_tech_notation, step_parity_action_cost_4,
     step_parity_action_flags_4, step_parity_basic_action_costs_4,
-    step_parity_bracket_tap_action_costs_4, step_parity_distance_action_costs_4,
-    step_parity_elapsed_action_costs_4, step_parity_orientation_action_costs_4,
-    step_parity_permutations_4, step_parity_place_rows_4, step_parity_result_state_holds_4,
-    step_parity_result_state_no_holds_4, step_parity_row_best_candidates_4,
-    step_parity_row_key_candidates_4, step_parity_row_transitions_4,
-    step_parity_switch_action_costs_4,
+    step_parity_bracket_tap_action_costs_4, step_parity_count_prepared_rows_4,
+    step_parity_distance_action_costs_4, step_parity_elapsed_action_costs_4,
+    step_parity_orientation_action_costs_4, step_parity_permutations_4, step_parity_place_rows_4,
+    step_parity_result_state_holds_4, step_parity_result_state_no_holds_4,
+    step_parity_row_best_candidates_4, step_parity_row_key_candidates_4,
+    step_parity_row_transitions_4, step_parity_switch_action_costs_4,
 };
 use std::collections::HashSet;
 
@@ -1064,6 +1064,43 @@ fn rejects_prepared_row_placement_when_state_cap_is_too_small() {
         )
         .is_none()
     );
+}
+
+#[test]
+fn counts_prepared_rows_after_step_parity_backtracking() {
+    let note_masks = [0b0001u8, 0b0001];
+    let tech_masks = note_masks;
+    let note_counts = note_masks.map(|mask| mask.count_ones() as u8);
+    let hold_masks = [0u8; 2];
+    let mine_masks = [0u8; 2];
+    let prev_row_live_holds = [0u8; 2];
+    let row_seconds = [0.0f32, 0.125];
+    let row_ms = [0, 125];
+    let placements = expected_place_rows(
+        &note_counts,
+        &note_masks,
+        &hold_masks,
+        &mine_masks,
+        &prev_row_live_holds,
+        &row_seconds,
+    );
+    let expected = placement_counts(&tech_masks, &note_counts, &row_ms, &placements);
+
+    let actual = step_parity_count_prepared_rows_4(
+        &note_counts,
+        &tech_masks,
+        &note_masks,
+        &hold_masks,
+        &mine_masks,
+        &prev_row_live_holds,
+        &row_seconds,
+        &row_ms,
+        256,
+    )
+    .unwrap();
+
+    assert_ne!(expected, TechCounts::default());
+    assert_eq!(actual, expected);
 }
 
 #[test]

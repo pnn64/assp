@@ -197,6 +197,34 @@ typedef struct assp_step_parity_row_cost_ctx4 {
     const float *elapsed_seconds;
 } assp_step_parity_row_cost_ctx4;
 
+typedef struct assp_step_parity_prepared_rows4 {
+    const uint8_t *note_counts;
+    const uint8_t *tech_masks;
+    const uint8_t *note_masks;
+    const uint8_t *hold_masks;
+    const uint8_t *mine_masks;
+    const uint8_t *prev_row_live_holds;
+    const float *row_seconds;
+    const int32_t *row_ms;
+    size_t row_count;
+} assp_step_parity_prepared_rows4;
+
+typedef struct assp_step_parity_workspace4 {
+    uint8_t *out_placements;
+    size_t out_placement_cap;
+    assp_step_parity_state4 *prev_states;
+    float *prev_costs;
+    assp_step_parity_state4 *next_states;
+    float *next_costs;
+    uint32_t *predecessors;
+    uint8_t *placements;
+    int8_t *hits;
+    uint32_t *keys;
+    uint8_t *backtrack_placements;
+    uint32_t *backtrack_predecessors;
+    size_t state_cap;
+} assp_step_parity_workspace4;
+
 typedef struct assp_chart_ref {
     const uint8_t *note_data;
     size_t note_data_len;
@@ -546,6 +574,11 @@ size_t assp_step_parity_place_rows_4(
     uint8_t *backtrack_placements,
     uint32_t *backtrack_predecessors,
     size_t state_cap
+);
+int32_t assp_step_parity_count_prepared_rows_4(
+    const assp_step_parity_prepared_rows4 *rows,
+    assp_step_parity_workspace4 *workspace,
+    assp_tech_counts *out
 );
 size_t assp_parse_bpm_map(
     const uint8_t *data,

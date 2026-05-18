@@ -51,6 +51,7 @@ The first implemented pieces are:
 - `assp_step_parity_row_key_candidates_4`
 - `assp_step_parity_row_best_candidates_4`
 - `assp_step_parity_place_rows_4`
+- `assp_step_parity_count_prepared_rows_4`
 - `assp_step_parity_action_flags_4`
 - `assp_step_parity_basic_action_costs_4`
 - `assp_step_parity_elapsed_action_costs_4`
@@ -227,6 +228,10 @@ caller-prepared 4-panel parity rows and backtracks the cheapest combined-foot
 placement for each row. The remaining integration work is building those
 prepared rows from chart data, including RSSP's hold propagation and timing
 row handling.
+`assp_step_parity_count_prepared_rows_4` feeds the backtracked prepared-row
+placements into the post-parity 4-panel tech-count stage, so caller-prepared
+rows can now exercise the same DP-to-count path that chart row construction
+will use.
 `assp_step_parity_action_flags_4` ports the boolean prelude used by RSSP's
 `calc_action_cost`: moved-left/right, prior non-holding foot movement,
 did-jump, and left/right jack detection from resolved parity states and hit

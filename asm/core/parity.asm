@@ -1,6 +1,8 @@
 default rel
 %include "assp.inc"
 
+extern assp_calculate_step_tech_counts_from_placements_4
+
 global assp_step_parity_permutations_4
 global assp_step_parity_result_state_no_holds_4
 global assp_step_parity_result_state_holds_4
@@ -16,6 +18,7 @@ global assp_step_parity_orientation_action_costs_4
 global assp_step_parity_action_cost_4
 global assp_step_parity_row_best_candidates_4
 global assp_step_parity_place_rows_4
+global assp_step_parity_count_prepared_rows_4
 
 section .text
 
@@ -2378,6 +2381,124 @@ assp_step_parity_place_rows_4:
     pop rbp
     pop r15
     pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
+; rcx = assp_step_parity_prepared_rows4,
+; rdx = assp_step_parity_workspace4, r8 = out assp_tech_counts.
+; eax = 1 on success, 0 on invalid pointers/capacity.
+assp_step_parity_count_prepared_rows_4:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    sub rsp, 160
+
+    mov rbx, rcx
+    mov rsi, rdx
+    mov rdi, r8
+
+    test rdi, rdi
+    jz .fail_no_zero
+    xor eax, eax
+    mov [rdi], rax
+    mov [rdi + 8], rax
+    mov [rdi + 16], rax
+    mov [rdi + 24], rax
+
+    test rbx, rbx
+    jz .fail
+    test rsi, rsi
+    jz .fail
+
+    mov r12, [rbx + ASSP_STEP_PARITY_PREPARED_ROWS4_ROW_COUNT]
+    cmp r12, 0
+    je .count_rows
+
+    cmp qword [rbx + ASSP_STEP_PARITY_PREPARED_ROWS4_NOTE_COUNTS], 0
+    je .fail
+    cmp qword [rbx + ASSP_STEP_PARITY_PREPARED_ROWS4_TECH_MASKS], 0
+    je .fail
+    cmp qword [rbx + ASSP_STEP_PARITY_PREPARED_ROWS4_NOTE_MASKS], 0
+    je .fail
+    cmp qword [rbx + ASSP_STEP_PARITY_PREPARED_ROWS4_HOLD_MASKS], 0
+    je .fail
+    cmp qword [rbx + ASSP_STEP_PARITY_PREPARED_ROWS4_MINE_MASKS], 0
+    je .fail
+    cmp qword [rbx + ASSP_STEP_PARITY_PREPARED_ROWS4_PREV_ROW_LIVE_HOLDS], 0
+    je .fail
+    cmp qword [rbx + ASSP_STEP_PARITY_PREPARED_ROWS4_ROW_SECONDS], 0
+    je .fail
+    cmp qword [rbx + ASSP_STEP_PARITY_PREPARED_ROWS4_ROW_MS], 0
+    je .fail
+    cmp qword [rsi + ASSP_STEP_PARITY_WORKSPACE4_OUT_PLACEMENTS], 0
+    je .fail
+
+    mov rcx, [rbx + ASSP_STEP_PARITY_PREPARED_ROWS4_NOTE_COUNTS]
+    mov rdx, [rbx + ASSP_STEP_PARITY_PREPARED_ROWS4_NOTE_MASKS]
+    mov r8, [rbx + ASSP_STEP_PARITY_PREPARED_ROWS4_HOLD_MASKS]
+    mov r9, [rbx + ASSP_STEP_PARITY_PREPARED_ROWS4_MINE_MASKS]
+    mov rax, [rbx + ASSP_STEP_PARITY_PREPARED_ROWS4_PREV_ROW_LIVE_HOLDS]
+    mov [rsp + 32], rax
+    mov rax, [rbx + ASSP_STEP_PARITY_PREPARED_ROWS4_ROW_SECONDS]
+    mov [rsp + 40], rax
+    mov [rsp + 48], r12
+    mov rax, [rsi + ASSP_STEP_PARITY_WORKSPACE4_OUT_PLACEMENTS]
+    mov [rsp + 56], rax
+    mov rax, [rsi + ASSP_STEP_PARITY_WORKSPACE4_OUT_PLACEMENT_CAP]
+    mov [rsp + 64], rax
+    mov rax, [rsi + ASSP_STEP_PARITY_WORKSPACE4_PREV_STATES]
+    mov [rsp + 72], rax
+    mov rax, [rsi + ASSP_STEP_PARITY_WORKSPACE4_PREV_COSTS]
+    mov [rsp + 80], rax
+    mov rax, [rsi + ASSP_STEP_PARITY_WORKSPACE4_NEXT_STATES]
+    mov [rsp + 88], rax
+    mov rax, [rsi + ASSP_STEP_PARITY_WORKSPACE4_NEXT_COSTS]
+    mov [rsp + 96], rax
+    mov rax, [rsi + ASSP_STEP_PARITY_WORKSPACE4_PREDECESSORS]
+    mov [rsp + 104], rax
+    mov rax, [rsi + ASSP_STEP_PARITY_WORKSPACE4_PLACEMENTS]
+    mov [rsp + 112], rax
+    mov rax, [rsi + ASSP_STEP_PARITY_WORKSPACE4_HITS]
+    mov [rsp + 120], rax
+    mov rax, [rsi + ASSP_STEP_PARITY_WORKSPACE4_KEYS]
+    mov [rsp + 128], rax
+    mov rax, [rsi + ASSP_STEP_PARITY_WORKSPACE4_BACKTRACK_PLACEMENTS]
+    mov [rsp + 136], rax
+    mov rax, [rsi + ASSP_STEP_PARITY_WORKSPACE4_BACKTRACK_PREDECESSORS]
+    mov [rsp + 144], rax
+    mov rax, [rsi + ASSP_STEP_PARITY_WORKSPACE4_STATE_CAP]
+    mov [rsp + 152], rax
+    call assp_step_parity_place_rows_4
+    cmp rax, ASSP_NOT_FOUND
+    je .fail
+    cmp rax, r12
+    jne .fail
+
+.count_rows:
+    mov rcx, [rbx + ASSP_STEP_PARITY_PREPARED_ROWS4_TECH_MASKS]
+    mov rdx, [rbx + ASSP_STEP_PARITY_PREPARED_ROWS4_NOTE_COUNTS]
+    mov r8, [rbx + ASSP_STEP_PARITY_PREPARED_ROWS4_ROW_MS]
+    mov r9, [rsi + ASSP_STEP_PARITY_WORKSPACE4_OUT_PLACEMENTS]
+    mov [rsp + 32], r12
+    mov [rsp + 40], rdi
+    call assp_calculate_step_tech_counts_from_placements_4
+    jmp .done
+
+.fail:
+    xor eax, eax
+    jmp .done
+
+.fail_no_zero:
+    xor eax, eax
+
+.done:
+    add rsp, 160
     pop r13
     pop r12
     pop rdi
