@@ -109,6 +109,8 @@ start:
 .supported_lanes:
     mov [chart_lanes], rax
 
+    call prepare_step_artist
+
     call prepare_hash
     test eax, eax
     jz fail_hash
@@ -1179,6 +1181,24 @@ prepare_timing_stats:
     add rsp, 88
     ret
 
+prepare_step_artist:
+    sub rsp, 56
+
+    mov qword [step_artist_slice + ASSP_BYTE_SLICE_PTR], 0
+    mov qword [step_artist_slice + ASSP_BYTE_SLICE_LEN], 0
+
+    lea rcx, [file_buffer]
+    mov rdx, [file_len]
+    mov r8, [chart_index]
+    lea r9, [tag_credit]
+    mov qword [rsp + 32], tag_credit_end - tag_credit
+    lea rax, [step_artist_slice]
+    mov [rsp + 40], rax
+    call assp_find_chart_tag_by_index
+
+    add rsp, 56
+    ret
+
 prepare_offset:
     sub rsp, 56
 
@@ -1324,6 +1344,10 @@ print_report:
     lea rcx, [label_description]
     mov rdx, [chart_info + ASSP_CHART_INFO_DESC_PTR]
     mov r8, [chart_info + ASSP_CHART_INFO_DESC_LEN]
+    call print_slice_field
+    lea rcx, [label_step_artist]
+    mov rdx, [step_artist_slice + ASSP_BYTE_SLICE_PTR]
+    mov r8, [step_artist_slice + ASSP_BYTE_SLICE_LEN]
     call print_slice_field
     lea rcx, [label_hash]
     lea rdx, [hash_pair]
@@ -1792,6 +1816,8 @@ section .data
 default_fixture db "fixtures\camellia_mix.ssc", 0
 tag_offset db "#OFFSET:"
 tag_offset_end:
+tag_credit db "#CREDIT:"
+tag_credit_end:
 msg_header db "assp standalone", 13, 10, 0
 msg_read_fail db "failed to read input file", 13, 10, 0
 msg_notes_fail db "failed to find selected #NOTES chart", 13, 10, 0
@@ -1809,6 +1835,7 @@ label_step_type db "step_type: ", 0
 label_difficulty db "difficulty: ", 0
 label_meter db "meter: ", 0
 label_description db "description: ", 0
+label_step_artist db "step_artist: ", 0
 label_hash db "hash: ", 0
 label_bpm_neutral_hash db "bpm_neutral_hash: ", 0
 label_hash_bpms db "hash_bpms: ", 0
@@ -1893,6 +1920,7 @@ file_bytes_read resd 1
 chart_info resb ASSP_CHART_INFO_SIZE
 bpms_slice resb ASSP_BYTE_SLICE_SIZE
 offset_slice resb ASSP_BYTE_SLICE_SIZE
+step_artist_slice resb ASSP_BYTE_SLICE_SIZE
 global_timing_tags resb ASSP_TIMING_TAGS_SIZE
 chart_timing_tags resb ASSP_TIMING_TAGS_SIZE
 note_stats resb ASSP_NOTE_STATS_SIZE
