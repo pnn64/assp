@@ -580,6 +580,22 @@ int32_t assp_step_parity_count_prepared_rows_4(
     assp_step_parity_workspace4 *workspace,
     assp_tech_counts *out
 );
+size_t assp_step_parity_prepare_tap_rows_4(
+    const uint8_t *data,
+    size_t len,
+    const float *input_row_seconds,
+    const int32_t *input_row_ms,
+    size_t input_row_count,
+    uint8_t *out_note_counts,
+    uint8_t *out_tech_masks,
+    uint8_t *out_note_masks,
+    uint8_t *out_hold_masks,
+    uint8_t *out_mine_masks,
+    uint8_t *out_prev_row_live_holds,
+    float *out_row_seconds,
+    int32_t *out_row_ms,
+    size_t out_cap
+);
 size_t assp_parse_bpm_map(
     const uint8_t *data,
     size_t len,

@@ -19,6 +19,7 @@ global assp_step_parity_action_cost_4
 global assp_step_parity_row_best_candidates_4
 global assp_step_parity_place_rows_4
 global assp_step_parity_count_prepared_rows_4
+global assp_step_parity_prepare_tap_rows_4
 
 section .text
 
@@ -2499,6 +2500,208 @@ assp_step_parity_count_prepared_rows_4:
 
 .done:
     add rsp, 160
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
+%macro prepare_tap_row4_col 2
+    mov al, [rsi + %1]
+    cmp al, '0'
+    je %%done
+    cmp al, '1'
+    je %%tap
+    cmp al, 'L'
+    je %%lift
+    mov rax, ASSP_NOT_FOUND
+    jmp %%end
+%%tap:
+    or r8d, %2
+    or r9d, %2
+    inc r10d
+    jmp %%done
+%%lift:
+    or r8d, %2
+    inc r10d
+%%done:
+    xor eax, eax
+%%end:
+%endmacro
+
+; rcx = minimized 4-panel note-data, rdx = byte length,
+; r8 = input row seconds for emitted object rows,
+; r9 = input row milliseconds for emitted object rows,
+; stack arg 5 = input row time count,
+; stack arg 6 = out note counts,
+; stack arg 7 = out tech masks,
+; stack arg 8 = out note masks,
+; stack arg 9 = out hold masks,
+; stack arg 10 = out mine masks,
+; stack arg 11 = out prev-row-live-hold flags,
+; stack arg 12 = out row seconds,
+; stack arg 13 = out row milliseconds,
+; stack arg 14 = output row capacity.
+; rax = prepared row count, or ASSP_NOT_FOUND for unsupported rows/capacity.
+assp_step_parity_prepare_tap_rows_4:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+    push rbp
+    sub rsp, 32
+
+    mov rsi, rcx
+    mov r12, rdx
+    mov r13, r8
+    mov r14, r9
+    mov r15, [rsp + 144]
+    mov rbx, [rsp + 152]
+    mov rdi, [rsp + 160]
+    mov rbp, [rsp + 168]
+
+    test r12, r12
+    jz .init
+    test rsi, rsi
+    jz .fail
+
+.init:
+    test r12, r12
+    jnz .check_outputs
+    xor eax, eax
+    jmp .done
+
+.check_outputs:
+    test r13, r13
+    jz .fail
+    test r14, r14
+    jz .fail
+    test r15, r15
+    jz .fail
+    test rbx, rbx
+    jz .fail
+    test rdi, rdi
+    jz .fail
+    test rbp, rbp
+    jz .fail
+    cmp qword [rsp + 176], 0
+    je .fail
+    cmp qword [rsp + 184], 0
+    je .fail
+    cmp qword [rsp + 192], 0
+    je .fail
+    cmp qword [rsp + 200], 0
+    je .fail
+    cmp qword [rsp + 208], 0
+    je .fail
+
+    lea r12, [rsi + r12]
+    xor r11d, r11d
+
+.line_loop:
+    cmp rsi, r12
+    jae .success
+
+.trim_left:
+    cmp rsi, r12
+    jae .success
+    mov al, [rsi]
+    cmp al, ' '
+    je .trim_advance
+    cmp al, 9
+    jb .line_start
+    cmp al, 13
+    jbe .trim_advance
+    jmp .line_start
+
+.trim_advance:
+    inc rsi
+    jmp .trim_left
+
+.line_start:
+    mov al, [rsi]
+    cmp al, '/'
+    je .line_done
+    cmp al, ','
+    je .line_done
+    cmp al, ';'
+    je .success
+
+    lea rax, [rsi + 4]
+    cmp rax, r12
+    ja .success
+
+    xor r8d, r8d
+    xor r9d, r9d
+    xor r10d, r10d
+    prepare_tap_row4_col 0, 1
+    cmp rax, ASSP_NOT_FOUND
+    je .fail
+    prepare_tap_row4_col 1, 2
+    cmp rax, ASSP_NOT_FOUND
+    je .fail
+    prepare_tap_row4_col 2, 4
+    cmp rax, ASSP_NOT_FOUND
+    je .fail
+    prepare_tap_row4_col 3, 8
+    cmp rax, ASSP_NOT_FOUND
+    je .fail
+
+    test r8d, r8d
+    jz .line_done
+    cmp r11, [rsp + 136]
+    jae .fail
+    cmp r11, [rsp + 208]
+    jae .fail
+
+    mov [r15 + r11], r10b
+    mov [rbx + r11], r8b
+    mov [rdi + r11], r9b
+    mov byte [rbp + r11], 0
+    mov rax, [rsp + 176]
+    mov byte [rax + r11], 0
+    mov rax, [rsp + 184]
+    mov byte [rax + r11], 0
+    movss xmm0, [r13 + r11 * 4]
+    mov rax, [rsp + 192]
+    movss [rax + r11 * 4], xmm0
+    mov eax, [r14 + r11 * 4]
+    mov rcx, [rsp + 200]
+    mov [rcx + r11 * 4], eax
+    inc r11
+
+.line_done:
+    add rsi, 4
+
+.skip_to_next_line:
+    cmp rsi, r12
+    jae .success
+    mov al, [rsi]
+    cmp al, ';'
+    je .success
+    inc rsi
+    cmp al, 10
+    je .line_loop
+    cmp al, ','
+    je .line_loop
+    jmp .skip_to_next_line
+
+.success:
+    mov rax, r11
+    jmp .done
+
+.fail:
+    mov rax, ASSP_NOT_FOUND
+
+.done:
+    add rsp, 32
+    pop rbp
+    pop r15
+    pop r14
     pop r13
     pop r12
     pop rdi

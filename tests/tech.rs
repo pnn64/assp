@@ -8,9 +8,10 @@ use assp::{
     step_parity_bracket_tap_action_costs_4, step_parity_count_prepared_rows_4,
     step_parity_distance_action_costs_4, step_parity_elapsed_action_costs_4,
     step_parity_orientation_action_costs_4, step_parity_permutations_4, step_parity_place_rows_4,
-    step_parity_result_state_holds_4, step_parity_result_state_no_holds_4,
-    step_parity_row_best_candidates_4, step_parity_row_key_candidates_4,
-    step_parity_row_transitions_4, step_parity_switch_action_costs_4,
+    step_parity_prepare_tap_rows_4, step_parity_result_state_holds_4,
+    step_parity_result_state_no_holds_4, step_parity_row_best_candidates_4,
+    step_parity_row_key_candidates_4, step_parity_row_transitions_4,
+    step_parity_switch_action_costs_4,
 };
 use std::collections::HashSet;
 
@@ -1064,6 +1065,31 @@ fn rejects_prepared_row_placement_when_state_cap_is_too_small() {
         )
         .is_none()
     );
+}
+
+#[test]
+fn prepares_tap_rows_from_minimized_note_data() {
+    let rows = step_parity_prepare_tap_rows_4(
+        b"1000\n0000\n0L00\n0011\n;\n",
+        &[0.0, 0.125, 0.25],
+        &[0, 125, 250],
+    )
+    .unwrap();
+
+    assert_eq!(rows.note_counts, [1, 1, 2]);
+    assert_eq!(rows.tech_masks, [0b0001, 0b0010, 0b1100]);
+    assert_eq!(rows.note_masks, [0b0001, 0, 0b1100]);
+    assert_eq!(rows.hold_masks, [0, 0, 0]);
+    assert_eq!(rows.mine_masks, [0, 0, 0]);
+    assert_eq!(rows.prev_row_live_holds, [0, 0, 0]);
+    assert_eq!(rows.row_seconds, [0.0, 0.125, 0.25]);
+    assert_eq!(rows.row_ms, [0, 125, 250]);
+}
+
+#[test]
+fn rejects_unsupported_rows_in_tap_row_preparer() {
+    assert!(step_parity_prepare_tap_rows_4(b"2000\n;\n", &[0.0], &[0]).is_none());
+    assert!(step_parity_prepare_tap_rows_4(b"1000\n;\n", &[], &[]).is_none());
 }
 
 #[test]
