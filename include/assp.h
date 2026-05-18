@@ -245,6 +245,18 @@ size_t assp_measure_densities_8(
     uint32_t *out,
     size_t out_cap
 );
+size_t assp_measure_equally_spaced_minimized_4(
+    const uint8_t *data,
+    size_t len,
+    uint8_t *out,
+    size_t out_cap
+);
+size_t assp_measure_equally_spaced_minimized_8(
+    const uint8_t *data,
+    size_t len,
+    uint8_t *out,
+    size_t out_cap
+);
 int64_t assp_nps_median_centi(
     const uint32_t *nps_milli,
     size_t len

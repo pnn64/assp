@@ -47,6 +47,8 @@ The first implemented pieces are:
 - `assp_last_beat_milli_8`
 - `assp_measure_densities_4`
 - `assp_measure_densities_8`
+- `assp_measure_equally_spaced_minimized_4`
+- `assp_measure_equally_spaced_minimized_8`
 - `assp_minimize_measure_4`
 - `assp_minimize_measure_8`
 - `assp_minimize_chart_4`
@@ -97,6 +99,9 @@ rolls.
 RSSP's density output for the bundled SM and SSC fixtures.
 `assp_measure_densities_8` provides the same density primitive for 8-panel
 chart data.
+`assp_measure_equally_spaced_minimized_4` and
+`assp_measure_equally_spaced_minimized_8` compute RSSP's per-measure
+equally-spaced flags from already-minimized note data.
 `assp_minimize_measure_4` and `assp_minimize_measure_8` apply RSSP's
 per-measure row reduction for 4-panel and 8-panel charts, which is the first
 piece of the minimized-note/hash pipeline.
@@ -248,9 +253,10 @@ metadata fields before chart rows are passed to the stat counter. The standalone
 report path currently supports `dance-single` and `dance-double` charts. Chart
 reports include RSSP-style chart hashes,
 normalized hash BPMs, min/max/average/median display BPMs, tier BPM, peak and
-median NPS, density-derived stream counts, fixed-point duration metrics with
-stops/delays/warps, token breakdowns, segment breakdowns, offset adjustment, and
-note stats with nonfake mine and timing-fake counts.
+median NPS, equally-spaced measure counts, density-derived stream counts,
+fixed-point duration metrics with stops/delays/warps, token breakdowns, segment
+breakdowns, offset adjustment, and note stats with nonfake mine and timing-fake
+counts.
 
 Run the optional Rust parity tests:
 

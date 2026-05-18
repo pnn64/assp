@@ -3,8 +3,148 @@ default rel
 
 global assp_measure_densities_4
 global assp_measure_densities_8
+global assp_measure_equally_spaced_minimized_4
+global assp_measure_equally_spaced_minimized_8
 
 section .text
+
+%macro ASSP_EQUALLY_SPACED_MINIMIZED 2
+; rcx = minimized note-data bytes, rdx = len, r8 = optional u8 output, r9 = output cap.
+; rax = total measure count. Writes 1 for equally spaced measures and 0 otherwise.
+%1:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+
+    test rcx, rcx
+    jz %%zero
+
+    mov rsi, rcx
+    lea rdi, [rcx + rdx]
+    mov rbx, r8
+    mov r12, r9
+    xor r13d, r13d
+    xor r14d, r14d
+    xor r15d, r15d
+
+    cmp rsi, rdi
+    jae %%eof
+
+%%line_loop:
+    cmp rsi, rdi
+    jae %%eof
+
+    mov r10, rsi
+%%find_line_end:
+    cmp r10, rdi
+    jae %%line_end_found
+    cmp byte [r10], 10
+    je %%line_end_found
+    inc r10
+    jmp %%find_line_end
+
+%%line_end_found:
+    mov r11, r10
+    cmp r11, rsi
+    jbe %%trim_cr_done
+    cmp byte [r11 - 1], 13
+    jne %%trim_cr_done
+    dec r11
+%%trim_cr_done:
+    cmp r10, rdi
+    jae %%next_is_end
+    inc r10
+%%next_is_end:
+    mov r9, r10
+
+    cmp rsi, r11
+    jae %%line_done
+    mov al, [rsi]
+    cmp al, ','
+    je %%comma
+    cmp al, ';'
+    je %%semi
+
+    lea rax, [rsi + %2]
+    cmp rax, r11
+    ja %%line_done
+
+    inc r14
+    xor edx, edx
+%%note_loop:
+    cmp edx, %2
+    jae %%line_done
+    mov al, [rsi + rdx]
+    cmp al, '1'
+    je %%note_row
+    cmp al, '2'
+    je %%note_row
+    cmp al, '4'
+    je %%note_row
+    inc edx
+    jmp %%note_loop
+
+%%note_row:
+    inc r15
+    jmp %%line_done
+
+%%comma:
+    call %%store
+    xor r14d, r14d
+    xor r15d, r15d
+    jmp %%line_done
+
+%%semi:
+    call %%store
+    jmp %%done
+
+%%line_done:
+    mov rsi, r9
+    jmp %%line_loop
+
+%%eof:
+    call %%store
+    jmp %%done
+
+%%zero:
+    xor eax, eax
+    jmp %%pop_done
+
+%%done:
+    mov rax, r13
+
+%%pop_done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
+%%store:
+    test rbx, rbx
+    jz %%count
+    cmp r13, r12
+    jae %%count
+    xor eax, eax
+    cmp r14, r15
+    jne %%write
+    mov al, 1
+%%write:
+    mov [rbx + r13], al
+%%count:
+    inc r13
+    ret
+%endmacro
+
+ASSP_EQUALLY_SPACED_MINIMIZED assp_measure_equally_spaced_minimized_4, 4
+ASSP_EQUALLY_SPACED_MINIMIZED assp_measure_equally_spaced_minimized_8, 8
 
 ; rcx = note-data bytes, rdx = len, r8 = optional u32 output, r9 = output cap.
 ; rax = total measure count. Writes up to out_cap densities when out is non-null.

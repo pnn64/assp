@@ -41,6 +41,8 @@ extern assp_last_beat_milli_4
 extern assp_last_beat_milli_8
 extern assp_measure_densities_4
 extern assp_measure_densities_8
+extern assp_measure_equally_spaced_minimized_4
+extern assp_measure_equally_spaced_minimized_8
 extern assp_measure_nps_milli_from_bpms
 extern assp_measure_nps_milli_with_events
 extern assp_nps_median_centi
@@ -174,6 +176,10 @@ start:
     call prepare_nps
     test eax, eax
     jz fail_nps
+
+    call prepare_equally_spaced
+    test eax, eax
+    jz fail_stats
 
     call prepare_tier_bpm
 
@@ -718,6 +724,64 @@ prepare_tier_bpm:
     add rsp, 40
     ret
 
+prepare_equally_spaced:
+    sub rsp, 40
+
+    lea rcx, [minimized_buffer]
+    mov rdx, [minimized_chart_len]
+    xor r8d, r8d
+    xor r9d, r9d
+    cmp qword [chart_lanes], 8
+    je .count_8
+    call assp_measure_equally_spaced_minimized_4
+    jmp .count_done
+.count_8:
+    call assp_measure_equally_spaced_minimized_8
+.count_done:
+    cmp rax, DENSITY_CAP
+    ja .fail
+    mov [equally_spaced_count], rax
+
+    lea rcx, [minimized_buffer]
+    mov rdx, [minimized_chart_len]
+    lea r8, [equally_spaced_buffer]
+    mov r9d, DENSITY_CAP
+    cmp qword [chart_lanes], 8
+    je .fill_8
+    call assp_measure_equally_spaced_minimized_4
+    jmp .fill_done
+.fill_8:
+    call assp_measure_equally_spaced_minimized_8
+.fill_done:
+    cmp rax, DENSITY_CAP
+    ja .fail
+    mov [equally_spaced_count], rax
+
+    xor r8d, r8d
+    xor r9d, r9d
+    lea r10, [equally_spaced_buffer]
+.sum_loop:
+    cmp r8, [equally_spaced_count]
+    jae .sum_done
+    cmp byte [r10 + r8], 0
+    je .sum_next
+    inc r9
+.sum_next:
+    inc r8
+    jmp .sum_loop
+
+.sum_done:
+    mov [equally_spaced_measures], r9
+    mov eax, ASSP_TRUE
+    jmp .done
+
+.fail:
+    xor eax, eax
+
+.done:
+    add rsp, 40
+    ret
+
 prepare_timing_events:
     sub rsp, 56
 
@@ -1199,6 +1263,9 @@ print_report:
     lea rcx, [label_measures]
     mov rdx, [measure_count]
     call print_field
+    lea rcx, [label_equally_spaced_measures]
+    mov rdx, [equally_spaced_measures]
+    call print_field
     lea rcx, [label_peak_nps_milli]
     mov rdx, [peak_nps_milli]
     call print_field
@@ -1556,6 +1623,7 @@ label_max_bpm db "max_bpm: ", 0
 label_average_bpm db "average_bpm: ", 0
 label_median_bpm db "median_bpm: ", 0
 label_measures db "measures: ", 0
+label_equally_spaced_measures db "equally_spaced_measures: ", 0
 label_peak_nps_milli db "peak_nps_milli: ", 0
 label_median_nps db "median_nps: ", 0
 label_tier_bpm db "tier_bpm: ", 0
@@ -1611,6 +1679,7 @@ chart_count resq 1
 measure_count resq 1
 stream_segment_count resq 1
 stream_token_count resq 1
+equally_spaced_count resq 1
 file_handle resq 1
 file_size resq 1
 file_len resq 1
@@ -1634,6 +1703,7 @@ nps_count resq 1
 peak_nps_milli resq 1
 median_nps_centi resq 1
 tier_bpm_centi resq 1
+equally_spaced_measures resq 1
 last_beat_milli resq 1
 offset_ms resq 1
 min_bpm resq 1
@@ -1652,6 +1722,7 @@ delay_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
 warp_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
 fake_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
 nps_buffer resd DENSITY_CAP
+equally_spaced_buffer resb DENSITY_CAP
 row_scratch resq ROW_SCRATCH_CAP
 minimized_buffer resb MINIMIZED_BUFFER_CAP
 density_buffer resd DENSITY_CAP

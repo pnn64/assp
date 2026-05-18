@@ -239,6 +239,18 @@ unsafe extern "C" {
         out: *mut u32,
         out_cap: usize,
     ) -> usize;
+    fn assp_measure_equally_spaced_minimized_4(
+        data: *const u8,
+        len: usize,
+        out: *mut u8,
+        out_cap: usize,
+    ) -> usize;
+    fn assp_measure_equally_spaced_minimized_8(
+        data: *const u8,
+        len: usize,
+        out: *mut u8,
+        out_cap: usize,
+    ) -> usize;
     fn assp_minimize_measure_4(
         rows: *const u8,
         row_count: usize,
@@ -764,6 +776,44 @@ pub fn measure_densities_8(data: &[u8]) -> Vec<u32> {
 }
 
 #[must_use]
+pub fn measure_equally_spaced_minimized_4(data: &[u8]) -> Vec<bool> {
+    let count = unsafe {
+        assp_measure_equally_spaced_minimized_4(data.as_ptr(), data.len(), std::ptr::null_mut(), 0)
+    };
+    let mut out = vec![0; count];
+    if count != 0 {
+        unsafe {
+            assp_measure_equally_spaced_minimized_4(
+                data.as_ptr(),
+                data.len(),
+                out.as_mut_ptr(),
+                out.len(),
+            )
+        };
+    }
+    out.into_iter().map(|v| v != 0).collect()
+}
+
+#[must_use]
+pub fn measure_equally_spaced_minimized_8(data: &[u8]) -> Vec<bool> {
+    let count = unsafe {
+        assp_measure_equally_spaced_minimized_8(data.as_ptr(), data.len(), std::ptr::null_mut(), 0)
+    };
+    let mut out = vec![0; count];
+    if count != 0 {
+        unsafe {
+            assp_measure_equally_spaced_minimized_8(
+                data.as_ptr(),
+                data.len(),
+                out.as_mut_ptr(),
+                out.len(),
+            )
+        };
+    }
+    out.into_iter().map(|v| v != 0).collect()
+}
+
+#[must_use]
 pub fn minimize_measure_4(rows: &[[u8; 4]]) -> Vec<[u8; 4]> {
     let count = unsafe {
         assp_minimize_measure_4(
@@ -871,6 +921,18 @@ pub fn minimize_chart_8(data: &[u8]) -> Option<Vec<u8>> {
         )
     };
     (count != NOT_FOUND).then_some(out)
+}
+
+#[must_use]
+pub fn measure_equally_spaced_4(data: &[u8]) -> Option<Vec<bool>> {
+    let minimized = minimize_chart_4(data)?;
+    Some(measure_equally_spaced_minimized_4(&minimized))
+}
+
+#[must_use]
+pub fn measure_equally_spaced_8(data: &[u8]) -> Option<Vec<bool>> {
+    let minimized = minimize_chart_8(data)?;
+    Some(measure_equally_spaced_minimized_8(&minimized))
 }
 
 #[must_use]
