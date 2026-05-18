@@ -525,6 +525,28 @@ size_t assp_step_parity_row_best_candidates_4(
     float *out_costs,
     size_t out_cap
 );
+size_t assp_step_parity_place_rows_4(
+    const uint8_t *note_counts,
+    const uint8_t *note_masks,
+    const uint8_t *hold_masks,
+    const uint8_t *mine_masks,
+    const uint8_t *prev_row_live_holds,
+    const float *row_seconds,
+    size_t row_count,
+    uint8_t *out_placements,
+    size_t out_placement_cap,
+    assp_step_parity_state4 *scratch_prev_states,
+    float *scratch_prev_costs,
+    assp_step_parity_state4 *scratch_next_states,
+    float *scratch_next_costs,
+    uint32_t *scratch_predecessors,
+    uint8_t *scratch_placements,
+    int8_t *scratch_hits,
+    uint32_t *scratch_keys,
+    uint8_t *backtrack_placements,
+    uint32_t *backtrack_predecessors,
+    size_t state_cap
+);
 size_t assp_parse_bpm_map(
     const uint8_t *data,
     size_t len,

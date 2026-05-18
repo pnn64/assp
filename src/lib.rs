@@ -35,7 +35,7 @@ pub use abi::{
     step_parity_action_flags_4, step_parity_basic_action_costs_4,
     step_parity_bracket_tap_action_costs_4, step_parity_distance_action_costs_4,
     step_parity_elapsed_action_costs_4, step_parity_orientation_action_costs_4,
-    step_parity_permutations_4, step_parity_result_state_holds_4,
+    step_parity_permutations_4, step_parity_place_rows_4, step_parity_result_state_holds_4,
     step_parity_result_state_no_holds_4, step_parity_row_best_candidates_4,
     step_parity_row_key_candidates_4, step_parity_row_transitions_4,
     step_parity_switch_action_costs_4, steps_timing_allowed, stream_counts_from_densities,

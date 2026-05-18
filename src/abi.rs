@@ -488,6 +488,28 @@ unsafe extern "C" {
         out_costs: *mut f32,
         out_cap: usize,
     ) -> usize;
+    fn assp_step_parity_place_rows_4(
+        note_counts: *const u8,
+        note_masks: *const u8,
+        hold_masks: *const u8,
+        mine_masks: *const u8,
+        prev_row_live_holds: *const u8,
+        row_seconds: *const f32,
+        row_count: usize,
+        out_placements: *mut u8,
+        out_placement_cap: usize,
+        scratch_prev_states: *mut StepParityState4,
+        scratch_prev_costs: *mut f32,
+        scratch_next_states: *mut StepParityState4,
+        scratch_next_costs: *mut f32,
+        scratch_predecessors: *mut u32,
+        scratch_placements: *mut u8,
+        scratch_hits: *mut i8,
+        scratch_keys: *mut u32,
+        backtrack_placements: *mut u8,
+        backtrack_predecessors: *mut u32,
+        state_cap: usize,
+    ) -> usize;
     fn assp_parse_bpm_map(
         data: *const u8,
         len: usize,
@@ -1387,6 +1409,85 @@ pub fn step_parity_row_best_candidates_4(
                 },
                 cost: costs[i],
             })
+            .collect(),
+    )
+}
+
+#[must_use]
+pub fn step_parity_place_rows_4(
+    note_counts: &[u8],
+    note_masks: &[u8],
+    hold_masks: &[u8],
+    mine_masks: &[u8],
+    prev_row_live_holds: &[u8],
+    row_seconds: &[f32],
+    state_cap: usize,
+) -> Option<Vec<[u8; 4]>> {
+    let row_count = note_counts.len();
+    if note_masks.len() != row_count
+        || hold_masks.len() != row_count
+        || mine_masks.len() != row_count
+        || prev_row_live_holds.len() != row_count
+        || row_seconds.len() != row_count
+    {
+        return None;
+    }
+    if row_count == 0 {
+        return Some(Vec::new());
+    }
+    if state_cap == 0 {
+        return None;
+    }
+
+    let output_len = row_count.checked_mul(4)?;
+    let scratch_placements_len = state_cap.checked_mul(4)?;
+    let scratch_hits_len = state_cap.checked_mul(5)?;
+    let backtrack_count = row_count.checked_mul(state_cap)?;
+    let backtrack_placements_len = backtrack_count.checked_mul(4)?;
+
+    let mut out_placements = vec![0u8; output_len];
+    let mut scratch_prev_states = vec![StepParityState4::default(); state_cap];
+    let mut scratch_prev_costs = vec![0.0f32; state_cap];
+    let mut scratch_next_states = vec![StepParityState4::default(); state_cap];
+    let mut scratch_next_costs = vec![0.0f32; state_cap];
+    let mut scratch_predecessors = vec![0u32; state_cap];
+    let mut scratch_placements = vec![0u8; scratch_placements_len];
+    let mut scratch_hits = vec![0i8; scratch_hits_len];
+    let mut scratch_keys = vec![0u32; state_cap];
+    let mut backtrack_placements = vec![0u8; backtrack_placements_len];
+    let mut backtrack_predecessors = vec![0u32; backtrack_count];
+    let count = unsafe {
+        assp_step_parity_place_rows_4(
+            note_counts.as_ptr(),
+            note_masks.as_ptr(),
+            hold_masks.as_ptr(),
+            mine_masks.as_ptr(),
+            prev_row_live_holds.as_ptr(),
+            row_seconds.as_ptr(),
+            row_count,
+            out_placements.as_mut_ptr(),
+            out_placements.len(),
+            scratch_prev_states.as_mut_ptr(),
+            scratch_prev_costs.as_mut_ptr(),
+            scratch_next_states.as_mut_ptr(),
+            scratch_next_costs.as_mut_ptr(),
+            scratch_predecessors.as_mut_ptr(),
+            scratch_placements.as_mut_ptr(),
+            scratch_hits.as_mut_ptr(),
+            scratch_keys.as_mut_ptr(),
+            backtrack_placements.as_mut_ptr(),
+            backtrack_predecessors.as_mut_ptr(),
+            state_cap,
+        )
+    };
+    if count == NOT_FOUND || count != row_count {
+        return None;
+    }
+
+    Some(
+        out_placements
+            .chunks_exact(4)
+            .map(|row| [row[0], row[1], row[2], row[3]])
             .collect(),
     )
 }

@@ -7,7 +7,7 @@ use assp::{
     step_parity_action_flags_4, step_parity_basic_action_costs_4,
     step_parity_bracket_tap_action_costs_4, step_parity_distance_action_costs_4,
     step_parity_elapsed_action_costs_4, step_parity_orientation_action_costs_4,
-    step_parity_permutations_4, step_parity_result_state_holds_4,
+    step_parity_permutations_4, step_parity_place_rows_4, step_parity_result_state_holds_4,
     step_parity_result_state_no_holds_4, step_parity_row_best_candidates_4,
     step_parity_row_key_candidates_4, step_parity_row_transitions_4,
     step_parity_switch_action_costs_4,
@@ -696,6 +696,63 @@ fn expected_best_row_candidates(
     out
 }
 
+fn expected_place_rows(
+    note_counts: &[u8],
+    note_masks: &[u8],
+    hold_masks: &[u8],
+    mine_masks: &[u8],
+    prev_row_live_holds: &[u8],
+    row_seconds: &[f32],
+) -> Vec<[u8; 4]> {
+    let mut states = vec![StepParityState4::default()];
+    let mut costs = vec![0.0f32];
+    let mut prev_second = row_seconds[0] - 1.0;
+    let mut backtrack: Vec<Vec<(usize, [u8; 4])>> = Vec::new();
+
+    for i in 0..note_counts.len() {
+        let elapsed = row_seconds[i] - prev_second;
+        prev_second = row_seconds[i];
+        let active_mask = note_masks[i] | hold_masks[i];
+        let candidates = expected_best_row_candidates(
+            &states,
+            &costs,
+            note_counts[i],
+            note_masks[i],
+            hold_masks[i],
+            mine_masks[i],
+            active_mask & 0b1001,
+            prev_row_live_holds[i] != 0,
+            elapsed,
+        );
+
+        states = candidates
+            .iter()
+            .map(|(_, _, state, _, _, _)| *state)
+            .collect();
+        costs = candidates.iter().map(|candidate| candidate.5).collect();
+        backtrack.push(
+            candidates
+                .iter()
+                .map(|(pred, _, state, _, _, _)| (*pred as usize, state.combined_columns))
+                .collect(),
+        );
+    }
+
+    let mut idx = costs
+        .iter()
+        .enumerate()
+        .min_by(|(_, a), (_, b)| a.total_cmp(b))
+        .map(|(idx, _)| idx)
+        .unwrap();
+    let mut placements = vec![[0; 4]; note_counts.len()];
+    for row in (0..note_counts.len()).rev() {
+        let (pred, placement) = backtrack[row][idx];
+        placements[row] = placement;
+        idx = pred;
+    }
+    placements
+}
+
 #[test]
 fn parses_known_tech_list_like_rssp_core() {
     const KNOWN: &str = concat!(
@@ -950,6 +1007,60 @@ fn rejects_row_best_candidates_with_mismatched_costs() {
             1,
             false,
             0.25
+        )
+        .is_none()
+    );
+}
+
+#[test]
+fn places_prepared_rows_by_backtracking_best_step_parity_path() {
+    let note_masks = [0b0001u8, 0b0010, 0b0001, 0b0101];
+    let note_counts = note_masks.map(|mask| mask.count_ones() as u8);
+    let hold_masks = [0u8; 4];
+    let mine_masks = [0u8, 0, 0b0001, 0];
+    let prev_row_live_holds = [0u8; 4];
+    let row_seconds = [0.0f32, 0.125, 0.25, 0.5];
+
+    let expected = expected_place_rows(
+        &note_counts,
+        &note_masks,
+        &hold_masks,
+        &mine_masks,
+        &prev_row_live_holds,
+        &row_seconds,
+    );
+    let actual = step_parity_place_rows_4(
+        &note_counts,
+        &note_masks,
+        &hold_masks,
+        &mine_masks,
+        &prev_row_live_holds,
+        &row_seconds,
+        256,
+    )
+    .unwrap();
+
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn rejects_prepared_row_placement_when_state_cap_is_too_small() {
+    let note_masks = [0b0001u8];
+    let note_counts = [1u8];
+    let hold_masks = [0u8];
+    let mine_masks = [0u8];
+    let prev_row_live_holds = [0u8];
+    let row_seconds = [0.0f32];
+
+    assert!(
+        step_parity_place_rows_4(
+            &note_counts,
+            &note_masks,
+            &hold_masks,
+            &mine_masks,
+            &prev_row_live_holds,
+            &row_seconds,
+            1,
         )
         .is_none()
     );

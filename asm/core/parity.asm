@@ -15,6 +15,7 @@ global assp_step_parity_distance_action_costs_4
 global assp_step_parity_orientation_action_costs_4
 global assp_step_parity_action_cost_4
 global assp_step_parity_row_best_candidates_4
+global assp_step_parity_place_rows_4
 
 section .text
 
@@ -1903,7 +1904,7 @@ assp_step_parity_action_cost_4:
 ; stack arg 8 = out hits[5 * cap],
 ; stack arg 9 = out keys[4 * cap],
 ; stack arg 10 = out costs[cap],
-; stack arg 11 = output capacity. Capacity must be at least state_count * 24.
+; stack arg 11 = output capacity. Capacity must hold the unique row states.
 ; rax = unique best row-state key count, or ASSP_NOT_FOUND on invalid input.
 assp_step_parity_row_best_candidates_4:
     push rbx
@@ -1953,12 +1954,8 @@ assp_step_parity_row_best_candidates_4:
     mov [rsp + 104], r10
     mov [rsp + 112], r11
     mov [rsp + 120], rax
-    mov rax, r14
-    mov ecx, 24
-    mul rcx
-    jo .fail
-    cmp [rsp + 120], rax
-    jb .fail
+    test rax, rax
+    jz .fail
 
     sub rsp, 960
     mov qword [rsp + 784], 0
@@ -2005,6 +2002,8 @@ assp_step_parity_row_best_candidates_4:
     jmp .scan_keys
 
 .new_key:
+    cmp rcx, [rsp + 1080]
+    jae .fail_with_stack
     mov [rsp + 816], rcx
     mov byte [rsp + 824], 1
     jmp .score_candidate
@@ -2113,6 +2112,267 @@ assp_step_parity_row_best_candidates_4:
 
 .zero_success:
     xor eax, eax
+
+.done:
+    pop rbp
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
+; rcx = note counts[row_count], rdx = note masks[row_count],
+; r8 = hold masks[row_count], r9 = mine masks[row_count],
+; stack arg 5 = prev-row-live-hold flags[row_count],
+; stack arg 6 = row seconds f32[row_count],
+; stack arg 7 = row count,
+; stack arg 8 = out combined placements[4 * row_count],
+; stack arg 9 = output byte capacity,
+; stack arg 10 = scratch previous states[state_cap],
+; stack arg 11 = scratch previous costs[state_cap],
+; stack arg 12 = scratch next states[state_cap],
+; stack arg 13 = scratch next costs[state_cap],
+; stack arg 14 = scratch predecessor indexes[state_cap],
+; stack arg 15 = scratch row placements[4 * state_cap],
+; stack arg 16 = scratch row hits[5 * state_cap],
+; stack arg 17 = scratch row keys[state_cap],
+; stack arg 18 = backtrack combined placements[4 * state_cap * row_count],
+; stack arg 19 = backtrack predecessor indexes[state_cap * row_count],
+; stack arg 20 = state capacity.
+; rax = row count on success, or ASSP_NOT_FOUND on invalid input/capacity.
+assp_step_parity_place_rows_4:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+    push rbp
+    sub rsp, 256
+
+    mov r12, rcx
+    mov r13, rdx
+    mov r14, r8
+    mov r15, r9
+
+    mov rax, [rsp + 376]
+    test rax, rax
+    jz .zero_success
+
+    test r12, r12
+    jz .fail
+    test r13, r13
+    jz .fail
+    test r14, r14
+    jz .fail
+    test r15, r15
+    jz .fail
+    cmp qword [rsp + 360], 0
+    je .fail
+    cmp qword [rsp + 368], 0
+    je .fail
+    cmp qword [rsp + 384], 0
+    je .fail
+    cmp qword [rsp + 400], 0
+    je .fail
+    cmp qword [rsp + 408], 0
+    je .fail
+    cmp qword [rsp + 416], 0
+    je .fail
+    cmp qword [rsp + 424], 0
+    je .fail
+    cmp qword [rsp + 432], 0
+    je .fail
+    cmp qword [rsp + 440], 0
+    je .fail
+    cmp qword [rsp + 448], 0
+    je .fail
+    cmp qword [rsp + 456], 0
+    je .fail
+    cmp qword [rsp + 464], 0
+    je .fail
+    cmp qword [rsp + 472], 0
+    je .fail
+    cmp qword [rsp + 480], 0
+    je .fail
+
+    mov rax, [rsp + 376]
+    shl rax, 2
+    jc .fail
+    cmp [rsp + 392], rax
+    jb .fail
+
+    mov rax, [rsp + 400]
+    xor ecx, ecx
+    mov [rax], rcx
+    mov [rax + 8], ecx
+    mov rax, [rsp + 408]
+    mov [rax], ecx
+
+    mov rax, [rsp + 400]
+    mov [rsp + 168], rax
+    mov rax, [rsp + 408]
+    mov [rsp + 176], rax
+    mov rax, [rsp + 416]
+    mov [rsp + 184], rax
+    mov rax, [rsp + 424]
+    mov [rsp + 192], rax
+    mov qword [rsp + 152], 1
+    mov qword [rsp + 160], 0
+
+    mov rax, [rsp + 368]
+    movss xmm0, [rax]
+    subss xmm0, [rel cost_one]
+    movss [rsp + 224], xmm0
+
+.row_loop:
+    mov rax, [rsp + 160]
+    cmp rax, [rsp + 376]
+    jae .choose_best
+
+    mov rdx, [rsp + 368]
+    movss xmm0, [rdx + rax * 4]
+    movss xmm1, xmm0
+    subss xmm1, [rsp + 224]
+    movss [rsp + 144], xmm1
+    movss [rsp + 224], xmm0
+
+    movzx ecx, byte [r12 + rax]
+    mov [rsp + 112 + ASSP_STEP_PARITY_ROW_COST_CTX4_NOTE_COUNT], ecx
+    movzx ecx, byte [r13 + rax]
+    mov [rsp + 112 + ASSP_STEP_PARITY_ROW_COST_CTX4_NOTE_MASK], ecx
+    movzx edx, byte [r14 + rax]
+    mov [rsp + 112 + ASSP_STEP_PARITY_ROW_COST_CTX4_HOLD_MASK], edx
+    movzx ecx, byte [r15 + rax]
+    mov [rsp + 112 + ASSP_STEP_PARITY_ROW_COST_CTX4_MINE_MASK], ecx
+    movzx ecx, byte [r13 + rax]
+    or ecx, edx
+    and ecx, 9
+    mov [rsp + 112 + ASSP_STEP_PARITY_ROW_COST_CTX4_SIDE_MASK], ecx
+    mov rdx, [rsp + 360]
+    movzx ecx, byte [rdx + rax]
+    mov [rsp + 112 + ASSP_STEP_PARITY_ROW_COST_CTX4_PREV_ROW_HAS_LIVE_HOLD], ecx
+    lea rcx, [rsp + 144]
+    mov [rsp + 112 + ASSP_STEP_PARITY_ROW_COST_CTX4_ELAPSED_SECONDS], rcx
+
+    mov rcx, [rsp + 168]
+    mov rdx, [rsp + 176]
+    mov r8, [rsp + 152]
+    lea r9, [rsp + 112]
+    mov rax, [rsp + 432]
+    mov [rsp + 32], rax
+    mov rax, [rsp + 440]
+    mov [rsp + 40], rax
+    mov rax, [rsp + 184]
+    mov [rsp + 48], rax
+    mov rax, [rsp + 448]
+    mov [rsp + 56], rax
+    mov rax, [rsp + 456]
+    mov [rsp + 64], rax
+    mov rax, [rsp + 192]
+    mov [rsp + 72], rax
+    mov rax, [rsp + 480]
+    mov [rsp + 80], rax
+    call assp_step_parity_row_best_candidates_4
+    cmp rax, ASSP_NOT_FOUND
+    je .fail
+    test rax, rax
+    jz .fail
+    mov [rsp + 200], rax
+
+    xor rcx, rcx
+.store_backtrack_loop:
+    cmp rcx, [rsp + 200]
+    jae .swap_rows
+
+    mov rax, [rsp + 160]
+    imul rax, [rsp + 480]
+    add rax, rcx
+
+    mov rdx, [rsp + 432]
+    mov edx, [rdx + rcx * 4]
+    mov r8, [rsp + 472]
+    mov [r8 + rax * 4], edx
+
+    mov rdx, [rsp + 184]
+    lea r8, [rcx + rcx * 2]
+    mov edx, [rdx + r8 * 4]
+    mov r8, [rsp + 464]
+    mov [r8 + rax * 4], edx
+
+    inc rcx
+    jmp .store_backtrack_loop
+
+.swap_rows:
+    mov rax, [rsp + 168]
+    mov rdx, [rsp + 184]
+    mov [rsp + 168], rdx
+    mov [rsp + 184], rax
+    mov rax, [rsp + 176]
+    mov rdx, [rsp + 192]
+    mov [rsp + 176], rdx
+    mov [rsp + 192], rax
+    mov rax, [rsp + 200]
+    mov [rsp + 152], rax
+    inc qword [rsp + 160]
+    jmp .row_loop
+
+.choose_best:
+    mov rdx, [rsp + 176]
+    xor ecx, ecx
+    movss xmm0, [rdx]
+    mov rax, 1
+.best_loop:
+    cmp rax, [rsp + 152]
+    jae .backtrack
+    movss xmm1, [rdx + rax * 4]
+    comiss xmm1, xmm0
+    jae .next_best
+    movss xmm0, xmm1
+    mov rcx, rax
+.next_best:
+    inc rax
+    jmp .best_loop
+
+.backtrack:
+    mov [rsp + 208], rcx
+    mov rsi, [rsp + 376]
+.backtrack_loop:
+    test rsi, rsi
+    jz .success
+    dec rsi
+
+    mov rax, rsi
+    imul rax, [rsp + 480]
+    add rax, [rsp + 208]
+
+    mov rdx, [rsp + 464]
+    mov ecx, [rdx + rax * 4]
+    mov rdx, [rsp + 384]
+    mov [rdx + rsi * 4], ecx
+
+    mov rdx, [rsp + 472]
+    mov ecx, [rdx + rax * 4]
+    mov [rsp + 208], rcx
+    jmp .backtrack_loop
+
+.success:
+    mov rax, [rsp + 376]
+    add rsp, 256
+    jmp .done
+
+.zero_success:
+    xor eax, eax
+    add rsp, 256
+    jmp .done
+
+.fail:
+    mov rax, ASSP_NOT_FOUND
+    add rsp, 256
 
 .done:
     pop rbp
