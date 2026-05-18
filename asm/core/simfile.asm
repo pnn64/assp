@@ -265,6 +265,7 @@ assp_find_global_bpms:
 
     mov r10, rcx
     lea r11, [rcx + rdx]
+    call find_global_scan_end
 
 .scan:
     lea rax, [r10 + 6]
@@ -409,6 +410,7 @@ assp_find_global_tag:
 
     mov r10, rcx
     lea r11, [rcx + rdx]
+    call find_global_scan_end
     mov r12, r8
     mov r13, r9
     call find_tag_in_range
@@ -533,6 +535,7 @@ assp_find_global_timing_tags:
 
     mov r10, rcx
     lea r11, [rcx + rdx]
+    call find_global_scan_end
     mov rbx, r8
     call find_timing_tags_in_range
     mov eax, ASSP_TRUE
@@ -914,6 +917,41 @@ find_bpms_in_range:
 
 .fail:
     xor eax, eax
+    ret
+
+; r10 = simfile start, r11 = simfile end.
+; Narrows r11 to the first chart section so global scans do not consume
+; chart-local SSC tags.
+find_global_scan_end:
+    mov rdx, r10
+
+.scan:
+    cmp rdx, r11
+    jae .done
+
+    lea rax, [rdx + 10]
+    cmp rax, r11
+    ja .check_notes
+    is_notedata_tag rdx
+    test eax, eax
+    jnz .found
+
+.check_notes:
+    lea rax, [rdx + 8]
+    cmp rax, r11
+    ja .next
+    is_notes_tag rdx
+    test eax, eax
+    jnz .found
+
+.next:
+    inc rdx
+    jmp .scan
+
+.found:
+    mov r11, rdx
+
+.done:
     ret
 
 ; r10 = scan start, r11 = scan end, r12 = tag ptr, r13 = tag len,

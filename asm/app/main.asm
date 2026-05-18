@@ -1252,6 +1252,14 @@ prepare_global_metadata:
     mov qword [sample_start_slice + ASSP_BYTE_SLICE_LEN], 0
     mov qword [sample_length_slice + ASSP_BYTE_SLICE_PTR], 0
     mov qword [sample_length_slice + ASSP_BYTE_SLICE_LEN], 0
+    mov qword [global_time_signatures_slice + ASSP_BYTE_SLICE_PTR], 0
+    mov qword [global_time_signatures_slice + ASSP_BYTE_SLICE_LEN], 0
+    mov qword [global_labels_slice + ASSP_BYTE_SLICE_PTR], 0
+    mov qword [global_labels_slice + ASSP_BYTE_SLICE_LEN], 0
+    mov qword [global_tickcounts_slice + ASSP_BYTE_SLICE_PTR], 0
+    mov qword [global_tickcounts_slice + ASSP_BYTE_SLICE_LEN], 0
+    mov qword [global_combos_slice + ASSP_BYTE_SLICE_PTR], 0
+    mov qword [global_combos_slice + ASSP_BYTE_SLICE_LEN], 0
 
     lea rcx, [file_buffer]
     mov rdx, [file_len]
@@ -1362,6 +1370,38 @@ prepare_global_metadata:
     lea r8, [tag_sample_length]
     mov r9d, tag_sample_length_end - tag_sample_length
     lea rax, [sample_length_slice]
+    mov [rsp + 32], rax
+    call assp_find_global_tag
+
+    lea rcx, [file_buffer]
+    mov rdx, [file_len]
+    lea r8, [tag_time_signatures]
+    mov r9d, tag_time_signatures_end - tag_time_signatures
+    lea rax, [global_time_signatures_slice]
+    mov [rsp + 32], rax
+    call assp_find_global_tag
+
+    lea rcx, [file_buffer]
+    mov rdx, [file_len]
+    lea r8, [tag_labels]
+    mov r9d, tag_labels_end - tag_labels
+    lea rax, [global_labels_slice]
+    mov [rsp + 32], rax
+    call assp_find_global_tag
+
+    lea rcx, [file_buffer]
+    mov rdx, [file_len]
+    lea r8, [tag_tickcounts]
+    mov r9d, tag_tickcounts_end - tag_tickcounts
+    lea rax, [global_tickcounts_slice]
+    mov [rsp + 32], rax
+    call assp_find_global_tag
+
+    lea rcx, [file_buffer]
+    mov rdx, [file_len]
+    lea r8, [tag_combos]
+    mov r9d, tag_combos_end - tag_combos
+    lea rax, [global_combos_slice]
     mov [rsp + 32], rax
     call assp_find_global_tag
 
@@ -1716,6 +1756,66 @@ print_report:
     lea rcx, [label_chart_combos]
     mov rdx, [chart_combos_slice + ASSP_BYTE_SLICE_PTR]
     mov r8, [chart_combos_slice + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+    lea rcx, [label_global_time_signatures]
+    mov rdx, [global_time_signatures_slice + ASSP_BYTE_SLICE_PTR]
+    mov r8, [global_time_signatures_slice + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+    lea rcx, [label_global_labels]
+    mov rdx, [global_labels_slice + ASSP_BYTE_SLICE_PTR]
+    mov r8, [global_labels_slice + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+    lea rcx, [label_global_tickcounts]
+    mov rdx, [global_tickcounts_slice + ASSP_BYTE_SLICE_PTR]
+    mov r8, [global_tickcounts_slice + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+    lea rcx, [label_global_combos]
+    mov rdx, [global_combos_slice + ASSP_BYTE_SLICE_PTR]
+    mov r8, [global_combos_slice + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+    lea rcx, [label_selected_time_signatures]
+    lea rdx, [chart_time_signatures_slice]
+    lea r8, [global_time_signatures_slice]
+    call print_selected_metadata_tag
+    lea rcx, [label_selected_labels]
+    lea rdx, [chart_labels_slice]
+    lea r8, [global_labels_slice]
+    call print_selected_metadata_tag
+    lea rcx, [label_selected_tickcounts]
+    lea rdx, [chart_tickcounts_slice]
+    lea r8, [global_tickcounts_slice]
+    call print_selected_metadata_tag
+    lea rcx, [label_selected_combos]
+    lea rdx, [chart_combos_slice]
+    lea r8, [global_combos_slice]
+    call print_selected_metadata_tag
+    lea rcx, [label_global_bpms]
+    mov rdx, [global_timing_tags + ASSP_TIMING_TAGS_BPMS + ASSP_BYTE_SLICE_PTR]
+    mov r8, [global_timing_tags + ASSP_TIMING_TAGS_BPMS + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+    lea rcx, [label_global_stops]
+    mov rdx, [global_timing_tags + ASSP_TIMING_TAGS_STOPS + ASSP_BYTE_SLICE_PTR]
+    mov r8, [global_timing_tags + ASSP_TIMING_TAGS_STOPS + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+    lea rcx, [label_global_delays]
+    mov rdx, [global_timing_tags + ASSP_TIMING_TAGS_DELAYS + ASSP_BYTE_SLICE_PTR]
+    mov r8, [global_timing_tags + ASSP_TIMING_TAGS_DELAYS + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+    lea rcx, [label_global_warps]
+    mov rdx, [global_timing_tags + ASSP_TIMING_TAGS_WARPS + ASSP_BYTE_SLICE_PTR]
+    mov r8, [global_timing_tags + ASSP_TIMING_TAGS_WARPS + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+    lea rcx, [label_global_speeds]
+    mov rdx, [global_timing_tags + ASSP_TIMING_TAGS_SPEEDS + ASSP_BYTE_SLICE_PTR]
+    mov r8, [global_timing_tags + ASSP_TIMING_TAGS_SPEEDS + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+    lea rcx, [label_global_scrolls]
+    mov rdx, [global_timing_tags + ASSP_TIMING_TAGS_SCROLLS + ASSP_BYTE_SLICE_PTR]
+    mov r8, [global_timing_tags + ASSP_TIMING_TAGS_SCROLLS + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+    lea rcx, [label_global_fakes]
+    mov rdx, [global_timing_tags + ASSP_TIMING_TAGS_FAKES + ASSP_BYTE_SLICE_PTR]
+    mov r8, [global_timing_tags + ASSP_TIMING_TAGS_FAKES + ASSP_BYTE_SLICE_LEN]
     call print_slice_field
     lea rcx, [label_chart_bpms]
     mov rdx, [chart_timing_tags + ASSP_TIMING_TAGS_BPMS + ASSP_BYTE_SLICE_PTR]
@@ -2273,6 +2373,25 @@ print_selected_timing_tag:
     add rsp, 72
     ret
 
+print_selected_metadata_tag:
+    sub rsp, 72
+    mov [rsp + 32], rcx
+    mov [rsp + 40], rdx
+    mov [rsp + 48], r8
+
+    mov r10, [rsp + 48]
+    cmp qword [chart_has_own_timing], 0
+    je .selected
+    mov r10, [rsp + 40]
+
+.selected:
+    mov rcx, [rsp + 32]
+    mov rdx, [r10 + ASSP_BYTE_SLICE_PTR]
+    mov r8, [r10 + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+    add rsp, 72
+    ret
+
 print_bpm_segments_field:
     sub rsp, 88
     mov [rsp + 32], rdx
@@ -2585,6 +2704,21 @@ label_chart_time_signatures db "chart_time_signatures: ", 0
 label_chart_labels db "chart_labels: ", 0
 label_chart_tickcounts db "chart_tickcounts: ", 0
 label_chart_combos db "chart_combos: ", 0
+label_global_time_signatures db "global_time_signatures: ", 0
+label_global_labels db "global_labels: ", 0
+label_global_tickcounts db "global_tickcounts: ", 0
+label_global_combos db "global_combos: ", 0
+label_selected_time_signatures db "selected_time_signatures: ", 0
+label_selected_labels db "selected_labels: ", 0
+label_selected_tickcounts db "selected_tickcounts: ", 0
+label_selected_combos db "selected_combos: ", 0
+label_global_bpms db "global_bpms: ", 0
+label_global_stops db "global_stops: ", 0
+label_global_delays db "global_delays: ", 0
+label_global_warps db "global_warps: ", 0
+label_global_speeds db "global_speeds: ", 0
+label_global_scrolls db "global_scrolls: ", 0
+label_global_fakes db "global_fakes: ", 0
 label_chart_bpms db "chart_bpms: ", 0
 label_chart_stops db "chart_stops: ", 0
 label_chart_delays db "chart_delays: ", 0
@@ -2736,6 +2870,10 @@ cdtitle_slice resb ASSP_BYTE_SLICE_SIZE
 jacket_slice resb ASSP_BYTE_SLICE_SIZE
 sample_start_slice resb ASSP_BYTE_SLICE_SIZE
 sample_length_slice resb ASSP_BYTE_SLICE_SIZE
+global_time_signatures_slice resb ASSP_BYTE_SLICE_SIZE
+global_labels_slice resb ASSP_BYTE_SLICE_SIZE
+global_tickcounts_slice resb ASSP_BYTE_SLICE_SIZE
+global_combos_slice resb ASSP_BYTE_SLICE_SIZE
 chart_name_slice resb ASSP_BYTE_SLICE_SIZE
 chart_music_slice resb ASSP_BYTE_SLICE_SIZE
 chart_attacks_slice resb ASSP_BYTE_SLICE_SIZE

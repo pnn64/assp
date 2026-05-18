@@ -221,6 +221,25 @@ fn finds_global_timing_tags() {
 }
 
 #[test]
+fn global_tag_scans_stop_before_chart_sections() {
+    let data = b"#TITLE:X;
+#NOTEDATA:;
+#STEPSTYPE:dance-single;
+#BPMS:0.000=180.000;
+#STOPS:4.000=1.000;
+#LABELS:0.000=chart;
+#NOTES:
+1000
+;";
+    let tags = find_global_timing_tags(data).unwrap();
+
+    assert!(find_global_bpms(data).is_none());
+    assert!(find_global_tag(data, b"#LABELS:").is_none());
+    assert_eq!(tags.bpms.len, 0);
+    assert_eq!(tags.stops.len, 0);
+}
+
+#[test]
 fn treats_freezes_as_stop_timing_tags() {
     let data = b"#TITLE:X;
 #FREEZES:16.000=0.250;
