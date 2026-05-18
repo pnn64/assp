@@ -310,6 +310,14 @@ int32_t assp_count_step_tech_brackets_minimized_8(
     size_t len,
     assp_tech_counts *out
 );
+int32_t assp_calculate_step_tech_counts_from_placements_4(
+    const uint8_t *tech_masks,
+    const uint8_t *note_counts,
+    const int32_t *row_ms,
+    const uint8_t *placements,
+    size_t row_count,
+    assp_tech_counts *out
+);
 size_t assp_parse_bpm_map(
     const uint8_t *data,
     size_t len,

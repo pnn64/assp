@@ -69,7 +69,6 @@ section .text
     push r13
     push r14
     push r15
-    sub rsp, 96
 
     test r8, r8
     jz %%fail
@@ -90,18 +89,6 @@ section .text
     lea rdi, [rcx + rdx]
     xor r12d, r12d
     xor r15d, r15d
-    mov qword [rsp], 0
-    mov qword [rsp + 8], 0
-    mov qword [rsp + 16], 0
-    mov qword [rsp + 24], 0
-    mov qword [rsp + 32], 0
-    mov qword [rsp + 40], 0
-    mov qword [rsp + 48], 0
-    mov qword [rsp + 56], 0
-    mov qword [rsp + 64], 0
-    mov qword [rsp + 72], 0
-    mov qword [rsp + 80], 0
-    mov qword [rsp + 88], 0
 
 %%line_loop:
     cmp rsi, rdi
@@ -114,7 +101,7 @@ section .text
     cmp al, ';'
     je %%success
     cmp al, ','
-    je %%skip_comma_one
+    je %%skip_one
     cmp al, 10
     je %%skip_one
     cmp al, 13
@@ -129,16 +116,10 @@ section .text
     inc rsi
     jmp %%skip_separators
 
-%%skip_comma_one:
-    mov dword [rsp + 64], ASSP_TRUE
-    inc rsi
-    jmp %%skip_separators
-
 %%row_start:
     lea rax, [rsi + %2]
     cmp rax, rdi
     ja %%success
-    inc dword [rsp + 40]
 
     xor r13d, r13d
     xor r14d, r14d
@@ -155,54 +136,6 @@ section .text
 
     test r13d, r13d
     jz %%update_holds
-    mov eax, [rsp]
-    inc eax
-    mov [rsp], eax
-    cmp eax, 1
-    je %%simple_store_first
-    cmp eax, 2
-    je %%simple_store_second
-    cmp eax, 3
-    je %%simple_store_third
-    cmp eax, 4
-    je %%simple_store_fourth
-    mov dword [rsp + 8], ASSP_TRUE
-    jmp %%simple_check_row
-
-%%simple_store_first:
-    mov [rsp + 16], r13d
-    mov eax, [rsp + 40]
-    mov [rsp + 48], eax
-    jmp %%simple_check_row
-
-%%simple_store_second:
-    mov [rsp + 24], r13d
-    mov eax, [rsp + 40]
-    mov [rsp + 56], eax
-    jmp %%simple_check_row
-
-%%simple_store_third:
-    mov [rsp + 32], r13d
-    mov eax, [rsp + 40]
-    mov [rsp + 72], eax
-    jmp %%simple_check_row
-
-%%simple_store_fourth:
-    mov [rsp + 80], r13d
-    mov eax, [rsp + 40]
-    mov [rsp + 88], eax
-
-%%simple_check_row:
-    cmp r14d, 1
-    je %%simple_check_hold
-    mov dword [rsp + 8], ASSP_TRUE
-
-%%simple_check_hold:
-    test r15d, r15d
-    jz %%seen_check
-    mov dword [rsp + 8], ASSP_TRUE
-
-%%seen_check:
     test r12d, r12d
     jnz %%count_row
     mov r12d, ASSP_TRUE
@@ -228,9 +161,6 @@ section .text
     update_hold_lane 6, 64
     update_hold_lane 7, 128
 %endif
-    test r15d, r15d
-    jz %%row_done
-    mov dword [rsp + 8], ASSP_TRUE
 
 %%row_done:
     add rsi, %2
@@ -245,143 +175,10 @@ section .text
     cmp al, 10
     je %%line_loop
     cmp al, ','
-    je %%line_comma
+    je %%line_loop
     jmp %%skip_to_next_line
 
-%%line_comma:
-    mov dword [rsp + 64], ASSP_TRUE
-    jmp %%line_loop
-
 %%success:
-%if %2 == 4
-    cmp dword [rsp], 3
-    jne %%check_simple_doublestep
-    cmp dword [rsp + 8], 0
-    jne %%check_simple_doublestep
-    mov ecx, [rsp + 16]
-    mov edx, [rsp + 24]
-    mov r8d, [rsp + 32]
-    call count_simple_crossovers_4
-    add [rbx + ASSP_TECH_COUNTS_CROSSOVERS], eax
-
-%%check_simple_footswitch:
-    cmp dword [rsp], 3
-    jne %%check_simple_jack
-    cmp dword [rsp + 8], 0
-    jne %%check_simple_jack
-    cmp dword [rsp + 64], 0
-    jne %%check_simple_jack
-    cmp dword [rsp + 40], 16
-    jne %%check_simple_jack
-    mov eax, [rsp + 56]
-    sub eax, [rsp + 48]
-    cmp eax, 1
-    jne %%check_simple_jack
-    mov eax, [rsp + 72]
-    sub eax, [rsp + 56]
-    cmp eax, 1
-    jne %%check_simple_jack
-    cmp dword [rsp + 32], 1
-    jne %%check_three_row_jacks
-    mov eax, [rsp + 16]
-    cmp eax, [rsp + 24]
-    jne %%check_three_row_jacks
-    cmp eax, 2
-    je %%count_down_footswitch
-    cmp eax, 4
-    je %%count_up_footswitch
-    jmp %%check_three_row_jacks
-
-%%count_down_footswitch:
-    inc dword [rbx + ASSP_TECH_COUNTS_FOOTSWITCHES]
-    inc dword [rbx + ASSP_TECH_COUNTS_DOWN_FOOTSWITCHES]
-    jmp %%return_true
-
-%%count_up_footswitch:
-    inc dword [rbx + ASSP_TECH_COUNTS_FOOTSWITCHES]
-    inc dword [rbx + ASSP_TECH_COUNTS_UP_FOOTSWITCHES]
-    jmp %%return_true
-
-%%check_three_row_jacks:
-    xor eax, eax
-    mov ecx, [rsp + 16]
-    cmp ecx, [rsp + 24]
-    jne %%check_second_jack_pair
-    inc eax
-
-%%check_second_jack_pair:
-    mov ecx, [rsp + 24]
-    cmp ecx, [rsp + 32]
-    jne %%add_three_row_jacks
-    inc eax
-
-%%add_three_row_jacks:
-    add [rbx + ASSP_TECH_COUNTS_JACKS], eax
-    jmp %%return_true
-
-%%check_simple_doublestep:
-    cmp dword [rsp], 4
-    jne %%check_simple_jack
-    cmp dword [rsp + 8], 0
-    jne %%check_simple_jack
-    cmp dword [rsp + 64], 0
-    jne %%check_simple_jack
-    cmp dword [rsp + 40], 16
-    jne %%check_simple_jack
-    mov eax, [rsp + 56]
-    sub eax, [rsp + 48]
-    cmp eax, 1
-    jne %%check_simple_jack
-    mov eax, [rsp + 72]
-    sub eax, [rsp + 56]
-    cmp eax, 1
-    jne %%check_simple_jack
-    mov eax, [rsp + 88]
-    sub eax, [rsp + 72]
-    cmp eax, 1
-    jne %%check_simple_jack
-    mov eax, [rsp + 16]
-    cmp eax, [rsp + 24]
-    jne %%check_simple_doublestep_pattern
-    cmp eax, [rsp + 32]
-    jne %%check_simple_doublestep_pattern
-    cmp eax, [rsp + 80]
-    jne %%check_simple_doublestep_pattern
-    add dword [rbx + ASSP_TECH_COUNTS_JACKS], 3
-    jmp %%return_true
-
-%%check_simple_doublestep_pattern:
-    cmp dword [rsp + 16], 8
-    jne %%check_simple_jack
-    cmp dword [rsp + 24], 4
-    jne %%check_simple_jack
-    cmp dword [rsp + 32], 1
-    jne %%check_simple_jack
-    cmp dword [rsp + 80], 2
-    jne %%check_simple_jack
-    inc dword [rbx + ASSP_TECH_COUNTS_DOUBLESTEPS]
-    jmp %%return_true
-
-%%check_simple_jack:
-    cmp dword [rsp], 2
-    jne %%return_true
-    cmp dword [rsp + 8], 0
-    jne %%return_true
-    cmp dword [rsp + 64], 0
-    jne %%return_true
-    cmp dword [rsp + 40], 16
-    jb %%return_true
-    mov eax, [rsp + 56]
-    sub eax, [rsp + 48]
-    cmp eax, 1
-    jne %%return_true
-    mov eax, [rsp + 16]
-    cmp eax, [rsp + 24]
-    jne %%return_true
-    inc dword [rbx + ASSP_TECH_COUNTS_JACKS]
-%endif
-
-%%return_true:
     mov eax, ASSP_TRUE
     jmp %%done
 
@@ -389,7 +186,6 @@ section .text
     xor eax, eax
 
 %%done:
-    add rsp, 96
     pop r15
     pop r14
     pop r13
@@ -402,40 +198,6 @@ section .text
 
 ASSP_COUNT_STEP_TECH_BRACKETS_MINIMIZED assp_count_step_tech_brackets_minimized_4, 4, count_brackets_4
 ASSP_COUNT_STEP_TECH_BRACKETS_MINIMIZED assp_count_step_tech_brackets_minimized_8, 8, count_brackets_8
-
-; ecx = first single-note mask, edx = second mask, r8d = third mask.
-; eax = 1 when the exact three-row tap sequence is a basic single-panel crossover.
-count_simple_crossovers_4:
-    xor eax, eax
-    cmp ecx, 1
-    je .left_to_right
-    cmp ecx, 8
-    je .right_to_left
-    ret
-
-.left_to_right:
-    cmp r8d, 8
-    jne .done
-    cmp edx, 2
-    je .found
-    cmp edx, 4
-    je .found
-    ret
-
-.right_to_left:
-    cmp r8d, 1
-    jne .done
-    cmp edx, 2
-    je .found
-    cmp edx, 4
-    je .found
-    ret
-
-.found:
-    mov eax, 1
-
-.done:
-    ret
 
 ; ecx = active note mask, eax = disjoint bracketable pair count.
 count_brackets_4:
