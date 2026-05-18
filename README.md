@@ -262,9 +262,10 @@ The standalone executable currently scans SSC files for chart metadata and
 description. SM `#NOTES:` / `#NOTES2:` blocks are also split into their five
 metadata fields before chart rows are passed to the stat counter. The standalone
 report path currently supports `dance-single` and `dance-double` charts. Chart
-reports include simfile title/artist/translit metadata, chart name and
-credit/step-artist metadata, RSSP-style chart hashes, normalized hash BPMs,
-chart display-BPM tags, offset seconds, RSSP-style display BPM,
+reports include simfile title/artist/translit metadata, genre, media/artwork
+tags, sample timing tags, chart name and credit/step-artist metadata,
+RSSP-style chart hashes, normalized hash BPMs, chart display-BPM tags, offset
+seconds, RSSP-style display BPM,
 min/max/average/median display BPMs, tier BPM, max/peak/median NPS,
 equally-spaced measure counts,
 density-derived stream counts, total stream counts, stream percentages,

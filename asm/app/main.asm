@@ -1191,12 +1191,28 @@ prepare_global_metadata:
     mov qword [subtitle_slice + ASSP_BYTE_SLICE_LEN], 0
     mov qword [artist_slice + ASSP_BYTE_SLICE_PTR], 0
     mov qword [artist_slice + ASSP_BYTE_SLICE_LEN], 0
+    mov qword [genre_slice + ASSP_BYTE_SLICE_PTR], 0
+    mov qword [genre_slice + ASSP_BYTE_SLICE_LEN], 0
     mov qword [title_trans_slice + ASSP_BYTE_SLICE_PTR], 0
     mov qword [title_trans_slice + ASSP_BYTE_SLICE_LEN], 0
     mov qword [subtitle_trans_slice + ASSP_BYTE_SLICE_PTR], 0
     mov qword [subtitle_trans_slice + ASSP_BYTE_SLICE_LEN], 0
     mov qword [artist_trans_slice + ASSP_BYTE_SLICE_PTR], 0
     mov qword [artist_trans_slice + ASSP_BYTE_SLICE_LEN], 0
+    mov qword [music_slice + ASSP_BYTE_SLICE_PTR], 0
+    mov qword [music_slice + ASSP_BYTE_SLICE_LEN], 0
+    mov qword [banner_slice + ASSP_BYTE_SLICE_PTR], 0
+    mov qword [banner_slice + ASSP_BYTE_SLICE_LEN], 0
+    mov qword [background_slice + ASSP_BYTE_SLICE_PTR], 0
+    mov qword [background_slice + ASSP_BYTE_SLICE_LEN], 0
+    mov qword [cdtitle_slice + ASSP_BYTE_SLICE_PTR], 0
+    mov qword [cdtitle_slice + ASSP_BYTE_SLICE_LEN], 0
+    mov qword [jacket_slice + ASSP_BYTE_SLICE_PTR], 0
+    mov qword [jacket_slice + ASSP_BYTE_SLICE_LEN], 0
+    mov qword [sample_start_slice + ASSP_BYTE_SLICE_PTR], 0
+    mov qword [sample_start_slice + ASSP_BYTE_SLICE_LEN], 0
+    mov qword [sample_length_slice + ASSP_BYTE_SLICE_PTR], 0
+    mov qword [sample_length_slice + ASSP_BYTE_SLICE_LEN], 0
 
     lea rcx, [file_buffer]
     mov rdx, [file_len]
@@ -1224,6 +1240,14 @@ prepare_global_metadata:
 
     lea rcx, [file_buffer]
     mov rdx, [file_len]
+    lea r8, [tag_genre]
+    mov r9d, tag_genre_end - tag_genre
+    lea rax, [genre_slice]
+    mov [rsp + 32], rax
+    call assp_find_global_tag
+
+    lea rcx, [file_buffer]
+    mov rdx, [file_len]
     lea r8, [tag_title_trans]
     mov r9d, tag_title_trans_end - tag_title_trans
     lea rax, [title_trans_slice]
@@ -1243,6 +1267,62 @@ prepare_global_metadata:
     lea r8, [tag_artist_trans]
     mov r9d, tag_artist_trans_end - tag_artist_trans
     lea rax, [artist_trans_slice]
+    mov [rsp + 32], rax
+    call assp_find_global_tag
+
+    lea rcx, [file_buffer]
+    mov rdx, [file_len]
+    lea r8, [tag_music]
+    mov r9d, tag_music_end - tag_music
+    lea rax, [music_slice]
+    mov [rsp + 32], rax
+    call assp_find_global_tag
+
+    lea rcx, [file_buffer]
+    mov rdx, [file_len]
+    lea r8, [tag_banner]
+    mov r9d, tag_banner_end - tag_banner
+    lea rax, [banner_slice]
+    mov [rsp + 32], rax
+    call assp_find_global_tag
+
+    lea rcx, [file_buffer]
+    mov rdx, [file_len]
+    lea r8, [tag_background]
+    mov r9d, tag_background_end - tag_background
+    lea rax, [background_slice]
+    mov [rsp + 32], rax
+    call assp_find_global_tag
+
+    lea rcx, [file_buffer]
+    mov rdx, [file_len]
+    lea r8, [tag_cdtitle]
+    mov r9d, tag_cdtitle_end - tag_cdtitle
+    lea rax, [cdtitle_slice]
+    mov [rsp + 32], rax
+    call assp_find_global_tag
+
+    lea rcx, [file_buffer]
+    mov rdx, [file_len]
+    lea r8, [tag_jacket]
+    mov r9d, tag_jacket_end - tag_jacket
+    lea rax, [jacket_slice]
+    mov [rsp + 32], rax
+    call assp_find_global_tag
+
+    lea rcx, [file_buffer]
+    mov rdx, [file_len]
+    lea r8, [tag_sample_start]
+    mov r9d, tag_sample_start_end - tag_sample_start
+    lea rax, [sample_start_slice]
+    mov [rsp + 32], rax
+    call assp_find_global_tag
+
+    lea rcx, [file_buffer]
+    mov rdx, [file_len]
+    lea r8, [tag_sample_length]
+    mov r9d, tag_sample_length_end - tag_sample_length
+    lea rax, [sample_length_slice]
     mov [rsp + 32], rax
     call assp_find_global_tag
 
@@ -1428,6 +1508,10 @@ print_report:
     mov rdx, [artist_slice + ASSP_BYTE_SLICE_PTR]
     mov r8, [artist_slice + ASSP_BYTE_SLICE_LEN]
     call print_slice_field
+    lea rcx, [label_genre]
+    mov rdx, [genre_slice + ASSP_BYTE_SLICE_PTR]
+    mov r8, [genre_slice + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
     lea rcx, [label_title_trans]
     mov rdx, [title_trans_slice + ASSP_BYTE_SLICE_PTR]
     mov r8, [title_trans_slice + ASSP_BYTE_SLICE_LEN]
@@ -1439,6 +1523,34 @@ print_report:
     lea rcx, [label_artist_trans]
     mov rdx, [artist_trans_slice + ASSP_BYTE_SLICE_PTR]
     mov r8, [artist_trans_slice + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+    lea rcx, [label_music]
+    mov rdx, [music_slice + ASSP_BYTE_SLICE_PTR]
+    mov r8, [music_slice + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+    lea rcx, [label_banner]
+    mov rdx, [banner_slice + ASSP_BYTE_SLICE_PTR]
+    mov r8, [banner_slice + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+    lea rcx, [label_background]
+    mov rdx, [background_slice + ASSP_BYTE_SLICE_PTR]
+    mov r8, [background_slice + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+    lea rcx, [label_cdtitle]
+    mov rdx, [cdtitle_slice + ASSP_BYTE_SLICE_PTR]
+    mov r8, [cdtitle_slice + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+    lea rcx, [label_jacket]
+    mov rdx, [jacket_slice + ASSP_BYTE_SLICE_PTR]
+    mov r8, [jacket_slice + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+    lea rcx, [label_sample_start]
+    mov rdx, [sample_start_slice + ASSP_BYTE_SLICE_PTR]
+    mov r8, [sample_start_slice + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+    lea rcx, [label_sample_length]
+    mov rdx, [sample_length_slice + ASSP_BYTE_SLICE_PTR]
+    mov r8, [sample_length_slice + ASSP_BYTE_SLICE_LEN]
     call print_slice_field
 
     lea rcx, [label_chart]
@@ -1956,12 +2068,28 @@ tag_subtitle db "#SUBTITLE:"
 tag_subtitle_end:
 tag_artist db "#ARTIST:"
 tag_artist_end:
+tag_genre db "#GENRE:"
+tag_genre_end:
 tag_title_trans db "#TITLETRANSLIT:"
 tag_title_trans_end:
 tag_subtitle_trans db "#SUBTITLETRANSLIT:"
 tag_subtitle_trans_end:
 tag_artist_trans db "#ARTISTTRANSLIT:"
 tag_artist_trans_end:
+tag_music db "#MUSIC:"
+tag_music_end:
+tag_banner db "#BANNER:"
+tag_banner_end:
+tag_background db "#BACKGROUND:"
+tag_background_end:
+tag_cdtitle db "#CDTITLE:"
+tag_cdtitle_end:
+tag_jacket db "#JACKET:"
+tag_jacket_end:
+tag_sample_start db "#SAMPLESTART:"
+tag_sample_start_end:
+tag_sample_length db "#SAMPLELENGTH:"
+tag_sample_length_end:
 tag_offset db "#OFFSET:"
 tag_offset_end:
 tag_chart_name db "#CHARTNAME:"
@@ -1984,9 +2112,17 @@ label_file db "file: ", 0
 label_title db "title: ", 0
 label_subtitle db "subtitle: ", 0
 label_artist db "artist: ", 0
+label_genre db "genre: ", 0
 label_title_trans db "title_trans: ", 0
 label_subtitle_trans db "subtitle_trans: ", 0
 label_artist_trans db "artist_trans: ", 0
+label_music db "music: ", 0
+label_banner db "banner: ", 0
+label_background db "background: ", 0
+label_cdtitle db "cdtitle: ", 0
+label_jacket db "jacket: ", 0
+label_sample_start db "sample_start: ", 0
+label_sample_length db "sample_length: ", 0
 label_charts db "charts: ", 0
 label_chart db "chart: ", 0
 label_step_type db "step_type: ", 0
@@ -2087,9 +2223,17 @@ offset_slice resb ASSP_BYTE_SLICE_SIZE
 title_slice resb ASSP_BYTE_SLICE_SIZE
 subtitle_slice resb ASSP_BYTE_SLICE_SIZE
 artist_slice resb ASSP_BYTE_SLICE_SIZE
+genre_slice resb ASSP_BYTE_SLICE_SIZE
 title_trans_slice resb ASSP_BYTE_SLICE_SIZE
 subtitle_trans_slice resb ASSP_BYTE_SLICE_SIZE
 artist_trans_slice resb ASSP_BYTE_SLICE_SIZE
+music_slice resb ASSP_BYTE_SLICE_SIZE
+banner_slice resb ASSP_BYTE_SLICE_SIZE
+background_slice resb ASSP_BYTE_SLICE_SIZE
+cdtitle_slice resb ASSP_BYTE_SLICE_SIZE
+jacket_slice resb ASSP_BYTE_SLICE_SIZE
+sample_start_slice resb ASSP_BYTE_SLICE_SIZE
+sample_length_slice resb ASSP_BYTE_SLICE_SIZE
 chart_name_slice resb ASSP_BYTE_SLICE_SIZE
 display_bpm_slice resb ASSP_BYTE_SLICE_SIZE
 step_artist_slice resb ASSP_BYTE_SLICE_SIZE
