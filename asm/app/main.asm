@@ -1759,6 +1759,12 @@ print_report:
     lea rcx, [label_chart_offset_seconds]
     mov rdx, [offset_ms]
     call print_fixed3_field
+    lea rcx, [label_beat0_offset_seconds]
+    mov rdx, [offset_ms]
+    call print_milli6_field
+    lea rcx, [label_beat0_group_offset_seconds]
+    xor edx, edx
+    call print_milli6_field
     lea rcx, [label_chart_has_own_timing]
     mov rdx, [chart_has_own_timing]
     call print_field
@@ -2216,6 +2222,17 @@ print_bpm_segments_field:
     add rsp, 88
     ret
 
+print_milli6_field:
+    sub rsp, 56
+    mov [rsp + 32], rdx
+    call print_z
+    mov rcx, [rsp + 32]
+    call print_milli6_inline
+    lea rcx, [newline]
+    call print_z
+    add rsp, 56
+    ret
+
 print_milli6_inline:
     sub rsp, 72
     mov [rsp + 32], rcx
@@ -2491,6 +2508,8 @@ label_bpm_data db "bpm_data: ", 0
 label_bpms_formatted db "bpms_formatted: ", 0
 label_offset db "offset: ", 0
 label_chart_offset_seconds db "chart_offset_seconds: ", 0
+label_beat0_offset_seconds db "beat0_offset_seconds: ", 0
+label_beat0_group_offset_seconds db "beat0_group_offset_seconds: ", 0
 label_chart_has_own_timing db "chart_has_own_timing: ", 0
 label_display_bpm db "display_bpm_tag: ", 0
 label_bpm db "bpm: ", 0
