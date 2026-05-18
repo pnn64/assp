@@ -2388,6 +2388,18 @@ print_report:
     mov rdx, [artist_trans_slice + ASSP_BYTE_SLICE_PTR]
     mov r8, [artist_trans_slice + ASSP_BYTE_SLICE_LEN]
     call print_slice_field
+    lea rcx, [label_title_translated]
+    mov rdx, [title_trans_slice + ASSP_BYTE_SLICE_PTR]
+    mov r8, [title_trans_slice + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+    lea rcx, [label_subtitle_translated]
+    mov rdx, [subtitle_trans_slice + ASSP_BYTE_SLICE_PTR]
+    mov r8, [subtitle_trans_slice + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+    lea rcx, [label_artist_translated]
+    mov rdx, [artist_trans_slice + ASSP_BYTE_SLICE_PTR]
+    mov r8, [artist_trans_slice + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
     lea rcx, [label_music]
     mov rdx, [music_slice + ASSP_BYTE_SLICE_PTR]
     mov r8, [music_slice + ASSP_BYTE_SLICE_LEN]
@@ -2434,6 +2446,10 @@ print_report:
     mov rdx, [chart_index]
     call print_field
     lea rcx, [label_step_type]
+    mov rdx, [chart_info + ASSP_CHART_INFO_STEP_TYPE_PTR]
+    mov r8, [chart_info + ASSP_CHART_INFO_STEP_TYPE_LEN]
+    call print_slice_field
+    lea rcx, [label_steps_type]
     mov rdx, [chart_info + ASSP_CHART_INFO_STEP_TYPE_PTR]
     mov r8, [chart_info + ASSP_CHART_INFO_STEP_TYPE_LEN]
     call print_slice_field
@@ -3495,6 +3511,9 @@ print_report:
     lea rcx, [label_max_nps]
     mov rdx, [max_nps_centi]
     call print_fixed2_field
+    lea rcx, [label_peak_nps]
+    mov rdx, [max_nps_centi]
+    call print_fixed2_field
     lea rcx, [label_peak_nps_milli]
     mov rdx, [peak_nps_milli]
     call print_field
@@ -4465,6 +4484,9 @@ label_genre db "genre: ", 0
 label_title_trans db "title_trans: ", 0
 label_subtitle_trans db "subtitle_trans: ", 0
 label_artist_trans db "artist_trans: ", 0
+label_title_translated db "title_translated: ", 0
+label_subtitle_translated db "subtitle_translated: ", 0
+label_artist_translated db "artist_translated: ", 0
 label_music db "music: ", 0
 label_banner db "banner: ", 0
 label_background db "background: ", 0
@@ -4479,6 +4501,7 @@ label_chart_name_tag_allowed db "chart_name_tag_allowed: ", 0
 label_charts db "charts: ", 0
 label_chart db "chart: ", 0
 label_step_type db "step_type: ", 0
+label_steps_type db "steps_type: ", 0
 label_difficulty db "difficulty: ", 0
 label_raw_difficulty db "raw_difficulty: ", 0
 label_meter db "meter: ", 0
@@ -4761,6 +4784,7 @@ label_total_mono db "total_mono: ", 0
 label_left_face_mono db "left_face_mono: ", 0
 label_right_face_mono db "right_face_mono: ", 0
 label_max_nps db "max_nps: ", 0
+label_peak_nps db "peak_nps: ", 0
 label_peak_nps_milli db "peak_nps_milli: ", 0
 label_median_nps db "median_nps: ", 0
 label_tier_bpm db "tier_bpm: ", 0

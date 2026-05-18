@@ -321,8 +321,9 @@ description. SM `#NOTES:` / `#NOTES2:` blocks are also split into their five
 metadata fields before chart rows are passed to the stat counter. The standalone
 report path currently supports `dance-single` and `dance-double` charts. Chart
 reports include simfile title/artist/translit metadata, genre, media/artwork
-tags, sample timing tags, SSC version, split-timing allowance, chart-name tag
-allowance, resolved and raw difficulty, chart name, credit/step-artist metadata,
+tags, translated metadata aliases, sample timing tags, SSC version,
+split-timing allowance, chart-name tag allowance, resolved and raw difficulty,
+chart name, step-type aliases, credit/step-artist metadata,
 parsed tech notation, chart-local
 music/attacks/timing metadata tags, chart-local raw timing tags, global
 attacks/display-BPM tags, resolved display BPM ranges, global raw timing tags,
@@ -333,7 +334,7 @@ formatted timing BPM/stop/delay/warp/fake maps, global and selected timing
 metadata tags, selected raw timing tags, chart display-BPM tags,
 chart offset seconds, beat-zero timing offsets, timing ownership,
 RSSP-style display BPM aliases,
-min/max/average/median display BPMs, tier BPM, max/peak/median NPS,
+min/max/average/median display BPMs, tier BPM, max/peak/median NPS aliases,
 per-measure note/NPS vectors, per-measure equally-spaced flags,
 equally-spaced measure counts, formatted length,
 density-derived stream counts, total stream counts, stream percentages,
