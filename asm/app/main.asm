@@ -1689,6 +1689,12 @@ print_report:
     lea rcx, [label_offset]
     mov rdx, [offset_ms]
     call print_fixed3_field
+    lea rcx, [label_chart_offset_seconds]
+    mov rdx, [offset_ms]
+    call print_fixed3_field
+    lea rcx, [label_chart_has_own_timing]
+    mov rdx, [chart_has_own_timing]
+    call print_field
     lea rcx, [label_display_bpm]
     mov rdx, [display_bpm_slice + ASSP_BYTE_SLICE_PTR]
     mov r8, [display_bpm_slice + ASSP_BYTE_SLICE_LEN]
@@ -2245,6 +2251,8 @@ label_hash db "hash: ", 0
 label_bpm_neutral_hash db "bpm_neutral_hash: ", 0
 label_hash_bpms db "hash_bpms: ", 0
 label_offset db "offset: ", 0
+label_chart_offset_seconds db "chart_offset_seconds: ", 0
+label_chart_has_own_timing db "chart_has_own_timing: ", 0
 label_display_bpm db "display_bpm_tag: ", 0
 label_bpm db "bpm: ", 0
 label_min_bpm db "min_bpm: ", 0
