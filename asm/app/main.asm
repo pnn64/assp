@@ -1749,6 +1749,10 @@ print_report:
     lea rdx, [global_bpm_buffer]
     mov r8, [global_bpms_len]
     call print_slice_field
+    lea rcx, [label_bpms_formatted]
+    lea rdx, [bpm_segment_buffer]
+    mov r8, [bpm_segment_count]
+    call print_bpm_segments_field
     lea rcx, [label_offset]
     mov rdx, [offset_ms]
     call print_fixed3_field
@@ -2175,6 +2179,84 @@ print_duration_field:
     add rsp, 72
     ret
 
+print_bpm_segments_field:
+    sub rsp, 88
+    mov [rsp + 32], rdx
+    mov [rsp + 40], r8
+    mov qword [rsp + 48], 0
+    call print_z
+
+.loop:
+    mov rax, [rsp + 48]
+    cmp rax, [rsp + 40]
+    jae .newline
+    test rax, rax
+    jz .segment
+    lea rcx, [comma]
+    call print_z
+
+.segment:
+    mov rax, [rsp + 48]
+    imul rax, ASSP_BPM_SEGMENT_SIZE
+    add rax, [rsp + 32]
+    mov [rsp + 56], rax
+    mov rcx, [rax + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    call print_milli6_inline
+    lea rcx, [equals]
+    call print_z
+    mov rax, [rsp + 56]
+    mov rcx, [rax + ASSP_BPM_SEGMENT_BPM_MILLI]
+    call print_milli6_inline
+    inc qword [rsp + 48]
+    jmp .loop
+
+.newline:
+    lea rcx, [newline]
+    call print_z
+    add rsp, 88
+    ret
+
+print_milli6_inline:
+    sub rsp, 72
+    mov [rsp + 32], rcx
+
+    mov rax, [rsp + 32]
+    test rax, rax
+    jge .positive
+    neg rax
+    mov [rsp + 32], rax
+    lea rcx, [minus]
+    call print_z
+    mov rax, [rsp + 32]
+
+.positive:
+    xor edx, edx
+    mov r9d, 1000
+    div r9
+    mov [rsp + 40], rdx
+    mov rcx, rax
+    call print_u64
+    lea rcx, [dot]
+    call print_z
+    mov rax, [rsp + 40]
+    cmp rax, 100
+    jae .fraction
+    lea rcx, [zero_digit]
+    call print_z
+    mov rax, [rsp + 40]
+    cmp rax, 10
+    jae .fraction
+    lea rcx, [zero_digit]
+    call print_z
+
+.fraction:
+    mov rcx, [rsp + 40]
+    call print_u64
+    lea rcx, [milli_to_six_tail]
+    call print_z
+    add rsp, 72
+    ret
+
 print_slice_field:
     sub rsp, 72
     mov [rsp + 32], rdx
@@ -2406,6 +2488,7 @@ label_bpm_neutral_sha1 db "bpm_neutral_sha1: ", 0
 label_bpm_neutral_sha1_hash db "bpm_neutral_sha1_hash: ", 0
 label_hash_bpms db "hash_bpms: ", 0
 label_bpm_data db "bpm_data: ", 0
+label_bpms_formatted db "bpms_formatted: ", 0
 label_offset db "offset: ", 0
 label_chart_offset_seconds db "chart_offset_seconds: ", 0
 label_chart_has_own_timing db "chart_has_own_timing: ", 0
@@ -2483,9 +2566,12 @@ label_right db "right: ", 0
 label_right_arrows db "right_arrows: ", 0
 label_bad_rows db "malformed_rows: ", 0
 space db " ", 0
+comma db ",", 0
+equals db "=", 0
 minus db "-", 0
 dot db ".", 0
 zero_digit db "0", 0
+milli_to_six_tail db "000", 0
 minute_suffix db "m ", 0
 second_suffix db "s", 0
 newline db 13, 10, 0
