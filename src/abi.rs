@@ -70,6 +70,16 @@ pub struct StepParityActionFlags4 {
     pub right_moved_not_holding: u8,
 }
 
+#[repr(C)]
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
+pub struct StepParityBasicCosts4 {
+    pub mine: f32,
+    pub bracket_jack: f32,
+    pub doublestep: f32,
+    pub missed_footswitch: f32,
+    pub total: f32,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct StepParityTransition4 {
     pub placement: [u8; 4],
@@ -325,6 +335,14 @@ unsafe extern "C" {
         result: *const StepParityState4,
         hit: *const i8,
         out: *mut StepParityActionFlags4,
+    ) -> c_int;
+    fn assp_step_parity_basic_action_costs_4(
+        result: *const StepParityState4,
+        flags: *const StepParityActionFlags4,
+        multi_active: u32,
+        mine_mask: u32,
+        prev_row_has_live_hold: c_int,
+        out: *mut StepParityBasicCosts4,
     ) -> c_int;
     fn assp_parse_bpm_map(
         data: *const u8,
@@ -1157,6 +1175,28 @@ pub fn step_parity_action_flags_4(
 ) -> Option<StepParityActionFlags4> {
     let mut out = StepParityActionFlags4::default();
     let ok = unsafe { assp_step_parity_action_flags_4(initial, result, hit.as_ptr(), &mut out) };
+    (ok != 0).then_some(out)
+}
+
+#[must_use]
+pub fn step_parity_basic_action_costs_4(
+    result: &StepParityState4,
+    flags: &StepParityActionFlags4,
+    multi_active: bool,
+    mine_mask: u8,
+    prev_row_has_live_hold: bool,
+) -> Option<StepParityBasicCosts4> {
+    let mut out = StepParityBasicCosts4::default();
+    let ok = unsafe {
+        assp_step_parity_basic_action_costs_4(
+            result,
+            flags,
+            u32::from(multi_active),
+            u32::from(mine_mask),
+            c_int::from(prev_row_has_live_hold),
+            &mut out,
+        )
+    };
     (ok != 0).then_some(out)
 }
 
@@ -2033,7 +2073,9 @@ pub fn count_timing_note_stats_no_holds_8(
 
 #[cfg(test)]
 mod tests {
-    use super::{NoteStats, StepParityActionFlags4, StepParityState4, TechCounts};
+    use super::{
+        NoteStats, StepParityActionFlags4, StepParityBasicCosts4, StepParityState4, TechCounts,
+    };
 
     #[test]
     fn note_stats_layout_is_c_abi() {
@@ -2057,6 +2099,12 @@ mod tests {
     fn step_parity_action_flags4_layout_is_c_abi() {
         assert_eq!(std::mem::size_of::<StepParityActionFlags4>(), 7);
         assert_eq!(std::mem::align_of::<StepParityActionFlags4>(), 1);
+    }
+
+    #[test]
+    fn step_parity_basic_costs4_layout_is_c_abi() {
+        assert_eq!(std::mem::size_of::<StepParityBasicCosts4>(), 20);
+        assert_eq!(std::mem::align_of::<StepParityBasicCosts4>(), 4);
     }
 
     #[test]

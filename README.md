@@ -50,6 +50,7 @@ The first implemented pieces are:
 - `assp_step_parity_row_transitions_4`
 - `assp_step_parity_row_key_candidates_4`
 - `assp_step_parity_action_flags_4`
+- `assp_step_parity_basic_action_costs_4`
 - `assp_parse_bpm_map`
 - `assp_parse_offset_ms`
 - `assp_bpm_display_range`
@@ -214,6 +215,10 @@ costs to choose the winning predecessor when a later candidate has lower cost.
 did-jump, and left/right jack detection from resolved parity states and hit
 columns. This is scoring infrastructure only; it does not yet compute final
 row costs.
+`assp_step_parity_basic_action_costs_4` ports the pure constant-weight action
+cost terms that do not require layout geometry or elapsed-time math: mine
+collision, bracket-jack, doublestep, and missed footswitch. The remaining DP
+cost terms still need the layout and timing-dependent RSSP logic.
 `assp_chart_owns_timing_by_index` checks the RSSP chart-local timing ownership
 predicate for SSC `#NOTEDATA` blocks.
 `assp_parse_bpm_map` parses BPM timing maps into sorted fixed-point

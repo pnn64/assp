@@ -7,6 +7,7 @@ global assp_step_parity_result_state_holds_4
 global assp_step_parity_row_transitions_4
 global assp_step_parity_row_key_candidates_4
 global assp_step_parity_action_flags_4
+global assp_step_parity_basic_action_costs_4
 
 section .text
 
@@ -930,3 +931,127 @@ action_check_jack_foot_4:
 .no:
     xor eax, eax
     ret
+
+; rcx = result state, rdx = action flags, r8d = multi-active row,
+; r9d = mine|fake mine mask, stack arg 5 = prev row has live hold,
+; stack arg 6 = out assp_step_parity_basic_costs4.
+; eax = 1 on success, 0 on invalid pointers.
+assp_step_parity_basic_action_costs_4:
+    test rcx, rcx
+    jz .fail
+    test rdx, rdx
+    jz .fail
+    mov r10, [rsp + 48]
+    test r10, r10
+    jz .fail
+
+    xor eax, eax
+    mov [r10 + ASSP_STEP_PARITY_BASIC_COSTS4_MINE], eax
+    mov [r10 + ASSP_STEP_PARITY_BASIC_COSTS4_BRACKET_JACK], eax
+    mov [r10 + ASSP_STEP_PARITY_BASIC_COSTS4_DOUBLESTEP], eax
+    mov [r10 + ASSP_STEP_PARITY_BASIC_COSTS4_MISSED_FOOTSWITCH], eax
+    mov [r10 + ASSP_STEP_PARITY_BASIC_COSTS4_TOTAL], eax
+    xorps xmm0, xmm0
+
+    mov eax, r9d
+    and al, [rcx + ASSP_STEP_PARITY_STATE4_OCCUPIED_MASK]
+    jz .bracket_jack
+    movss xmm1, [rel cost_mine_weight]
+    movss [r10 + ASSP_STEP_PARITY_BASIC_COSTS4_MINE], xmm1
+    addss xmm0, xmm1
+
+.bracket_jack:
+    test r8d, r8d
+    jz .doublestep
+    cmp byte [rcx + ASSP_STEP_PARITY_STATE4_HOLDING_MASK], 0
+    jne .doublestep
+    cmp byte [rdx + ASSP_STEP_PARITY_ACTION_FLAGS4_DID_JUMP], 0
+    jne .doublestep
+    mov al, [rdx + ASSP_STEP_PARITY_ACTION_FLAGS4_MOVED_LEFT]
+    cmp al, [rdx + ASSP_STEP_PARITY_ACTION_FLAGS4_MOVED_RIGHT]
+    je .doublestep
+
+    xorps xmm2, xmm2
+    cmp byte [rdx + ASSP_STEP_PARITY_ACTION_FLAGS4_JACKED_LEFT], 0
+    je .right_bracket_jack
+    movzx eax, byte [rcx + ASSP_STEP_PARITY_STATE4_MOVED_MASK]
+    and eax, 3
+    cmp eax, 3
+    jne .right_bracket_jack
+    addss xmm2, [rel cost_bracket_jack_weight]
+
+.right_bracket_jack:
+    cmp byte [rdx + ASSP_STEP_PARITY_ACTION_FLAGS4_JACKED_RIGHT], 0
+    je .store_bracket_jack
+    movzx eax, byte [rcx + ASSP_STEP_PARITY_STATE4_MOVED_MASK]
+    and eax, 12
+    cmp eax, 12
+    jne .store_bracket_jack
+    addss xmm2, [rel cost_bracket_jack_weight]
+
+.store_bracket_jack:
+    movss [r10 + ASSP_STEP_PARITY_BASIC_COSTS4_BRACKET_JACK], xmm2
+    addss xmm0, xmm2
+
+.doublestep:
+    mov al, [rdx + ASSP_STEP_PARITY_ACTION_FLAGS4_MOVED_LEFT]
+    cmp al, [rdx + ASSP_STEP_PARITY_ACTION_FLAGS4_MOVED_RIGHT]
+    je .missed_footswitch
+    cmp byte [rdx + ASSP_STEP_PARITY_ACTION_FLAGS4_DID_JUMP], 0
+    jne .missed_footswitch
+    cmp byte [rcx + ASSP_STEP_PARITY_STATE4_HOLDING_MASK], 0
+    jne .missed_footswitch
+    cmp dword [rsp + 40], 0
+    jne .missed_footswitch
+
+    xor eax, eax
+    cmp byte [rdx + ASSP_STEP_PARITY_ACTION_FLAGS4_MOVED_LEFT], 0
+    je .check_right_doublestep
+    cmp byte [rdx + ASSP_STEP_PARITY_ACTION_FLAGS4_JACKED_LEFT], 0
+    jne .check_right_doublestep
+    cmp byte [rdx + ASSP_STEP_PARITY_ACTION_FLAGS4_LEFT_MOVED_NOT_HOLDING], 0
+    setne al
+
+.check_right_doublestep:
+    cmp byte [rdx + ASSP_STEP_PARITY_ACTION_FLAGS4_MOVED_RIGHT], 0
+    je .maybe_store_doublestep
+    cmp byte [rdx + ASSP_STEP_PARITY_ACTION_FLAGS4_JACKED_RIGHT], 0
+    jne .maybe_store_doublestep
+    cmp byte [rdx + ASSP_STEP_PARITY_ACTION_FLAGS4_RIGHT_MOVED_NOT_HOLDING], 0
+    setne cl
+    or al, cl
+
+.maybe_store_doublestep:
+    test al, al
+    jz .missed_footswitch
+    movss xmm1, [rel cost_doublestep_weight]
+    movss [r10 + ASSP_STEP_PARITY_BASIC_COSTS4_DOUBLESTEP], xmm1
+    addss xmm0, xmm1
+
+.missed_footswitch:
+    test r9d, r9d
+    jz .finish
+    cmp byte [rdx + ASSP_STEP_PARITY_ACTION_FLAGS4_JACKED_LEFT], 0
+    jne .store_missed_footswitch
+    cmp byte [rdx + ASSP_STEP_PARITY_ACTION_FLAGS4_JACKED_RIGHT], 0
+    je .finish
+
+.store_missed_footswitch:
+    movss xmm1, [rel cost_missed_footswitch_weight]
+    movss [r10 + ASSP_STEP_PARITY_BASIC_COSTS4_MISSED_FOOTSWITCH], xmm1
+    addss xmm0, xmm1
+
+.finish:
+    movss [r10 + ASSP_STEP_PARITY_BASIC_COSTS4_TOTAL], xmm0
+    mov eax, ASSP_TRUE
+    ret
+
+.fail:
+    xor eax, eax
+    ret
+
+section .rdata
+cost_mine_weight dd 10000.0
+cost_bracket_jack_weight dd 20.0
+cost_doublestep_weight dd 850.0
+cost_missed_footswitch_weight dd 500.0

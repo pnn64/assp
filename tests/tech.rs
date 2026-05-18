@@ -1,8 +1,8 @@
 use assp::{
-    StepParityActionFlags4, StepParityState4, TechCounts,
+    StepParityActionFlags4, StepParityBasicCosts4, StepParityState4, TechCounts,
     calculate_step_tech_counts_from_placements_4, count_step_tech_brackets_minimized_4,
     count_step_tech_brackets_minimized_8, parse_tech_notation, step_parity_action_flags_4,
-    step_parity_permutations_4, step_parity_result_state_holds_4,
+    step_parity_basic_action_costs_4, step_parity_permutations_4, step_parity_result_state_holds_4,
     step_parity_result_state_no_holds_4, step_parity_row_key_candidates_4,
     step_parity_row_transitions_4,
 };
@@ -200,6 +200,63 @@ fn expected_action_flags(
         jacked_right: u8::from(did_jack(3, 4, moved_right, right_moved_not_holding)),
         left_moved_not_holding: u8::from(left_moved_not_holding),
         right_moved_not_holding: u8::from(right_moved_not_holding),
+    }
+}
+
+fn expected_basic_costs(
+    result: StepParityState4,
+    flags: StepParityActionFlags4,
+    multi_active: bool,
+    mine_mask: u8,
+    prev_row_has_live_hold: bool,
+) -> StepParityBasicCosts4 {
+    let mine = if mine_mask & result.occupied_mask != 0 {
+        10000.0
+    } else {
+        0.0
+    };
+
+    let bracket_jack = if multi_active
+        && result.holding_mask == 0
+        && flags.did_jump == 0
+        && flags.moved_left != flags.moved_right
+    {
+        let left = flags.jacked_left != 0 && result.moved_mask & 0b0011 == 0b0011;
+        let right = flags.jacked_right != 0 && result.moved_mask & 0b1100 == 0b1100;
+        20.0 * f32::from(left as u8 + right as u8)
+    } else {
+        0.0
+    };
+
+    let did_double_step =
+        (flags.moved_left != 0 && flags.jacked_left == 0 && flags.left_moved_not_holding != 0)
+            || (flags.moved_right != 0
+                && flags.jacked_right == 0
+                && flags.right_moved_not_holding != 0);
+    let doublestep = if flags.moved_left != flags.moved_right
+        && flags.did_jump == 0
+        && result.holding_mask == 0
+        && did_double_step
+        && !prev_row_has_live_hold
+    {
+        850.0
+    } else {
+        0.0
+    };
+
+    let missed_footswitch = if mine_mask != 0 && (flags.jacked_left != 0 || flags.jacked_right != 0)
+    {
+        500.0
+    } else {
+        0.0
+    };
+
+    StepParityBasicCosts4 {
+        mine,
+        bracket_jack,
+        doublestep,
+        missed_footswitch,
+        total: mine + bracket_jack + doublestep + missed_footswitch,
     }
 }
 
@@ -448,6 +505,100 @@ fn calculates_action_flags_like_rssp_cost_prelude() {
         assert_eq!(
             step_parity_action_flags_4(&initial, &result, &hit).unwrap(),
             expected_action_flags(initial, result, hit)
+        );
+    }
+}
+
+#[test]
+fn calculates_basic_action_cost_terms_like_rssp_core() {
+    let cases = [
+        (
+            StepParityState4 {
+                occupied_mask: 0b0001,
+                moved_mask: 0b0001,
+                ..StepParityState4::default()
+            },
+            StepParityActionFlags4 {
+                moved_left: 1,
+                left_moved_not_holding: 1,
+                ..StepParityActionFlags4::default()
+            },
+            false,
+            0b0001,
+            false,
+        ),
+        (
+            StepParityState4 {
+                moved_mask: 0b0011,
+                ..StepParityState4::default()
+            },
+            StepParityActionFlags4 {
+                moved_left: 1,
+                jacked_left: 1,
+                left_moved_not_holding: 1,
+                ..StepParityActionFlags4::default()
+            },
+            true,
+            0,
+            false,
+        ),
+        (
+            StepParityState4 {
+                moved_mask: 0b0001,
+                ..StepParityState4::default()
+            },
+            StepParityActionFlags4 {
+                moved_left: 1,
+                left_moved_not_holding: 1,
+                ..StepParityActionFlags4::default()
+            },
+            false,
+            0,
+            false,
+        ),
+        (
+            StepParityState4 {
+                moved_mask: 0b0001,
+                ..StepParityState4::default()
+            },
+            StepParityActionFlags4 {
+                moved_left: 1,
+                left_moved_not_holding: 1,
+                ..StepParityActionFlags4::default()
+            },
+            false,
+            0,
+            true,
+        ),
+        (
+            StepParityState4 {
+                occupied_mask: 0b0100,
+                moved_mask: 0b1100,
+                ..StepParityState4::default()
+            },
+            StepParityActionFlags4 {
+                moved_right: 1,
+                jacked_right: 1,
+                right_moved_not_holding: 1,
+                ..StepParityActionFlags4::default()
+            },
+            true,
+            0b0100,
+            false,
+        ),
+    ];
+
+    for (result, flags, multi_active, mine_mask, prev_live_hold) in cases {
+        assert_eq!(
+            step_parity_basic_action_costs_4(
+                &result,
+                &flags,
+                multi_active,
+                mine_mask,
+                prev_live_hold
+            )
+            .unwrap(),
+            expected_basic_costs(result, flags, multi_active, mine_mask, prev_live_hold)
         );
     }
 }
