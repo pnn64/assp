@@ -298,6 +298,13 @@ unsafe extern "C" {
         len: usize,
         out: *mut StreamCounts,
     ) -> c_int;
+    fn assp_stream_percentages_centi(
+        counts: *const StreamCounts,
+        measure_count: usize,
+        out_stream_percent: *mut i64,
+        out_adjusted_stream_percent: *mut i64,
+        out_break_percent: *mut i64,
+    ) -> c_int;
     fn assp_stream_segments_from_densities(
         densities: *const u32,
         len: usize,
@@ -979,6 +986,26 @@ pub fn stream_counts_from_densities(densities: &[u32]) -> Option<StreamCounts> {
     let ok =
         unsafe { assp_stream_counts_from_densities(densities.as_ptr(), densities.len(), &mut out) };
     (ok != 0).then_some(out)
+}
+
+#[must_use]
+pub fn stream_percentages_centi(
+    counts: &StreamCounts,
+    measure_count: usize,
+) -> Option<(i64, i64, i64)> {
+    let mut stream_percent = 0;
+    let mut adjusted_stream_percent = 0;
+    let mut break_percent = 0;
+    let ok = unsafe {
+        assp_stream_percentages_centi(
+            counts,
+            measure_count,
+            &mut stream_percent,
+            &mut adjusted_stream_percent,
+            &mut break_percent,
+        )
+    };
+    (ok != 0).then_some((stream_percent, adjusted_stream_percent, break_percent))
 }
 
 #[must_use]

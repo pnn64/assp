@@ -20,6 +20,6 @@ pub use abi::{
     measure_equally_spaced_minimized_8, measure_nps_milli_from_bpms, measure_nps_milli_with_events,
     minimize_chart_4, minimize_chart_8, minimize_measure_4, minimize_measure_8,
     normalize_float_digits, nps_median_centi, parse_bpm_map, parse_offset_ms, sha1_short_hex2,
-    stream_counts_from_densities, stream_segments_from_densities, stream_tokens_from_densities,
-    supported_step_type_lanes, tier_bpm_centi, version,
+    stream_counts_from_densities, stream_percentages_centi, stream_segments_from_densities,
+    stream_tokens_from_densities, supported_step_type_lanes, tier_bpm_centi, version,
 };

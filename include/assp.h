@@ -316,6 +316,13 @@ int32_t assp_stream_counts_from_densities(
     size_t len,
     assp_stream_counts *out
 );
+int32_t assp_stream_percentages_centi(
+    const assp_stream_counts *counts,
+    size_t measure_count,
+    int64_t *out_stream_percent,
+    int64_t *out_adjusted_stream_percent,
+    int64_t *out_break_percent
+);
 size_t assp_stream_segments_from_densities(
     const uint32_t *densities,
     size_t len,

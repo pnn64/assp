@@ -53,6 +53,7 @@ extern assp_normalize_float_digits
 extern assp_parse_bpm_map
 extern assp_parse_offset_ms
 extern assp_stream_counts_from_densities
+extern assp_stream_percentages_centi
 extern assp_stream_segments_from_densities
 extern assp_stream_tokens_from_densities
 extern assp_format_stream_segments
@@ -191,6 +192,16 @@ start:
     mov rdx, [measure_count]
     lea r8, [stream_counts]
     call assp_stream_counts_from_densities
+    test eax, eax
+    jz fail_stats
+
+    lea rcx, [stream_counts]
+    mov rdx, [measure_count]
+    lea r8, [stream_percent_centi]
+    lea r9, [adjusted_stream_percent_centi]
+    lea rax, [break_percent_centi]
+    mov [rsp + 32], rax
+    call assp_stream_percentages_centi
     test eax, eax
     jz fail_stats
 
@@ -1299,6 +1310,15 @@ print_report:
     lea rcx, [label_total_breaks]
     mov rdx, [stream_counts + ASSP_STREAM_COUNTS_TOTAL_BREAKS]
     call print_field
+    lea rcx, [label_stream_percent]
+    mov rdx, [stream_percent_centi]
+    call print_fixed2_field
+    lea rcx, [label_adjusted_stream_percent]
+    mov rdx, [adjusted_stream_percent_centi]
+    call print_fixed2_field
+    lea rcx, [label_break_percent]
+    mov rdx, [break_percent_centi]
+    call print_fixed2_field
     lea rcx, [label_stream_segments]
     mov rdx, [stream_segment_count]
     call print_field
@@ -1635,6 +1655,9 @@ label_stream24 db "24th_streams: ", 0
 label_stream32 db "32nd_streams: ", 0
 label_sn_breaks db "sn_breaks: ", 0
 label_total_breaks db "total_breaks: ", 0
+label_stream_percent db "stream_percent: ", 0
+label_adjusted_stream_percent db "adj_stream_percent: ", 0
+label_break_percent db "break_percent: ", 0
 label_stream_segments db "stream_segments: ", 0
 label_stream_tokens db "stream_tokens: ", 0
 label_breakdown_detailed db "breakdown_detailed: ", 0
@@ -1704,6 +1727,9 @@ peak_nps_milli resq 1
 median_nps_centi resq 1
 tier_bpm_centi resq 1
 equally_spaced_measures resq 1
+stream_percent_centi resq 1
+adjusted_stream_percent_centi resq 1
+break_percent_centi resq 1
 last_beat_milli resq 1
 offset_ms resq 1
 min_bpm resq 1

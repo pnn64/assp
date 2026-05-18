@@ -2,6 +2,7 @@ default rel
 %include "assp.inc"
 
 global assp_stream_counts_from_densities
+global assp_stream_percentages_centi
 global assp_stream_segments_from_densities
 global assp_stream_tokens_from_densities
 global assp_format_stream_tokens
@@ -204,6 +205,89 @@ assp_stream_counts_from_densities:
     pop rdi
     pop rsi
     pop rbx
+    ret
+
+; rcx = assp_stream_counts, rdx = total measures, r8 = out stream percent,
+; r9 = out adjusted stream percent, stack arg 5 = out break percent.
+; Outputs are percentages rounded to cents. eax = 1 on success.
+assp_stream_percentages_centi:
+    push rbp
+    mov rbp, rsp
+    push rbx
+    push rsi
+    push rdi
+    push r12
+
+    mov r10, [rbp + 48]
+    test rcx, rcx
+    jz .fail
+    test r8, r8
+    jz .fail
+    test r9, r9
+    jz .fail
+    test r10, r10
+    jz .fail
+
+    mov rsi, [rcx + ASSP_STREAM_COUNTS_RUN16]
+    add rsi, [rcx + ASSP_STREAM_COUNTS_RUN20]
+    add rsi, [rcx + ASSP_STREAM_COUNTS_RUN24]
+    add rsi, [rcx + ASSP_STREAM_COUNTS_RUN32]
+    mov rdi, [rcx + ASSP_STREAM_COUNTS_TOTAL_BREAKS]
+
+    xor eax, eax
+    test rdx, rdx
+    jz .store_stream_percent
+    mov rax, rsi
+    imul rax, rax, 10000
+    mov rbx, rdx
+    call stream_round_unsigned_div_ties_even
+.store_stream_percent:
+    mov [r8], rax
+
+    lea r12, [rsi + rdi]
+    xor eax, eax
+    test r12, r12
+    jz .store_adjusted_percent
+    mov rax, rsi
+    imul rax, rax, 10000
+    mov rbx, r12
+    call stream_round_unsigned_div_ties_even
+.store_adjusted_percent:
+    mov [r9], rax
+
+    mov r11, 10000
+    sub r11, rax
+    mov r10, [rbp + 48]
+    mov [r10], r11
+
+    mov eax, 1
+    jmp .done
+
+.fail:
+    xor eax, eax
+
+.done:
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    pop rbp
+    ret
+
+; rax = numerator, rbx = positive denominator. rax = ties-even rounded quotient.
+stream_round_unsigned_div_ties_even:
+    xor edx, edx
+    div rbx
+    mov r10, rdx
+    shl r10, 1
+    cmp r10, rbx
+    jb .done
+    ja .round_up
+    test al, 1
+    jz .done
+.round_up:
+    inc rax
+.done:
     ret
 
 ; rcx = u32 densities, rdx = density count, r8 = optional output segments,

@@ -56,6 +56,7 @@ The first implemented pieces are:
 - `assp_sha1_short_hex2`
 - `assp_chart_hash_pair`
 - `assp_stream_counts_from_densities`
+- `assp_stream_percentages_centi`
 - `assp_stream_segments_from_densities`
 - `assp_stream_tokens_from_densities`
 - `assp_format_stream_tokens`
@@ -151,6 +152,8 @@ not mixed into that chart's duration/NPS timing context. Chart-local
 the chart as owning timing, matching RSSP's timing-data ownership check.
 `assp_stream_counts_from_densities` classifies 16th/20th/24th/32nd stream
 measures, SN breaks, and total break measures from those densities.
+`assp_stream_percentages_centi` computes RSSP-style stream, adjusted stream,
+and break percentages rounded to two decimal places.
 `assp_stream_segments_from_densities` emits stream and break ranges from the
 same measure densities.
 `assp_stream_tokens_from_densities` compresses RSSP's active stream range into
@@ -254,9 +257,9 @@ report path currently supports `dance-single` and `dance-double` charts. Chart
 reports include RSSP-style chart hashes,
 normalized hash BPMs, min/max/average/median display BPMs, tier BPM, peak and
 median NPS, equally-spaced measure counts, density-derived stream counts,
-fixed-point duration metrics with stops/delays/warps, token breakdowns, segment
-breakdowns, offset adjustment, and note stats with nonfake mine and timing-fake
-counts.
+stream percentages, fixed-point duration metrics with stops/delays/warps, token
+breakdowns, segment breakdowns, offset adjustment, and note stats with nonfake
+mine and timing-fake counts.
 
 Run the optional Rust parity tests:
 
