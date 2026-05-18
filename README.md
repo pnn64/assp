@@ -51,6 +51,7 @@ The first implemented pieces are:
 - `assp_step_parity_row_key_candidates_4`
 - `assp_step_parity_action_flags_4`
 - `assp_step_parity_basic_action_costs_4`
+- `assp_step_parity_elapsed_action_costs_4`
 - `assp_parse_bpm_map`
 - `assp_parse_offset_ms`
 - `assp_bpm_display_range`
@@ -219,6 +220,10 @@ row costs.
 cost terms that do not require layout geometry or elapsed-time math: mine
 collision, bracket-jack, doublestep, and missed footswitch. The remaining DP
 cost terms still need the layout and timing-dependent RSSP logic.
+`assp_step_parity_elapsed_action_costs_4` ports RSSP's elapsed-time action
+terms for slow brackets and fast jacks from the resolved action flags. This is
+still scoring infrastructure; the full DP must combine these costs with row
+state selection and layout-dependent costs.
 `assp_chart_owns_timing_by_index` checks the RSSP chart-local timing ownership
 predicate for SSC `#NOTEDATA` blocks.
 `assp_parse_bpm_map` parses BPM timing maps into sorted fixed-point

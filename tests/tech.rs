@@ -1,8 +1,9 @@
 use assp::{
-    StepParityActionFlags4, StepParityBasicCosts4, StepParityState4, TechCounts,
-    calculate_step_tech_counts_from_placements_4, count_step_tech_brackets_minimized_4,
+    StepParityActionFlags4, StepParityBasicCosts4, StepParityElapsedCosts4, StepParityState4,
+    TechCounts, calculate_step_tech_counts_from_placements_4, count_step_tech_brackets_minimized_4,
     count_step_tech_brackets_minimized_8, parse_tech_notation, step_parity_action_flags_4,
-    step_parity_basic_action_costs_4, step_parity_permutations_4, step_parity_result_state_holds_4,
+    step_parity_basic_action_costs_4, step_parity_elapsed_action_costs_4,
+    step_parity_permutations_4, step_parity_result_state_holds_4,
     step_parity_result_state_no_holds_4, step_parity_row_key_candidates_4,
     step_parity_row_transitions_4,
 };
@@ -257,6 +258,39 @@ fn expected_basic_costs(
         doublestep,
         missed_footswitch,
         total: mine + bracket_jack + doublestep + missed_footswitch,
+    }
+}
+
+fn expected_elapsed_costs(
+    flags: StepParityActionFlags4,
+    note_count: u8,
+    elapsed: f32,
+) -> StepParityElapsedCosts4 {
+    let moved_left = flags.moved_left != 0;
+    let moved_right = flags.moved_right != 0;
+    let slow_bracket = if elapsed > 0.15f32 && moved_left != moved_right && note_count >= 2 {
+        (elapsed - 0.15f32) * 300.0f32
+    } else {
+        0.0
+    };
+    let jack = if elapsed < 0.1f32
+        && moved_left != moved_right
+        && (flags.jacked_left != 0 || flags.jacked_right != 0)
+    {
+        let ts = 0.1f32 - elapsed;
+        if ts > 0.0 {
+            (1.0f32 / ts - 1.0f32 / 0.1f32) * 30.0f32
+        } else {
+            0.0
+        }
+    } else {
+        0.0
+    };
+
+    StepParityElapsedCosts4 {
+        slow_bracket,
+        jack,
+        total: slow_bracket + jack,
     }
 }
 
@@ -599,6 +633,55 @@ fn calculates_basic_action_cost_terms_like_rssp_core() {
             )
             .unwrap(),
             expected_basic_costs(result, flags, multi_active, mine_mask, prev_live_hold)
+        );
+    }
+}
+
+#[test]
+fn calculates_elapsed_action_cost_terms_like_rssp_core() {
+    let cases = [
+        (
+            StepParityActionFlags4 {
+                moved_left: 1,
+                ..StepParityActionFlags4::default()
+            },
+            2,
+            0.25f32,
+        ),
+        (
+            StepParityActionFlags4 {
+                moved_left: 1,
+                jacked_left: 1,
+                ..StepParityActionFlags4::default()
+            },
+            1,
+            0.05f32,
+        ),
+        (
+            StepParityActionFlags4 {
+                moved_left: 1,
+                moved_right: 1,
+                jacked_left: 1,
+                ..StepParityActionFlags4::default()
+            },
+            2,
+            0.25f32,
+        ),
+        (
+            StepParityActionFlags4 {
+                moved_right: 1,
+                jacked_right: 1,
+                ..StepParityActionFlags4::default()
+            },
+            2,
+            0.1f32,
+        ),
+    ];
+
+    for (flags, note_count, elapsed) in cases {
+        assert_eq!(
+            step_parity_elapsed_action_costs_4(&flags, note_count, elapsed).unwrap(),
+            expected_elapsed_costs(flags, note_count, elapsed)
         );
     }
 }

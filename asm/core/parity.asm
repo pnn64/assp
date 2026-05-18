@@ -8,6 +8,7 @@ global assp_step_parity_row_transitions_4
 global assp_step_parity_row_key_candidates_4
 global assp_step_parity_action_flags_4
 global assp_step_parity_basic_action_costs_4
+global assp_step_parity_elapsed_action_costs_4
 
 section .text
 
@@ -1050,8 +1051,80 @@ assp_step_parity_basic_action_costs_4:
     xor eax, eax
     ret
 
+; rcx = action flags, edx = row note count, r8 = elapsed seconds f32 ptr,
+; r9 = out assp_step_parity_elapsed_costs4.
+; eax = 1 on success, 0 on invalid pointers.
+assp_step_parity_elapsed_action_costs_4:
+    test rcx, rcx
+    jz .fail
+    test r8, r8
+    jz .fail
+    test r9, r9
+    jz .fail
+
+    xor eax, eax
+    mov [r9 + ASSP_STEP_PARITY_ELAPSED_COSTS4_SLOW_BRACKET], eax
+    mov [r9 + ASSP_STEP_PARITY_ELAPSED_COSTS4_JACK], eax
+    mov [r9 + ASSP_STEP_PARITY_ELAPSED_COSTS4_TOTAL], eax
+    xorps xmm0, xmm0
+
+.slow_bracket:
+    cmp edx, 2
+    jb .jack
+    mov al, [rcx + ASSP_STEP_PARITY_ACTION_FLAGS4_MOVED_LEFT]
+    cmp al, [rcx + ASSP_STEP_PARITY_ACTION_FLAGS4_MOVED_RIGHT]
+    je .jack
+    movss xmm1, [r8]
+    comiss xmm1, [rel cost_slow_bracket_threshold]
+    jbe .jack
+    subss xmm1, [rel cost_slow_bracket_threshold]
+    mulss xmm1, [rel cost_slow_bracket_weight]
+    movss [r9 + ASSP_STEP_PARITY_ELAPSED_COSTS4_SLOW_BRACKET], xmm1
+    addss xmm0, xmm1
+
+.jack:
+    mov al, [rcx + ASSP_STEP_PARITY_ACTION_FLAGS4_MOVED_LEFT]
+    cmp al, [rcx + ASSP_STEP_PARITY_ACTION_FLAGS4_MOVED_RIGHT]
+    je .finish
+    cmp byte [rcx + ASSP_STEP_PARITY_ACTION_FLAGS4_JACKED_LEFT], 0
+    jne .maybe_jack
+    cmp byte [rcx + ASSP_STEP_PARITY_ACTION_FLAGS4_JACKED_RIGHT], 0
+    je .finish
+
+.maybe_jack:
+    movss xmm1, [r8]
+    comiss xmm1, [rel cost_jack_threshold]
+    jae .finish
+    movss xmm2, [rel cost_jack_threshold]
+    subss xmm2, xmm1
+    xorps xmm3, xmm3
+    comiss xmm2, xmm3
+    jbe .finish
+    movss xmm1, [rel cost_one]
+    divss xmm1, xmm2
+    movss xmm2, [rel cost_one]
+    divss xmm2, [rel cost_jack_threshold]
+    subss xmm1, xmm2
+    mulss xmm1, [rel cost_jack_weight]
+    movss [r9 + ASSP_STEP_PARITY_ELAPSED_COSTS4_JACK], xmm1
+    addss xmm0, xmm1
+
+.finish:
+    movss [r9 + ASSP_STEP_PARITY_ELAPSED_COSTS4_TOTAL], xmm0
+    mov eax, ASSP_TRUE
+    ret
+
+.fail:
+    xor eax, eax
+    ret
+
 section .rdata
 cost_mine_weight dd 10000.0
 cost_bracket_jack_weight dd 20.0
 cost_doublestep_weight dd 850.0
 cost_missed_footswitch_weight dd 500.0
+cost_slow_bracket_threshold dd 0.15
+cost_slow_bracket_weight dd 300.0
+cost_jack_threshold dd 0.1
+cost_jack_weight dd 30.0
+cost_one dd 1.0

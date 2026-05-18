@@ -80,6 +80,14 @@ pub struct StepParityBasicCosts4 {
     pub total: f32,
 }
 
+#[repr(C)]
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
+pub struct StepParityElapsedCosts4 {
+    pub slow_bracket: f32,
+    pub jack: f32,
+    pub total: f32,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct StepParityTransition4 {
     pub placement: [u8; 4],
@@ -343,6 +351,12 @@ unsafe extern "C" {
         mine_mask: u32,
         prev_row_has_live_hold: c_int,
         out: *mut StepParityBasicCosts4,
+    ) -> c_int;
+    fn assp_step_parity_elapsed_action_costs_4(
+        flags: *const StepParityActionFlags4,
+        note_count: u32,
+        elapsed_seconds: *const f32,
+        out: *mut StepParityElapsedCosts4,
     ) -> c_int;
     fn assp_parse_bpm_map(
         data: *const u8,
@@ -1194,6 +1208,24 @@ pub fn step_parity_basic_action_costs_4(
             u32::from(multi_active),
             u32::from(mine_mask),
             c_int::from(prev_row_has_live_hold),
+            &mut out,
+        )
+    };
+    (ok != 0).then_some(out)
+}
+
+#[must_use]
+pub fn step_parity_elapsed_action_costs_4(
+    flags: &StepParityActionFlags4,
+    note_count: u8,
+    elapsed_seconds: f32,
+) -> Option<StepParityElapsedCosts4> {
+    let mut out = StepParityElapsedCosts4::default();
+    let ok = unsafe {
+        assp_step_parity_elapsed_action_costs_4(
+            flags,
+            u32::from(note_count),
+            &elapsed_seconds,
             &mut out,
         )
     };
@@ -2074,7 +2106,8 @@ pub fn count_timing_note_stats_no_holds_8(
 #[cfg(test)]
 mod tests {
     use super::{
-        NoteStats, StepParityActionFlags4, StepParityBasicCosts4, StepParityState4, TechCounts,
+        NoteStats, StepParityActionFlags4, StepParityBasicCosts4, StepParityElapsedCosts4,
+        StepParityState4, TechCounts,
     };
 
     #[test]
@@ -2105,6 +2138,12 @@ mod tests {
     fn step_parity_basic_costs4_layout_is_c_abi() {
         assert_eq!(std::mem::size_of::<StepParityBasicCosts4>(), 20);
         assert_eq!(std::mem::align_of::<StepParityBasicCosts4>(), 4);
+    }
+
+    #[test]
+    fn step_parity_elapsed_costs4_layout_is_c_abi() {
+        assert_eq!(std::mem::size_of::<StepParityElapsedCosts4>(), 12);
+        assert_eq!(std::mem::align_of::<StepParityElapsedCosts4>(), 4);
     }
 
     #[test]
