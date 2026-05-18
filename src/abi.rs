@@ -50,6 +50,16 @@ pub struct TechCounts {
 
 #[repr(C)]
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct StepParityState4 {
+    pub combined_columns: [u8; 4],
+    pub where_feet_are: [i8; 5],
+    pub occupied_mask: u8,
+    pub moved_mask: u8,
+    pub holding_mask: u8,
+}
+
+#[repr(C)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct ChartRef {
     pub note_data: *const u8,
     pub note_data_len: usize,
@@ -243,6 +253,24 @@ unsafe extern "C" {
         placements: *const u8,
         row_count: usize,
         out: *mut TechCounts,
+    ) -> c_int;
+    fn assp_step_parity_permutations_4(mask: u32, out: *mut u8, out_cap: usize) -> usize;
+    fn assp_step_parity_result_state_no_holds_4(
+        initial: *const StepParityState4,
+        placement: *const u8,
+        active_mask: u32,
+        out_state: *mut StepParityState4,
+        out_hit: *mut i8,
+        out_key: *mut u32,
+    ) -> c_int;
+    fn assp_step_parity_result_state_holds_4(
+        initial: *const StepParityState4,
+        placement: *const u8,
+        active_mask: u32,
+        hold_mask: u32,
+        out_state: *mut StepParityState4,
+        out_hit: *mut i8,
+        out_key: *mut u32,
     ) -> c_int;
     fn assp_parse_bpm_map(
         data: *const u8,
@@ -888,6 +916,68 @@ pub fn calculate_step_tech_counts_from_placements_4(
         )
     };
     (ok != 0).then_some(counts)
+}
+
+#[must_use]
+pub fn step_parity_permutations_4(mask: u8) -> Vec<[u8; 4]> {
+    let count =
+        unsafe { assp_step_parity_permutations_4(u32::from(mask), std::ptr::null_mut(), 0) };
+    let mut bytes = vec![0u8; count.saturating_mul(4)];
+    if count != 0 {
+        unsafe {
+            assp_step_parity_permutations_4(u32::from(mask), bytes.as_mut_ptr(), count);
+        }
+    }
+    bytes
+        .chunks_exact(4)
+        .map(|chunk| [chunk[0], chunk[1], chunk[2], chunk[3]])
+        .collect()
+}
+
+#[must_use]
+pub fn step_parity_result_state_no_holds_4(
+    initial: &StepParityState4,
+    placement: &[u8; 4],
+    active_mask: u8,
+) -> Option<(StepParityState4, [i8; 5], u32)> {
+    let mut state = StepParityState4::default();
+    let mut hit = [-1; 5];
+    let mut key = 0;
+    let ok = unsafe {
+        assp_step_parity_result_state_no_holds_4(
+            initial,
+            placement.as_ptr(),
+            u32::from(active_mask),
+            &mut state,
+            hit.as_mut_ptr(),
+            &mut key,
+        )
+    };
+    (ok != 0).then_some((state, hit, key))
+}
+
+#[must_use]
+pub fn step_parity_result_state_holds_4(
+    initial: &StepParityState4,
+    placement: &[u8; 4],
+    active_mask: u8,
+    hold_mask: u8,
+) -> Option<(StepParityState4, [i8; 5], u32)> {
+    let mut state = StepParityState4::default();
+    let mut hit = [-1; 5];
+    let mut key = 0;
+    let ok = unsafe {
+        assp_step_parity_result_state_holds_4(
+            initial,
+            placement.as_ptr(),
+            u32::from(active_mask),
+            u32::from(hold_mask),
+            &mut state,
+            hit.as_mut_ptr(),
+            &mut key,
+        )
+    };
+    (ok != 0).then_some((state, hit, key))
 }
 
 #[must_use]
@@ -1763,7 +1853,7 @@ pub fn count_timing_note_stats_no_holds_8(
 
 #[cfg(test)]
 mod tests {
-    use super::{NoteStats, TechCounts};
+    use super::{NoteStats, StepParityState4, TechCounts};
 
     #[test]
     fn note_stats_layout_is_c_abi() {
@@ -1775,6 +1865,12 @@ mod tests {
     fn tech_counts_layout_is_c_abi() {
         assert_eq!(std::mem::size_of::<TechCounts>(), 32);
         assert_eq!(std::mem::align_of::<TechCounts>(), 4);
+    }
+
+    #[test]
+    fn step_parity_state4_layout_is_c_abi() {
+        assert_eq!(std::mem::size_of::<StepParityState4>(), 12);
+        assert_eq!(std::mem::align_of::<StepParityState4>(), 1);
     }
 
     #[test]

@@ -44,6 +44,9 @@ The first implemented pieces are:
 - `assp_count_step_tech_brackets_minimized_4`
 - `assp_count_step_tech_brackets_minimized_8`
 - `assp_calculate_step_tech_counts_from_placements_4`
+- `assp_step_parity_permutations_4`
+- `assp_step_parity_result_state_no_holds_4`
+- `assp_step_parity_result_state_holds_4`
 - `assp_parse_bpm_map`
 - `assp_parse_offset_ms`
 - `assp_bpm_display_range`
@@ -187,6 +190,14 @@ tech masks, note counts, row times, and resolved foot placements, then applies
 RSSP's tech-count rules for jacks, doublesteps, brackets, footswitches,
 sideswitches, and crossovers. The remaining work is wiring the actual
 step-parity row builder and DP placement generator ahead of this stage.
+`assp_step_parity_permutations_4` ports RSSP's 4-panel `permute_row` legality
+rules for parity row masks, including foot uniqueness, toe-without-heel
+rejection, and bracket-distance rejection.
+`assp_step_parity_result_state_no_holds_4` and
+`assp_step_parity_result_state_holds_4` port RSSP's 4-panel parity
+`result_state` transition primitives. They compute the resolved state,
+per-foot hit columns, and row-state key used by the DP stage; this is the next
+foundation piece before wiring full row DP and backtracking.
 `assp_chart_owns_timing_by_index` checks the RSSP chart-local timing ownership
 predicate for SSC `#NOTEDATA` blocks.
 `assp_parse_bpm_map` parses BPM timing maps into sorted fixed-point

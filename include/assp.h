@@ -112,6 +112,14 @@ typedef struct assp_tech_counts {
     uint32_t doublesteps;
 } assp_tech_counts;
 
+typedef struct assp_step_parity_state4 {
+    uint8_t combined_columns[4];
+    int8_t where_feet_are[5];
+    uint8_t occupied_mask;
+    uint8_t moved_mask;
+    uint8_t holding_mask;
+} assp_step_parity_state4;
+
 typedef struct assp_chart_ref {
     const uint8_t *note_data;
     size_t note_data_len;
@@ -317,6 +325,28 @@ int32_t assp_calculate_step_tech_counts_from_placements_4(
     const uint8_t *placements,
     size_t row_count,
     assp_tech_counts *out
+);
+size_t assp_step_parity_permutations_4(
+    uint32_t mask,
+    uint8_t *out,
+    size_t out_cap
+);
+int32_t assp_step_parity_result_state_no_holds_4(
+    const assp_step_parity_state4 *initial,
+    const uint8_t *placement,
+    uint32_t active_mask,
+    assp_step_parity_state4 *out_state,
+    int8_t *out_hit,
+    uint32_t *out_key
+);
+int32_t assp_step_parity_result_state_holds_4(
+    const assp_step_parity_state4 *initial,
+    const uint8_t *placement,
+    uint32_t active_mask,
+    uint32_t hold_mask,
+    assp_step_parity_state4 *out_state,
+    int8_t *out_hit,
+    uint32_t *out_key
 );
 size_t assp_parse_bpm_map(
     const uint8_t *data,

@@ -1,6 +1,8 @@
 use assp::{
-    TechCounts, calculate_step_tech_counts_from_placements_4, count_step_tech_brackets_minimized_4,
-    count_step_tech_brackets_minimized_8, parse_tech_notation,
+    StepParityState4, TechCounts, calculate_step_tech_counts_from_placements_4,
+    count_step_tech_brackets_minimized_4, count_step_tech_brackets_minimized_8,
+    parse_tech_notation, step_parity_permutations_4, step_parity_result_state_holds_4,
+    step_parity_result_state_no_holds_4,
 };
 
 fn parse(credit: &str, description: &str) -> String {
@@ -42,6 +44,128 @@ fn placement_counts(
         .unwrap()
 }
 
+fn expected_permutations_4(mask: u8) -> Vec<[u8; 4]> {
+    fn rec(mask: u8, col: usize, used: u8, placement: &mut [u8; 4], out: &mut Vec<[u8; 4]>) {
+        if col == 4 {
+            if valid_placement(placement) {
+                out.push(*placement);
+            }
+            return;
+        }
+
+        if mask & (1 << col) == 0 {
+            placement[col] = 0;
+            rec(mask, col + 1, used, placement, out);
+            return;
+        }
+
+        for foot in 1..=4 {
+            let foot_mask = 1 << (foot - 1);
+            if used & foot_mask != 0 {
+                continue;
+            }
+            placement[col] = foot;
+            rec(mask, col + 1, used | foot_mask, placement, out);
+            placement[col] = 0;
+        }
+    }
+
+    let mut out = Vec::new();
+    rec(mask & 0x0f, 0, 0, &mut [0; 4], &mut out);
+    out
+}
+
+fn valid_placement(placement: &[u8; 4]) -> bool {
+    let mut pos = [u8::MAX; 5];
+    for (col, &foot) in placement.iter().enumerate() {
+        if foot != 0 {
+            pos[foot as usize] = col as u8;
+        }
+    }
+
+    if (pos[1] == u8::MAX && pos[2] != u8::MAX) || (pos[3] == u8::MAX && pos[4] != u8::MAX) {
+        return false;
+    }
+    if pos[1] != u8::MAX && pos[2] != u8::MAX && pos[1] + pos[2] == 3 {
+        return false;
+    }
+    if pos[3] != u8::MAX && pos[4] != u8::MAX && pos[3] + pos[4] == 3 {
+        return false;
+    }
+    true
+}
+
+fn expected_result_state(
+    initial: StepParityState4,
+    placement: [u8; 4],
+    active_mask: u8,
+    hold_mask: u8,
+) -> (StepParityState4, [i8; 5], u32) {
+    let mut combined = [0; 4];
+    let mut hit = [-1; 5];
+    let mut moved_mask = 0u8;
+    let mut holding_mask = 0u8;
+
+    for col in 0..4 {
+        if active_mask & (1 << col) == 0 {
+            continue;
+        }
+        let foot = placement[col];
+        if !(1..=4).contains(&foot) {
+            continue;
+        }
+        combined[col] = foot;
+        hit[foot as usize] = col as i8;
+        let foot_mask = 1 << (foot - 1);
+        let bit = 1 << col;
+        if hold_mask & bit != 0 {
+            holding_mask |= foot_mask;
+        }
+        if hold_mask & bit == 0 || initial.combined_columns[col] != foot {
+            moved_mask |= foot_mask;
+        }
+    }
+
+    let moved_left = moved_mask & 0b0011 != 0;
+    let moved_right = moved_mask & 0b1100 != 0;
+    let mut where_feet_are = [-1; 5];
+    let mut occupied_mask = 0u8;
+    let mut key = 0u32;
+
+    for col in 0..4 {
+        let mut foot = combined[col];
+        if foot == 0 {
+            let prev = initial.combined_columns[col];
+            foot = match prev {
+                1 | 3 if moved_mask & (1 << (prev - 1)) == 0 => prev,
+                2 if !moved_left => prev,
+                4 if !moved_right => prev,
+                _ => 0,
+            };
+        }
+        combined[col] = foot;
+        key |= u32::from(foot) << (col * 3);
+        if foot != 0 {
+            where_feet_are[foot as usize] = col as i8;
+            occupied_mask |= 1 << col;
+        }
+    }
+
+    key |= u32::from(moved_mask) << 24;
+    key |= u32::from(holding_mask) << 28;
+    (
+        StepParityState4 {
+            combined_columns: combined,
+            where_feet_are,
+            occupied_mask,
+            moved_mask,
+            holding_mask,
+        },
+        hit,
+        key,
+    )
+}
+
 #[test]
 fn parses_known_tech_list_like_rssp_core() {
     const KNOWN: &str = concat!(
@@ -74,6 +198,68 @@ fn parses_concatenated_chunks_with_longest_prefixes_like_rssp_core() {
 #[test]
 fn combines_credit_and_description_like_rssp_core() {
     assert_matches_rssp("STR+ FS-", "BXF,24ths 32nds");
+}
+
+#[test]
+fn enumerates_step_parity_permutations_like_rssp_row_rules() {
+    for mask in 0..16 {
+        assert_eq!(
+            step_parity_permutations_4(mask),
+            expected_permutations_4(mask),
+            "mask {mask:04b}"
+        );
+    }
+}
+
+#[test]
+fn calculates_no_hold_result_state_like_rssp_core() {
+    let start = StepParityState4::default();
+    let cases = [
+        (start, [1, 0, 0, 0], 0b0001),
+        (
+            StepParityState4 {
+                combined_columns: [1, 2, 0, 0],
+                ..StepParityState4::default()
+            },
+            [0, 0, 3, 0],
+            0b0100,
+        ),
+        (
+            StepParityState4 {
+                combined_columns: [1, 2, 0, 0],
+                ..StepParityState4::default()
+            },
+            [0, 0, 0, 1],
+            0b1000,
+        ),
+    ];
+
+    for (initial, placement, active_mask) in cases {
+        assert_eq!(
+            step_parity_result_state_no_holds_4(&initial, &placement, active_mask).unwrap(),
+            expected_result_state(initial, placement, active_mask, 0)
+        );
+    }
+}
+
+#[test]
+fn calculates_hold_result_state_like_rssp_core() {
+    let initial = StepParityState4 {
+        combined_columns: [1, 0, 3, 0],
+        ..StepParityState4::default()
+    };
+    let cases = [
+        ([1, 0, 0, 0], 0b0001, 0b0001),
+        ([2, 0, 3, 0], 0b0101, 0b0100),
+        ([0, 4, 0, 0], 0b0010, 0b0010),
+    ];
+
+    for (placement, active_mask, hold_mask) in cases {
+        assert_eq!(
+            step_parity_result_state_holds_4(&initial, &placement, active_mask, hold_mask).unwrap(),
+            expected_result_state(initial, placement, active_mask, hold_mask)
+        );
+    }
 }
 
 #[test]
