@@ -266,7 +266,7 @@ reports include simfile title/artist/translit metadata, genre, media/artwork
 tags, sample timing tags, chart name, credit/step-artist metadata, chart-local
 music/attacks/timing metadata tags, RSSP-style chart hashes, normalized global
 BPM data, normalized hash BPMs, RSSP-compatible hash and step-artist aliases,
-formatted timing BPMs, chart display-BPM tags,
+formatted timing BPM/stop/delay/warp/fake maps, chart display-BPM tags,
 chart offset seconds, beat-zero timing offsets, timing ownership,
 RSSP-style display BPM aliases,
 min/max/average/median display BPMs, tier BPM, max/peak/median NPS,

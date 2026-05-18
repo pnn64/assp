@@ -1753,6 +1753,22 @@ print_report:
     lea rdx, [bpm_segment_buffer]
     mov r8, [bpm_segment_count]
     call print_bpm_segments_field
+    lea rcx, [label_stops_formatted]
+    lea rdx, [stop_segment_buffer]
+    mov r8, [stop_segment_count]
+    call print_bpm_segments_field
+    lea rcx, [label_delays_formatted]
+    lea rdx, [delay_segment_buffer]
+    mov r8, [delay_segment_count]
+    call print_bpm_segments_field
+    lea rcx, [label_warps_formatted]
+    lea rdx, [warp_segment_buffer]
+    mov r8, [warp_segment_count]
+    call print_bpm_segments_field
+    lea rcx, [label_fakes_formatted]
+    lea rdx, [fake_segment_buffer]
+    mov r8, [fake_segment_count]
+    call print_bpm_segments_field
     lea rcx, [label_offset]
     mov rdx, [offset_ms]
     call print_fixed3_field
@@ -2506,6 +2522,10 @@ label_bpm_neutral_sha1_hash db "bpm_neutral_sha1_hash: ", 0
 label_hash_bpms db "hash_bpms: ", 0
 label_bpm_data db "bpm_data: ", 0
 label_bpms_formatted db "bpms_formatted: ", 0
+label_stops_formatted db "stops_formatted: ", 0
+label_delays_formatted db "delays_formatted: ", 0
+label_warps_formatted db "warps_formatted: ", 0
+label_fakes_formatted db "fakes_formatted: ", 0
 label_offset db "offset: ", 0
 label_chart_offset_seconds db "chart_offset_seconds: ", 0
 label_beat0_offset_seconds db "beat0_offset_seconds: ", 0
