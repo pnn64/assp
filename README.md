@@ -343,7 +343,8 @@ against the local RSSP Rust CLI:
 harness modes. They run Cargo only after the NASM standalone executable is
 built, and only to execute the local RSSP reference CLI. They check chart
 metadata, SHA1 hashes, matrix/tier BPM, NPS summary and per-measure vectors,
-arrow counts, gimmick counts, and stream metrics.
+timing metadata, breakdown strings, arrow counts, mono/candle stats, default
+pattern counts, gimmick counts, and stream metrics.
 
 The standalone executable currently scans SSC files for chart metadata and
 `#NOTES:` / `#NOTES2:` tags. The second argument is a zero-based chart index, or

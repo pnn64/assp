@@ -1563,12 +1563,7 @@ prepare_display_bpm_range:
 
     mov rcx, [display_bpm_slice + ASSP_BYTE_SLICE_PTR]
     mov rdx, [display_bpm_slice + ASSP_BYTE_SLICE_LEN]
-    test rdx, rdx
-    jnz .parse
-    mov rcx, [global_display_bpm_slice + ASSP_BYTE_SLICE_PTR]
-    mov rdx, [global_display_bpm_slice + ASSP_BYTE_SLICE_LEN]
 
-.parse:
     mov r8, [min_bpm]
     mov r9, [max_bpm]
     lea rax, [display_min_bpm]
@@ -2851,9 +2846,9 @@ print_report:
     mov rdx, [chart_has_own_timing]
     call print_field
     lea rcx, [label_display_bpm]
-    lea rdx, [display_bpm_slice]
-    lea r8, [global_display_bpm_slice]
-    call print_chart_or_global_tag_by_len
+    mov rdx, [display_bpm_slice + ASSP_BYTE_SLICE_PTR]
+    mov r8, [display_bpm_slice + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
     lea rcx, [label_bpm]
     mov rdx, [min_bpm]
     mov r8, [max_bpm]
