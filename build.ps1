@@ -3,6 +3,7 @@ param(
     [string]$Fixture,
     [int]$Chart = 0,
     [switch]$ListCharts,
+    [switch]$CompareRssp,
     [switch]$Clean
 )
 
@@ -81,7 +82,7 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Host "built $exe"
 
-if ($RunFixture -or $Fixture) {
+if (($RunFixture -or $Fixture) -and !$CompareRssp) {
     if (!$Fixture) {
         $Fixture = Join-Path $root "fixtures\camellia_mix.ssc"
     }
@@ -103,4 +104,127 @@ if ($RunFixture -or $Fixture) {
     } finally {
         Pop-Location
     }
+}
+
+if ($CompareRssp) {
+    if ($ListCharts) {
+        throw "-CompareRssp compares one chart; omit -ListCharts."
+    }
+    if (!(Get-Command cargo -ErrorAction SilentlyContinue)) {
+        throw "cargo was not found on PATH. It is needed only for -CompareRssp."
+    }
+    if (!$Fixture) {
+        $Fixture = Join-Path $root "fixtures\camellia_mix.ssc"
+    }
+
+    $resolvedFixture = (Resolve-Path $Fixture).Path
+    $workspace = Split-Path -Parent $root
+    $rsspManifest = Join-Path $workspace "rssp\crates\rssp-cli\Cargo.toml"
+    if (!(Test-Path $rsspManifest)) {
+        throw "RSSP CLI manifest was not found at $rsspManifest."
+    }
+
+    $asspLines = & $exe $resolvedFixture $Chart
+    if ($LASTEXITCODE -ne 0) {
+        exit $LASTEXITCODE
+    }
+
+    $assp = @{}
+    foreach ($line in $asspLines) {
+        if ($line -match '^([^:]+):\s*(.*)$') {
+            $assp[$matches[1]] = $matches[2].Trim()
+        }
+    }
+
+    $jsonText = & cargo run --quiet --manifest-path $rsspManifest --bin rssp -- $resolvedFixture --json --skip-tech
+    if ($LASTEXITCODE -ne 0) {
+        exit $LASTEXITCODE
+    }
+    $rssp = $jsonText | ConvertFrom-Json
+    if ($Chart -lt 0 -or $Chart -ge $rssp.charts.Count) {
+        throw "Chart index $Chart is outside RSSP chart range 0..$($rssp.charts.Count - 1)."
+    }
+
+    $chartJson = $rssp.charts[$Chart]
+    $culture = [System.Globalization.CultureInfo]::InvariantCulture
+    $numberStyles = [System.Globalization.NumberStyles]::Float
+    $failures = New-Object System.Collections.Generic.List[string]
+
+    function Get-AsspField([string]$name) {
+        if (!$assp.ContainsKey($name)) {
+            $failures.Add("missing ASSP field '$name'")
+            return $null
+        }
+        $assp[$name]
+    }
+
+    function Compare-Text([string]$name, [string]$expected) {
+        $actual = Get-AsspField $name
+        if ($null -ne $actual -and $actual -ne $expected) {
+            $failures.Add("$name expected '$expected' but got '$actual'")
+        }
+    }
+
+    function Compare-Int([string]$name, [int64]$expected) {
+        $actualText = Get-AsspField $name
+        if ($null -eq $actualText) {
+            return
+        }
+        $actual = [int64]::Parse($actualText, $culture)
+        if ($actual -ne $expected) {
+            $failures.Add("$name expected $expected but got $actual")
+        }
+    }
+
+    function Compare-Float([string]$name, [double]$expected, [double]$tolerance = 0.01) {
+        $actualText = Get-AsspField $name
+        if ($null -eq $actualText) {
+            return
+        }
+        $actual = [double]::Parse($actualText, $numberStyles, $culture)
+        if ([math]::Abs($actual - $expected) -gt $tolerance) {
+            $failures.Add("$name expected $expected but got $actual")
+        }
+    }
+
+    Compare-Text "step_type" ([string]$chartJson.chart_info.step_type)
+    Compare-Text "difficulty" ([string]$chartJson.chart_info.difficulty)
+    Compare-Text "rating" ([string]$chartJson.chart_info.rating)
+
+    Compare-Float "tier_bpm" ([double]$chartJson.chart_info.tier_bpm)
+    Compare-Float "matrix_rating" ([double]$chartJson.chart_info.matrix_rating)
+    Compare-Float "median_nps" ([double]$chartJson.nps.median_nps)
+
+    Compare-Int "total_arrows" ([int64]$chartJson.arrow_stats.total_arrows)
+    Compare-Int "left_arrows" ([int64]$chartJson.arrow_stats.left_arrows)
+    Compare-Int "down_arrows" ([int64]$chartJson.arrow_stats.down_arrows)
+    Compare-Int "up_arrows" ([int64]$chartJson.arrow_stats.up_arrows)
+    Compare-Int "right_arrows" ([int64]$chartJson.arrow_stats.right_arrows)
+    Compare-Int "total_steps" ([int64]$chartJson.arrow_stats.total_steps)
+    Compare-Int "jumps" ([int64]$chartJson.arrow_stats.jumps)
+    Compare-Int "hands" ([int64]$chartJson.arrow_stats.hands)
+    Compare-Int "holds" ([int64]$chartJson.arrow_stats.holds)
+    Compare-Int "rolls" ([int64]$chartJson.arrow_stats.rolls)
+    Compare-Int "mines" ([int64]$chartJson.arrow_stats.mines)
+
+    Compare-Int "total_streams" ([int64]$chartJson.stream_info.total_streams)
+    Compare-Int "16th_streams" ([int64]$chartJson.stream_info.'16th_streams')
+    Compare-Int "20th_streams" ([int64]$chartJson.stream_info.'20th_streams')
+    Compare-Int "24th_streams" ([int64]$chartJson.stream_info.'24th_streams')
+    Compare-Int "32nd_streams" ([int64]$chartJson.stream_info.'32nd_streams')
+    Compare-Int "total_breaks" ([int64]$chartJson.stream_info.total_breaks)
+    Compare-Int "sn_breaks" ([int64]$chartJson.stream_info.sn_breaks)
+    Compare-Float "stream_percent" ([double]$chartJson.stream_info.stream_percent)
+    Compare-Float "adj_stream_percent" ([double]$chartJson.stream_info.adj_stream_percent)
+    Compare-Float "break_percent" ([double]$chartJson.stream_info.break_percent)
+
+    if ($failures.Count -ne 0) {
+        Write-Host "RSSP parity check failed:"
+        foreach ($failure in $failures) {
+            Write-Host "  $failure"
+        }
+        exit 1
+    }
+
+    Write-Host "RSSP parity check passed for $resolvedFixture chart $Chart."
 }

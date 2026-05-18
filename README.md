@@ -314,6 +314,16 @@ Run the legacy SSC split-timing gate fixture:
 .\assp\target\assp.exe .\assp\fixtures\legacy_split_timing_disabled.ssc 0
 ```
 
+Build the standalone executable and compare key report fields against the local
+RSSP Rust CLI for one fixture chart:
+
+```powershell
+.\assp\build.ps1 -CompareRssp -Fixture .\assp\fixtures\camellia_mix.ssc -Chart 4
+```
+
+`-CompareRssp` is an optional parity harness. It runs Cargo only after the NASM
+standalone executable is built, and only to execute the local RSSP reference CLI.
+
 The standalone executable currently scans SSC files for chart metadata and
 `#NOTES:` / `#NOTES2:` tags. The second argument is a zero-based chart index, or
 `list` to print chart indexes with step type, difficulty, meter, and
