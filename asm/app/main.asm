@@ -1723,10 +1723,20 @@ print_report:
     mov rdx, [min_bpm]
     mov r8, [max_bpm]
     call print_bpm_field
+    lea rcx, [label_display_bpm_resolved]
+    mov rdx, [min_bpm]
+    mov r8, [max_bpm]
+    call print_bpm_field
     lea rcx, [label_min_bpm]
     mov rdx, [min_bpm]
     call print_field
     lea rcx, [label_max_bpm]
+    mov rdx, [max_bpm]
+    call print_field
+    lea rcx, [label_display_bpm_min]
+    mov rdx, [min_bpm]
+    call print_field
+    lea rcx, [label_display_bpm_max]
     mov rdx, [max_bpm]
     call print_field
     lea rcx, [label_average_bpm]
@@ -2292,8 +2302,11 @@ label_chart_offset_seconds db "chart_offset_seconds: ", 0
 label_chart_has_own_timing db "chart_has_own_timing: ", 0
 label_display_bpm db "display_bpm_tag: ", 0
 label_bpm db "bpm: ", 0
+label_display_bpm_resolved db "display_bpm: ", 0
 label_min_bpm db "min_bpm: ", 0
 label_max_bpm db "max_bpm: ", 0
+label_display_bpm_min db "display_bpm_min: ", 0
+label_display_bpm_max db "display_bpm_max: ", 0
 label_average_bpm db "average_bpm: ", 0
 label_median_bpm db "median_bpm: ", 0
 label_measures db "measures: ", 0
