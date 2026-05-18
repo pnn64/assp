@@ -144,6 +144,18 @@ typedef struct assp_step_parity_elapsed_costs4 {
     float total;
 } assp_step_parity_elapsed_costs4;
 
+typedef struct assp_step_parity_switch_costs4 {
+    float footswitch;
+    float sideswitch;
+    float total;
+} assp_step_parity_switch_costs4;
+
+typedef struct assp_step_parity_bracket_tap_costs4 {
+    float left;
+    float right;
+    float total;
+} assp_step_parity_bracket_tap_costs4;
+
 typedef struct assp_chart_ref {
     const uint8_t *note_data;
     size_t note_data_len;
@@ -413,6 +425,23 @@ int32_t assp_step_parity_elapsed_action_costs_4(
     uint32_t note_count,
     const float *elapsed_seconds,
     assp_step_parity_elapsed_costs4 *out
+);
+int32_t assp_step_parity_switch_action_costs_4(
+    const assp_step_parity_state4 *initial,
+    const assp_step_parity_state4 *result,
+    const uint8_t *placement,
+    uint32_t active_mask,
+    uint32_t side_mask,
+    uint32_t mine_mask,
+    const float *elapsed_seconds,
+    assp_step_parity_switch_costs4 *out
+);
+int32_t assp_step_parity_bracket_tap_action_costs_4(
+    const assp_step_parity_state4 *initial,
+    const int8_t *hit,
+    uint32_t hold_mask,
+    const float *elapsed_seconds,
+    assp_step_parity_bracket_tap_costs4 *out
 );
 size_t assp_parse_bpm_map(
     const uint8_t *data,

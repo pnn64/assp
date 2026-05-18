@@ -9,6 +9,8 @@ global assp_step_parity_row_key_candidates_4
 global assp_step_parity_action_flags_4
 global assp_step_parity_basic_action_costs_4
 global assp_step_parity_elapsed_action_costs_4
+global assp_step_parity_switch_action_costs_4
+global assp_step_parity_bracket_tap_action_costs_4
 
 section .text
 
@@ -1118,13 +1120,236 @@ assp_step_parity_elapsed_action_costs_4:
     xor eax, eax
     ret
 
+; rcx = initial, rdx = result, r8 = placement[4], r9d = active mask,
+; stack arg 5 = side mask, stack arg 6 = mine mask,
+; stack arg 7 = elapsed seconds f32 ptr,
+; stack arg 8 = out assp_step_parity_switch_costs4.
+; eax = 1 on success, 0 on invalid pointers.
+assp_step_parity_switch_action_costs_4:
+    test rcx, rcx
+    jz .fail
+    test rdx, rdx
+    jz .fail
+    test r8, r8
+    jz .fail
+    mov r10, [rsp + 56]
+    test r10, r10
+    jz .fail
+    mov r11, [rsp + 64]
+    test r11, r11
+    jz .fail
+
+    xor eax, eax
+    mov [r11 + ASSP_STEP_PARITY_SWITCH_COSTS4_FOOTSWITCH], eax
+    mov [r11 + ASSP_STEP_PARITY_SWITCH_COSTS4_SIDESWITCH], eax
+    mov [r11 + ASSP_STEP_PARITY_SWITCH_COSTS4_TOTAL], eax
+    xorps xmm0, xmm0
+
+.footswitch:
+    cmp dword [rsp + 48], 0
+    jne .sideswitch
+    movss xmm1, [r10]
+    comiss xmm1, [rel cost_slow_footswitch_threshold]
+    jb .sideswitch
+    comiss xmm1, [rel cost_slow_footswitch_ignore]
+    jae .sideswitch
+
+    xor eax, eax
+    and r9d, 0fh
+
+.footswitch_loop:
+    cmp eax, 4
+    jae .sideswitch
+    bt r9d, eax
+    jnc .next_footswitch_col
+    movzx r10d, byte [r8 + rax]
+    test r10d, r10d
+    jz .next_footswitch_col
+    cmp r10d, 4
+    ja .next_footswitch_col
+    movzx r11d, byte [rcx + ASSP_STEP_PARITY_STATE4_COMBINED + rax]
+    test r11d, r11d
+    jz .next_footswitch_col
+    cmp r11d, r10d
+    je .next_footswitch_col
+    test r10b, 1
+    jz .footswitch_even_part
+    inc r10d
+    jmp .check_footswitch_pair
+
+.footswitch_even_part:
+    dec r10d
+
+.check_footswitch_pair:
+    cmp r11d, r10d
+    je .next_footswitch_col
+
+    mov r10, [rsp + 56]
+    movss xmm1, [r10]
+    subss xmm1, [rel cost_slow_footswitch_threshold]
+    movss xmm2, [rel cost_slow_footswitch_threshold]
+    addss xmm2, xmm1
+    divss xmm1, xmm2
+    mulss xmm1, [rel cost_footswitch_weight]
+    mov r11, [rsp + 64]
+    movss [r11 + ASSP_STEP_PARITY_SWITCH_COSTS4_FOOTSWITCH], xmm1
+    addss xmm0, xmm1
+    jmp .sideswitch
+
+.next_footswitch_col:
+    inc eax
+    jmp .footswitch_loop
+
+.sideswitch:
+    xorps xmm1, xmm1
+    mov r10d, [rsp + 40]
+    and r10d, 0fh
+    xor eax, eax
+
+.sideswitch_loop:
+    cmp eax, 4
+    jae .store_sideswitch
+    bt r10d, eax
+    jnc .next_sideswitch_col
+    movzx r11d, byte [r8 + rax]
+    test r11d, r11d
+    jz .next_sideswitch_col
+    movzx r9d, byte [rcx + ASSP_STEP_PARITY_STATE4_COMBINED + rax]
+    test r9d, r9d
+    jz .next_sideswitch_col
+    cmp r9d, r11d
+    je .next_sideswitch_col
+    cmp r9d, 4
+    ja .next_sideswitch_col
+    movzx r11d, byte [rdx + ASSP_STEP_PARITY_STATE4_MOVED_MASK]
+    dec r9d
+    bt r11d, r9d
+    jc .next_sideswitch_col
+    addss xmm1, [rel cost_sideswitch_weight]
+
+.next_sideswitch_col:
+    inc eax
+    jmp .sideswitch_loop
+
+.store_sideswitch:
+    mov r11, [rsp + 64]
+    movss [r11 + ASSP_STEP_PARITY_SWITCH_COSTS4_SIDESWITCH], xmm1
+    addss xmm0, xmm1
+
+.finish:
+    movss [r11 + ASSP_STEP_PARITY_SWITCH_COSTS4_TOTAL], xmm0
+    mov eax, ASSP_TRUE
+    ret
+
+.fail:
+    xor eax, eax
+    ret
+
+; rcx = initial, rdx = hit[5], r8d = hold mask,
+; r9 = elapsed seconds f32 ptr,
+; stack arg 5 = out assp_step_parity_bracket_tap_costs4.
+; eax = 1 on success, 0 on invalid pointers.
+assp_step_parity_bracket_tap_action_costs_4:
+    test rcx, rcx
+    jz .fail
+    test rdx, rdx
+    jz .fail
+    test r9, r9
+    jz .fail
+    mov r10, [rsp + 40]
+    test r10, r10
+    jz .fail
+
+    xor eax, eax
+    mov [r10 + ASSP_STEP_PARITY_BRACKET_TAP_COSTS4_LEFT], eax
+    mov [r10 + ASSP_STEP_PARITY_BRACKET_TAP_COSTS4_RIGHT], eax
+    mov [r10 + ASSP_STEP_PARITY_BRACKET_TAP_COSTS4_TOTAL], eax
+    xorps xmm0, xmm0
+    test r8d, r8d
+    jz .finish
+
+.left_pair:
+    movsx eax, byte [rdx + 1]
+    test eax, eax
+    js .right_pair
+    cmp eax, 4
+    jae .right_pair
+    movsx r10d, byte [rdx + 2]
+    test r10d, r10d
+    js .right_pair
+    cmp r10d, 4
+    jae .right_pair
+    bt r8d, eax
+    setc r11b
+    bt r8d, r10d
+    setc al
+    cmp r11b, al
+    je .right_pair
+    movss xmm1, [rel cost_bracket_tap_weight]
+    movzx eax, byte [rcx + ASSP_STEP_PARITY_STATE4_MOVED_MASK]
+    and eax, 3
+    jz .store_left_pair
+    movss xmm2, [rel cost_one]
+    divss xmm2, [r9]
+    mulss xmm1, xmm2
+
+.store_left_pair:
+    mov r10, [rsp + 40]
+    movss [r10 + ASSP_STEP_PARITY_BRACKET_TAP_COSTS4_LEFT], xmm1
+    addss xmm0, xmm1
+
+.right_pair:
+    movsx eax, byte [rdx + 3]
+    test eax, eax
+    js .finish
+    cmp eax, 4
+    jae .finish
+    movsx r10d, byte [rdx + 4]
+    test r10d, r10d
+    js .finish
+    cmp r10d, 4
+    jae .finish
+    bt r8d, eax
+    setc r11b
+    bt r8d, r10d
+    setc al
+    cmp r11b, al
+    je .finish
+    movss xmm1, [rel cost_bracket_tap_weight]
+    movzx eax, byte [rcx + ASSP_STEP_PARITY_STATE4_MOVED_MASK]
+    and eax, 12
+    jz .store_right_pair
+    movss xmm2, [rel cost_one]
+    divss xmm2, [r9]
+    mulss xmm1, xmm2
+
+.store_right_pair:
+    mov r10, [rsp + 40]
+    movss [r10 + ASSP_STEP_PARITY_BRACKET_TAP_COSTS4_RIGHT], xmm1
+    addss xmm0, xmm1
+
+.finish:
+    mov r10, [rsp + 40]
+    movss [r10 + ASSP_STEP_PARITY_BRACKET_TAP_COSTS4_TOTAL], xmm0
+    mov eax, ASSP_TRUE
+    ret
+
+.fail:
+    xor eax, eax
+    ret
+
 section .rdata
 cost_mine_weight dd 10000.0
 cost_bracket_jack_weight dd 20.0
 cost_doublestep_weight dd 850.0
 cost_missed_footswitch_weight dd 500.0
+cost_bracket_tap_weight dd 400.0
 cost_slow_bracket_threshold dd 0.15
 cost_slow_bracket_weight dd 300.0
 cost_jack_threshold dd 0.1
 cost_jack_weight dd 30.0
+cost_slow_footswitch_threshold dd 0.2
+cost_slow_footswitch_ignore dd 0.4
+cost_footswitch_weight dd 325.0
+cost_sideswitch_weight dd 130.0
 cost_one dd 1.0

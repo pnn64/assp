@@ -52,6 +52,8 @@ The first implemented pieces are:
 - `assp_step_parity_action_flags_4`
 - `assp_step_parity_basic_action_costs_4`
 - `assp_step_parity_elapsed_action_costs_4`
+- `assp_step_parity_switch_action_costs_4`
+- `assp_step_parity_bracket_tap_action_costs_4`
 - `assp_parse_bpm_map`
 - `assp_parse_offset_ms`
 - `assp_bpm_display_range`
@@ -224,6 +226,14 @@ cost terms still need the layout and timing-dependent RSSP logic.
 terms for slow brackets and fast jacks from the resolved action flags. This is
 still scoring infrastructure; the full DP must combine these costs with row
 state selection and layout-dependent costs.
+`assp_step_parity_switch_action_costs_4` ports RSSP's action-cost terms for
+slow footswitches and side-panel switches from resolved placements and row
+masks.
+`assp_step_parity_bracket_tap_action_costs_4` ports RSSP's hold-row bracket
+tap penalty, including the elapsed-time jack penalty when the bracketed foot
+pair moved on the previous row. The remaining parity scoring work is now
+layout-dependent: hold-switch distance, twisted foot, facing, spin, and large
+movement costs.
 `assp_chart_owns_timing_by_index` checks the RSSP chart-local timing ownership
 predicate for SSC `#NOTEDATA` blocks.
 `assp_parse_bpm_map` parses BPM timing maps into sorted fixed-point

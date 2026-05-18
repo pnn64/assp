@@ -1,11 +1,13 @@
 use assp::{
-    StepParityActionFlags4, StepParityBasicCosts4, StepParityElapsedCosts4, StepParityState4,
-    TechCounts, calculate_step_tech_counts_from_placements_4, count_step_tech_brackets_minimized_4,
+    StepParityActionFlags4, StepParityBasicCosts4, StepParityBracketTapCosts4,
+    StepParityElapsedCosts4, StepParityState4, StepParitySwitchCosts4, TechCounts,
+    calculate_step_tech_counts_from_placements_4, count_step_tech_brackets_minimized_4,
     count_step_tech_brackets_minimized_8, parse_tech_notation, step_parity_action_flags_4,
-    step_parity_basic_action_costs_4, step_parity_elapsed_action_costs_4,
-    step_parity_permutations_4, step_parity_result_state_holds_4,
-    step_parity_result_state_no_holds_4, step_parity_row_key_candidates_4,
-    step_parity_row_transitions_4,
+    step_parity_basic_action_costs_4, step_parity_bracket_tap_action_costs_4,
+    step_parity_elapsed_action_costs_4, step_parity_permutations_4,
+    step_parity_result_state_holds_4, step_parity_result_state_no_holds_4,
+    step_parity_row_key_candidates_4, step_parity_row_transitions_4,
+    step_parity_switch_action_costs_4,
 };
 use std::collections::HashSet;
 
@@ -291,6 +293,102 @@ fn expected_elapsed_costs(
         slow_bracket,
         jack,
         total: slow_bracket + jack,
+    }
+}
+
+fn expected_switch_costs(
+    initial: StepParityState4,
+    result: StepParityState4,
+    placement: [u8; 4],
+    active_mask: u8,
+    side_mask: u8,
+    mine_mask: u8,
+    elapsed: f32,
+) -> StepParitySwitchCosts4 {
+    let footswitch = if mine_mask == 0 && (0.2f32..0.4f32).contains(&elapsed) {
+        let mut cost = 0.0;
+        for col in 0..4 {
+            if active_mask & (1 << col) == 0 {
+                continue;
+            }
+            let res = placement[col];
+            let init = initial.combined_columns[col];
+            if init == 0 || res == 0 {
+                continue;
+            }
+            let other_part = match res {
+                1 => 2,
+                2 => 1,
+                3 => 4,
+                4 => 3,
+                _ => 0,
+            };
+            if init != res && init != other_part {
+                let time_scaled = elapsed - 0.2f32;
+                cost = (time_scaled / (0.2f32 + time_scaled)) * 325.0f32;
+                break;
+            }
+        }
+        cost
+    } else {
+        0.0
+    };
+
+    let mut sideswitch = 0.0;
+    for col in 0..4 {
+        if side_mask & (1 << col) == 0 {
+            continue;
+        }
+        let res = placement[col];
+        let init = initial.combined_columns[col];
+        if init != res
+            && res != 0
+            && init != 0
+            && init <= 4
+            && result.moved_mask & (1 << (init - 1)) == 0
+        {
+            sideswitch += 130.0;
+        }
+    }
+
+    StepParitySwitchCosts4 {
+        footswitch,
+        sideswitch,
+        total: footswitch + sideswitch,
+    }
+}
+
+fn expected_bracket_tap_costs(
+    initial: StepParityState4,
+    hit: [i8; 5],
+    hold_mask: u8,
+    elapsed: f32,
+) -> StepParityBracketTapCosts4 {
+    let pair_cost = |heel: i8, toe: i8, moved_mask: u8| -> f32 {
+        if heel < 0 || toe < 0 {
+            return 0.0;
+        }
+        let heel = heel as usize;
+        let toe = toe as usize;
+        let hm = hold_mask & (1 << heel) != 0;
+        let tm = hold_mask & (1 << toe) != 0;
+        if hm == tm {
+            return 0.0;
+        }
+        let jack_penalty = if initial.moved_mask & moved_mask != 0 {
+            1.0f32 / elapsed
+        } else {
+            1.0
+        };
+        400.0 * jack_penalty
+    };
+
+    let left = pair_cost(hit[1], hit[2], 0b0011);
+    let right = pair_cost(hit[3], hit[4], 0b1100);
+    StepParityBracketTapCosts4 {
+        left,
+        right,
+        total: left + right,
     }
 }
 
@@ -682,6 +780,145 @@ fn calculates_elapsed_action_cost_terms_like_rssp_core() {
         assert_eq!(
             step_parity_elapsed_action_costs_4(&flags, note_count, elapsed).unwrap(),
             expected_elapsed_costs(flags, note_count, elapsed)
+        );
+    }
+}
+
+#[test]
+fn calculates_switch_action_cost_terms_like_rssp_core() {
+    let cases = [
+        (
+            StepParityState4 {
+                combined_columns: [1, 0, 0, 0],
+                ..StepParityState4::default()
+            },
+            StepParityState4::default(),
+            [3, 0, 0, 0],
+            0b0001,
+            0,
+            0,
+            0.3f32,
+        ),
+        (
+            StepParityState4 {
+                combined_columns: [1, 0, 0, 0],
+                ..StepParityState4::default()
+            },
+            StepParityState4::default(),
+            [2, 0, 0, 0],
+            0b0001,
+            0,
+            0,
+            0.3f32,
+        ),
+        (
+            StepParityState4 {
+                combined_columns: [1, 0, 0, 0],
+                ..StepParityState4::default()
+            },
+            StepParityState4::default(),
+            [3, 0, 0, 0],
+            0b0001,
+            0,
+            1,
+            0.3f32,
+        ),
+        (
+            StepParityState4 {
+                combined_columns: [1, 0, 0, 0],
+                ..StepParityState4::default()
+            },
+            StepParityState4::default(),
+            [3, 0, 0, 0],
+            0,
+            0b0001,
+            0,
+            0.125f32,
+        ),
+        (
+            StepParityState4 {
+                combined_columns: [1, 0, 0, 0],
+                ..StepParityState4::default()
+            },
+            StepParityState4 {
+                moved_mask: 0b0001,
+                ..StepParityState4::default()
+            },
+            [3, 0, 0, 0],
+            0,
+            0b0001,
+            0,
+            0.125f32,
+        ),
+    ];
+
+    for (initial, result, placement, active_mask, side_mask, mine_mask, elapsed) in cases {
+        assert_eq!(
+            step_parity_switch_action_costs_4(
+                &initial,
+                &result,
+                &placement,
+                active_mask,
+                side_mask,
+                mine_mask,
+                elapsed
+            )
+            .unwrap(),
+            expected_switch_costs(
+                initial,
+                result,
+                placement,
+                active_mask,
+                side_mask,
+                mine_mask,
+                elapsed
+            )
+        );
+    }
+}
+
+#[test]
+fn calculates_bracket_tap_action_cost_terms_like_rssp_core() {
+    let cases = [
+        (
+            StepParityState4::default(),
+            [-1, 0, 1, -1, -1],
+            0b0001,
+            0.25f32,
+        ),
+        (
+            StepParityState4 {
+                moved_mask: 0b0001,
+                ..StepParityState4::default()
+            },
+            [-1, 0, 1, -1, -1],
+            0b0001,
+            0.25f32,
+        ),
+        (
+            StepParityState4::default(),
+            [-1, -1, -1, 2, 3],
+            0b1000,
+            0.5f32,
+        ),
+        (
+            StepParityState4::default(),
+            [-1, 0, 1, 2, 3],
+            0b1010,
+            0.5f32,
+        ),
+        (
+            StepParityState4::default(),
+            [-1, 0, -1, 2, 3],
+            0b0001,
+            0.25f32,
+        ),
+    ];
+
+    for (initial, hit, hold_mask, elapsed) in cases {
+        assert_eq!(
+            step_parity_bracket_tap_action_costs_4(&initial, &hit, hold_mask, elapsed).unwrap(),
+            expected_bracket_tap_costs(initial, hit, hold_mask, elapsed)
         );
     }
 }
