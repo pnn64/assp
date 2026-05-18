@@ -173,7 +173,8 @@ not mixed into that chart's duration/NPS timing context. Chart-local
 `#TIMESIGNATURES:`, `#LABELS:`, `#TICKCOUNTS:`, and `#COMBOS:` tags also mark
 the chart as owning timing, matching RSSP's timing-data ownership check. The
 standalone report normalizes the selected chart/global metadata scope with that
-same ownership rule.
+same ownership rule, and prints selected normalized timing maps from the same
+chart/global timing scope.
 `assp_stream_counts_from_densities` classifies 16th/20th/24th/32nd stream
 measures, SN breaks, and total break measures from those densities.
 `assp_stream_percentages_centi` computes RSSP-style stream, adjusted stream,
@@ -281,12 +282,12 @@ report path currently supports `dance-single` and `dance-double` charts. Chart
 reports include simfile title/artist/translit metadata, genre, media/artwork
 tags, sample timing tags, chart name, credit/step-artist metadata, parsed tech
 notation, chart-local music/attacks/timing metadata tags, chart-local raw timing
-tags, global attacks/display-BPM tags, resolved display BPM ranges, global raw timing tags, RSSP-style chart hashes, normalized global BPM
-data, normalized global timing maps, normalized global/selected timing metadata,
-normalized hash BPMs, RSSP-compatible
-hash and step-artist aliases, formatted timing BPM/stop/delay/warp/fake maps,
-global and selected timing metadata tags, selected raw timing tags, chart
-display-BPM tags,
+tags, global attacks/display-BPM tags, resolved display BPM ranges, global raw
+timing tags, RSSP-style chart hashes, normalized global BPM data, normalized
+global timing maps, normalized global/selected timing metadata, normalized hash
+BPMs, normalized selected timing maps, RSSP-compatible hash and step-artist
+aliases, formatted timing BPM/stop/delay/warp/fake maps, global and selected
+timing metadata tags, selected raw timing tags, chart display-BPM tags,
 chart offset seconds, beat-zero timing offsets, timing ownership,
 RSSP-style display BPM aliases,
 min/max/average/median display BPMs, tier BPM, max/peak/median NPS,

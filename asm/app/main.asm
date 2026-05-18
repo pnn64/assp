@@ -183,6 +183,10 @@ start:
     test eax, eax
     jz fail_metadata
 
+    call prepare_selected_normalized_timing_maps
+    test eax, eax
+    jz fail_metadata
+
     call prepare_bpm_range
     test eax, eax
     jz fail_duration
@@ -1130,6 +1134,76 @@ prepare_global_normalized_timing_maps:
     add rsp, 40
     ret
 
+prepare_selected_normalized_timing_maps:
+    sub rsp, 40
+
+    mov qword [selected_normalized_bpms_len], 0
+    mov qword [selected_normalized_stops_len], 0
+    mov qword [selected_normalized_delays_len], 0
+    mov qword [selected_normalized_warps_len], 0
+    mov qword [selected_normalized_fakes_len], 0
+    mov qword [selected_normalized_speeds_len], 0
+    mov qword [selected_normalized_scrolls_len], 0
+
+    mov ecx, ASSP_TIMING_TAGS_BPMS
+    lea rdx, [selected_normalized_bpms_buffer]
+    lea r8, [selected_normalized_bpms_len]
+    call normalize_selected_timing_tag
+    test eax, eax
+    jz .fail
+
+    mov ecx, ASSP_TIMING_TAGS_STOPS
+    lea rdx, [selected_normalized_stops_buffer]
+    lea r8, [selected_normalized_stops_len]
+    call normalize_selected_timing_tag
+    test eax, eax
+    jz .fail
+
+    mov ecx, ASSP_TIMING_TAGS_DELAYS
+    lea rdx, [selected_normalized_delays_buffer]
+    lea r8, [selected_normalized_delays_len]
+    call normalize_selected_timing_tag
+    test eax, eax
+    jz .fail
+
+    mov ecx, ASSP_TIMING_TAGS_WARPS
+    lea rdx, [selected_normalized_warps_buffer]
+    lea r8, [selected_normalized_warps_len]
+    call normalize_selected_timing_tag
+    test eax, eax
+    jz .fail
+
+    mov ecx, ASSP_TIMING_TAGS_FAKES
+    lea rdx, [selected_normalized_fakes_buffer]
+    lea r8, [selected_normalized_fakes_len]
+    call normalize_selected_timing_tag
+    test eax, eax
+    jz .fail
+
+    mov ecx, ASSP_TIMING_TAGS_SPEEDS
+    lea rdx, [selected_normalized_speeds_buffer]
+    lea r8, [selected_normalized_speeds_len]
+    call normalize_selected_timing_tag
+    test eax, eax
+    jz .fail
+
+    mov ecx, ASSP_TIMING_TAGS_SCROLLS
+    lea rdx, [selected_normalized_scrolls_buffer]
+    lea r8, [selected_normalized_scrolls_len]
+    call normalize_selected_timing_tag
+    test eax, eax
+    jz .fail
+
+    mov eax, ASSP_TRUE
+    jmp .done
+
+.fail:
+    xor eax, eax
+
+.done:
+    add rsp, 40
+    ret
+
 ; ecx = ASSP_TIMING_TAGS_* offset, rdx = output buffer, r8 = output length slot.
 normalize_global_timing_tag:
     sub rsp, 40
@@ -1138,6 +1212,40 @@ normalize_global_timing_tag:
     mov r10, rcx
     mov r11, rdx
     lea rax, [global_timing_tags]
+    mov rcx, [rax + r10 + ASSP_BYTE_SLICE_PTR]
+    mov rdx, [rax + r10 + ASSP_BYTE_SLICE_LEN]
+    mov r8, r11
+    mov r9d, BPM_BUFFER_CAP
+    call assp_normalize_float_digits
+    cmp rax, ASSP_NOT_FOUND
+    je .fail
+    cmp rax, BPM_BUFFER_CAP
+    ja .fail
+    mov r8, [rsp + 32]
+    mov [r8], rax
+    mov eax, ASSP_TRUE
+    jmp .done
+
+.fail:
+    xor eax, eax
+
+.done:
+    add rsp, 40
+    ret
+
+; ecx = ASSP_TIMING_TAGS_* offset, rdx = output buffer, r8 = output length slot.
+normalize_selected_timing_tag:
+    sub rsp, 40
+
+    mov [rsp + 32], r8
+    mov r10, rcx
+    mov r11, rdx
+    lea rax, [global_timing_tags]
+    cmp qword [chart_has_own_timing], 0
+    je .selected
+    lea rax, [chart_timing_tags]
+
+.selected:
     mov rcx, [rax + r10 + ASSP_BYTE_SLICE_PTR]
     mov rdx, [rax + r10 + ASSP_BYTE_SLICE_LEN]
     mov r8, r11
@@ -2331,6 +2439,34 @@ print_report:
     lea rcx, [label_selected_scrolls]
     mov edx, ASSP_TIMING_TAGS_SCROLLS
     call print_selected_timing_tag
+    lea rcx, [label_selected_normalized_bpms]
+    lea rdx, [selected_normalized_bpms_buffer]
+    mov r8, [selected_normalized_bpms_len]
+    call print_slice_field
+    lea rcx, [label_selected_normalized_stops]
+    lea rdx, [selected_normalized_stops_buffer]
+    mov r8, [selected_normalized_stops_len]
+    call print_slice_field
+    lea rcx, [label_selected_normalized_delays]
+    lea rdx, [selected_normalized_delays_buffer]
+    mov r8, [selected_normalized_delays_len]
+    call print_slice_field
+    lea rcx, [label_selected_normalized_warps]
+    lea rdx, [selected_normalized_warps_buffer]
+    mov r8, [selected_normalized_warps_len]
+    call print_slice_field
+    lea rcx, [label_selected_normalized_fakes]
+    lea rdx, [selected_normalized_fakes_buffer]
+    mov r8, [selected_normalized_fakes_len]
+    call print_slice_field
+    lea rcx, [label_selected_normalized_speeds]
+    lea rdx, [selected_normalized_speeds_buffer]
+    mov r8, [selected_normalized_speeds_len]
+    call print_slice_field
+    lea rcx, [label_selected_normalized_scrolls]
+    lea rdx, [selected_normalized_scrolls_buffer]
+    mov r8, [selected_normalized_scrolls_len]
+    call print_slice_field
     lea rcx, [label_offset]
     mov rdx, [offset_ms]
     call print_fixed3_field
@@ -3241,6 +3377,13 @@ label_selected_warps db "selected_warps: ", 0
 label_selected_fakes db "selected_fakes: ", 0
 label_selected_speeds db "selected_speeds: ", 0
 label_selected_scrolls db "selected_scrolls: ", 0
+label_selected_normalized_bpms db "selected_normalized_bpms: ", 0
+label_selected_normalized_stops db "selected_normalized_stops: ", 0
+label_selected_normalized_delays db "selected_normalized_delays: ", 0
+label_selected_normalized_warps db "selected_normalized_warps: ", 0
+label_selected_normalized_fakes db "selected_normalized_fakes: ", 0
+label_selected_normalized_speeds db "selected_normalized_speeds: ", 0
+label_selected_normalized_scrolls db "selected_normalized_scrolls: ", 0
 label_global_display_bpm db "global_display_bpm: ", 0
 label_selected_display_bpm db "selected_display_bpm: ", 0
 label_offset db "offset: ", 0
@@ -3402,6 +3545,13 @@ normalized_warps_len resq 1
 normalized_speeds_len resq 1
 normalized_scrolls_len resq 1
 normalized_fakes_len resq 1
+selected_normalized_bpms_len resq 1
+selected_normalized_stops_len resq 1
+selected_normalized_delays_len resq 1
+selected_normalized_warps_len resq 1
+selected_normalized_fakes_len resq 1
+selected_normalized_speeds_len resq 1
+selected_normalized_scrolls_len resq 1
 bpm_segment_count resq 1
 stop_segment_count resq 1
 delay_segment_count resq 1
@@ -3453,6 +3603,13 @@ normalized_warps_buffer resb BPM_BUFFER_CAP
 normalized_speeds_buffer resb BPM_BUFFER_CAP
 normalized_scrolls_buffer resb BPM_BUFFER_CAP
 normalized_fakes_buffer resb BPM_BUFFER_CAP
+selected_normalized_bpms_buffer resb BPM_BUFFER_CAP
+selected_normalized_stops_buffer resb BPM_BUFFER_CAP
+selected_normalized_delays_buffer resb BPM_BUFFER_CAP
+selected_normalized_warps_buffer resb BPM_BUFFER_CAP
+selected_normalized_fakes_buffer resb BPM_BUFFER_CAP
+selected_normalized_speeds_buffer resb BPM_BUFFER_CAP
+selected_normalized_scrolls_buffer resb BPM_BUFFER_CAP
 bpm_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
 stop_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
 delay_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
