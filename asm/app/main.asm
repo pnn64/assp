@@ -875,6 +875,9 @@ prepare_timing_events:
     call assp_find_global_timing_tags
     test eax, eax
     jz .fail
+    call prepare_global_normalized_timing_maps
+    test eax, eax
+    jz .fail
 
     lea r10, [chart_timing_tags]
     xor eax, eax
@@ -1046,6 +1049,97 @@ prepare_timing_events:
 
 .done:
     add rsp, 56
+    ret
+
+prepare_global_normalized_timing_maps:
+    sub rsp, 40
+
+    mov qword [normalized_stops_len], 0
+    mov qword [normalized_delays_len], 0
+    mov qword [normalized_warps_len], 0
+    mov qword [normalized_speeds_len], 0
+    mov qword [normalized_scrolls_len], 0
+    mov qword [normalized_fakes_len], 0
+
+    mov ecx, ASSP_TIMING_TAGS_STOPS
+    lea rdx, [normalized_stops_buffer]
+    lea r8, [normalized_stops_len]
+    call normalize_global_timing_tag
+    test eax, eax
+    jz .fail
+
+    mov ecx, ASSP_TIMING_TAGS_DELAYS
+    lea rdx, [normalized_delays_buffer]
+    lea r8, [normalized_delays_len]
+    call normalize_global_timing_tag
+    test eax, eax
+    jz .fail
+
+    mov ecx, ASSP_TIMING_TAGS_WARPS
+    lea rdx, [normalized_warps_buffer]
+    lea r8, [normalized_warps_len]
+    call normalize_global_timing_tag
+    test eax, eax
+    jz .fail
+
+    mov ecx, ASSP_TIMING_TAGS_SPEEDS
+    lea rdx, [normalized_speeds_buffer]
+    lea r8, [normalized_speeds_len]
+    call normalize_global_timing_tag
+    test eax, eax
+    jz .fail
+
+    mov ecx, ASSP_TIMING_TAGS_SCROLLS
+    lea rdx, [normalized_scrolls_buffer]
+    lea r8, [normalized_scrolls_len]
+    call normalize_global_timing_tag
+    test eax, eax
+    jz .fail
+
+    mov ecx, ASSP_TIMING_TAGS_FAKES
+    lea rdx, [normalized_fakes_buffer]
+    lea r8, [normalized_fakes_len]
+    call normalize_global_timing_tag
+    test eax, eax
+    jz .fail
+
+    mov eax, ASSP_TRUE
+    jmp .done
+
+.fail:
+    xor eax, eax
+
+.done:
+    add rsp, 40
+    ret
+
+; ecx = ASSP_TIMING_TAGS_* offset, rdx = output buffer, r8 = output length slot.
+normalize_global_timing_tag:
+    sub rsp, 40
+
+    mov [rsp + 32], r8
+    mov r10, rcx
+    mov r11, rdx
+    lea rax, [global_timing_tags]
+    mov rcx, [rax + r10 + ASSP_BYTE_SLICE_PTR]
+    mov rdx, [rax + r10 + ASSP_BYTE_SLICE_LEN]
+    mov r8, r11
+    mov r9d, BPM_BUFFER_CAP
+    call assp_normalize_float_digits
+    cmp rax, ASSP_NOT_FOUND
+    je .fail
+    cmp rax, BPM_BUFFER_CAP
+    ja .fail
+    mov r8, [rsp + 32]
+    mov [r8], rax
+    mov eax, ASSP_TRUE
+    jmp .done
+
+.fail:
+    xor eax, eax
+
+.done:
+    add rsp, 40
     ret
 
 count_timing_report_segments:
@@ -1923,6 +2017,34 @@ print_report:
     lea rdx, [global_bpm_buffer]
     mov r8, [global_bpms_len]
     call print_slice_field
+    lea rcx, [label_normalized_bpms]
+    lea rdx, [global_bpm_buffer]
+    mov r8, [global_bpms_len]
+    call print_slice_field
+    lea rcx, [label_normalized_stops]
+    lea rdx, [normalized_stops_buffer]
+    mov r8, [normalized_stops_len]
+    call print_slice_field
+    lea rcx, [label_normalized_delays]
+    lea rdx, [normalized_delays_buffer]
+    mov r8, [normalized_delays_len]
+    call print_slice_field
+    lea rcx, [label_normalized_warps]
+    lea rdx, [normalized_warps_buffer]
+    mov r8, [normalized_warps_len]
+    call print_slice_field
+    lea rcx, [label_normalized_speeds]
+    lea rdx, [normalized_speeds_buffer]
+    mov r8, [normalized_speeds_len]
+    call print_slice_field
+    lea rcx, [label_normalized_scrolls]
+    lea rdx, [normalized_scrolls_buffer]
+    mov r8, [normalized_scrolls_len]
+    call print_slice_field
+    lea rcx, [label_normalized_fakes]
+    lea rdx, [normalized_fakes_buffer]
+    mov r8, [normalized_fakes_len]
+    call print_slice_field
     lea rcx, [label_bpms_formatted]
     lea rdx, [bpm_segment_buffer]
     mov r8, [bpm_segment_count]
@@ -2779,6 +2901,13 @@ label_bpm_neutral_sha1 db "bpm_neutral_sha1: ", 0
 label_bpm_neutral_sha1_hash db "bpm_neutral_sha1_hash: ", 0
 label_hash_bpms db "hash_bpms: ", 0
 label_bpm_data db "bpm_data: ", 0
+label_normalized_bpms db "normalized_bpms: ", 0
+label_normalized_stops db "normalized_stops: ", 0
+label_normalized_delays db "normalized_delays: ", 0
+label_normalized_warps db "normalized_warps: ", 0
+label_normalized_speeds db "normalized_speeds: ", 0
+label_normalized_scrolls db "normalized_scrolls: ", 0
+label_normalized_fakes db "normalized_fakes: ", 0
 label_bpms_formatted db "bpms_formatted: ", 0
 label_stops_formatted db "stops_formatted: ", 0
 label_delays_formatted db "delays_formatted: ", 0
@@ -2934,6 +3063,12 @@ stream_counts resb ASSP_STREAM_COUNTS_SIZE
 num_buffer resb 32
 normalized_bpms_len resq 1
 global_bpms_len resq 1
+normalized_stops_len resq 1
+normalized_delays_len resq 1
+normalized_warps_len resq 1
+normalized_speeds_len resq 1
+normalized_scrolls_len resq 1
+normalized_fakes_len resq 1
 bpm_segment_count resq 1
 stop_segment_count resq 1
 delay_segment_count resq 1
@@ -2969,6 +3104,12 @@ hash_pair resb 32
 tech_notation_buffer resb TECH_BUFFER_CAP
 bpm_buffer resb BPM_BUFFER_CAP
 global_bpm_buffer resb BPM_BUFFER_CAP
+normalized_stops_buffer resb BPM_BUFFER_CAP
+normalized_delays_buffer resb BPM_BUFFER_CAP
+normalized_warps_buffer resb BPM_BUFFER_CAP
+normalized_speeds_buffer resb BPM_BUFFER_CAP
+normalized_scrolls_buffer resb BPM_BUFFER_CAP
+normalized_fakes_buffer resb BPM_BUFFER_CAP
 bpm_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
 stop_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
 delay_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE

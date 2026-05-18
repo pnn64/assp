@@ -1,6 +1,6 @@
 use assp::{
     BpmSegment, bpm_average_centi, bpm_display_range, bpm_median_centi, find_bpms_for_chart,
-    normalize_float_digits, parse_bpm_map,
+    find_global_timing_tags, normalize_float_digits, parse_bpm_map,
 };
 use rssp_core::bpm;
 
@@ -40,6 +40,13 @@ fn assert_bpm_range(input: &[u8]) {
         bpm_display_range(&segments).unwrap(),
         (i64::from(rust.0), i64::from(rust.1))
     );
+}
+
+fn assert_normalized_timing_tag(data: &[u8], tag: assp::ByteSlice) {
+    let raw = slice_from(data, tag.data, tag.len);
+    let asm = normalize_float_digits(raw).unwrap();
+    let rust = bpm::normalize_float_digits(std::str::from_utf8(raw).unwrap());
+    assert_eq!(std::str::from_utf8(&asm).unwrap(), rust);
 }
 
 fn assert_average_bpm(input: &[u8]) {
@@ -143,6 +150,20 @@ fn normalizes_fixture_bpms_for_hash_input() {
         std::str::from_utf8(&normalize_float_digits(sm_raw).unwrap()).unwrap(),
         "0.000=140.000"
     );
+}
+
+#[test]
+fn normalizes_fixture_global_timing_maps_like_rssp_core() {
+    let data = include_bytes!("../../rssp/crates/rssp/benches/fixtures/bpm_fixture.ssc");
+    let tags = find_global_timing_tags(data).unwrap();
+
+    assert_normalized_timing_tag(data, tags.bpms);
+    assert_normalized_timing_tag(data, tags.stops);
+    assert_normalized_timing_tag(data, tags.delays);
+    assert_normalized_timing_tag(data, tags.warps);
+    assert_normalized_timing_tag(data, tags.speeds);
+    assert_normalized_timing_tag(data, tags.scrolls);
+    assert_normalized_timing_tag(data, tags.fakes);
 }
 
 #[test]
