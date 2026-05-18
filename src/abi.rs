@@ -286,6 +286,7 @@ unsafe extern "C" {
         out: *mut u8,
         out_cap: usize,
     ) -> usize;
+    fn assp_count_anchors_minimized_4(data: *const u8, len: usize, out4: *mut u32) -> c_int;
     fn assp_minimize_measure_4(
         rows: *const u8,
         row_count: usize,
@@ -1028,6 +1029,13 @@ pub fn measure_equally_spaced_minimized_8(data: &[u8]) -> Vec<bool> {
 }
 
 #[must_use]
+pub fn count_anchors_minimized_4(data: &[u8]) -> Option<[u32; 4]> {
+    let mut out = [0; 4];
+    let ok = unsafe { assp_count_anchors_minimized_4(data.as_ptr(), data.len(), out.as_mut_ptr()) };
+    (ok != 0).then_some(out)
+}
+
+#[must_use]
 pub fn minimize_measure_4(rows: &[[u8; 4]]) -> Vec<[u8; 4]> {
     let count = unsafe {
         assp_minimize_measure_4(
@@ -1147,6 +1155,12 @@ pub fn measure_equally_spaced_4(data: &[u8]) -> Option<Vec<bool>> {
 pub fn measure_equally_spaced_8(data: &[u8]) -> Option<Vec<bool>> {
     let minimized = minimize_chart_8(data)?;
     Some(measure_equally_spaced_minimized_8(&minimized))
+}
+
+#[must_use]
+pub fn count_anchors_4(data: &[u8]) -> Option<[u32; 4]> {
+    let minimized = minimize_chart_4(data)?;
+    count_anchors_minimized_4(&minimized)
 }
 
 #[must_use]

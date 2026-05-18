@@ -18,6 +18,7 @@ extern assp_count_gimmick_scroll_segments
 extern assp_count_gimmick_speed_segments
 extern assp_count_note_stats_4
 extern assp_count_note_stats_8
+extern assp_count_anchors_minimized_4
 extern assp_count_timing_fakes_4
 extern assp_count_timing_fakes_8
 extern assp_count_timing_segments
@@ -214,6 +215,10 @@ start:
     jz fail_nps
 
     call prepare_equally_spaced
+    test eax, eax
+    jz fail_stats
+
+    call prepare_anchors
     test eax, eax
     jz fail_stats
 
@@ -906,6 +911,35 @@ prepare_equally_spaced:
 
 .sum_done:
     mov [equally_spaced_measures], r9
+    mov eax, ASSP_TRUE
+    jmp .done
+
+.fail:
+    xor eax, eax
+
+.done:
+    add rsp, 40
+    ret
+
+prepare_anchors:
+    sub rsp, 40
+
+    mov dword [anchor_counts + 0], 0
+    mov dword [anchor_counts + 4], 0
+    mov dword [anchor_counts + 8], 0
+    mov dword [anchor_counts + 12], 0
+
+    cmp qword [chart_lanes], 4
+    jne .success
+
+    lea rcx, [minimized_buffer]
+    mov rdx, [minimized_chart_len]
+    lea r8, [anchor_counts]
+    call assp_count_anchors_minimized_4
+    test eax, eax
+    jz .fail
+
+.success:
     mov eax, ASSP_TRUE
     jmp .done
 
@@ -2669,6 +2703,24 @@ print_report:
     lea rcx, [label_equally_spaced_measures]
     mov rdx, [equally_spaced_measures]
     call print_field
+    lea rcx, [label_anchors]
+    mov edx, [anchor_counts + 0]
+    add edx, [anchor_counts + 4]
+    add edx, [anchor_counts + 8]
+    add edx, [anchor_counts + 12]
+    call print_field
+    lea rcx, [label_anchor_left]
+    mov edx, [anchor_counts + 0]
+    call print_field
+    lea rcx, [label_anchor_down]
+    mov edx, [anchor_counts + 4]
+    call print_field
+    lea rcx, [label_anchor_up]
+    mov edx, [anchor_counts + 8]
+    call print_field
+    lea rcx, [label_anchor_right]
+    mov edx, [anchor_counts + 12]
+    call print_field
     lea rcx, [label_max_nps]
     mov rdx, [max_nps_centi]
     call print_fixed2_field
@@ -3560,6 +3612,11 @@ label_average_bpm db "average_bpm: ", 0
 label_median_bpm db "median_bpm: ", 0
 label_measures db "measures: ", 0
 label_equally_spaced_measures db "equally_spaced_measures: ", 0
+label_anchors db "anchors: ", 0
+label_anchor_left db "anchor_left: ", 0
+label_anchor_down db "anchor_down: ", 0
+label_anchor_up db "anchor_up: ", 0
+label_anchor_right db "anchor_right: ", 0
 label_max_nps db "max_nps: ", 0
 label_peak_nps_milli db "peak_nps_milli: ", 0
 label_median_nps db "median_nps: ", 0
@@ -3781,6 +3838,7 @@ warp_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
 fake_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
 nps_buffer resd DENSITY_CAP
 equally_spaced_buffer resb DENSITY_CAP
+anchor_counts resd 4
 row_scratch resq ROW_SCRATCH_CAP
 minimized_buffer resb MINIMIZED_BUFFER_CAP
 density_buffer resd DENSITY_CAP

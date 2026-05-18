@@ -309,6 +309,11 @@ size_t assp_measure_equally_spaced_minimized_8(
     uint8_t *out,
     size_t out_cap
 );
+int32_t assp_count_anchors_minimized_4(
+    const uint8_t *data,
+    size_t len,
+    uint32_t *out4
+);
 int64_t assp_nps_median_centi(
     const uint32_t *nps_milli,
     size_t len
