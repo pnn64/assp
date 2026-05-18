@@ -348,6 +348,16 @@ int32_t assp_step_parity_result_state_holds_4(
     int8_t *out_hit,
     uint32_t *out_key
 );
+size_t assp_step_parity_row_transitions_4(
+    const assp_step_parity_state4 *initial,
+    uint32_t note_mask,
+    uint32_t hold_mask,
+    uint8_t *out_placements,
+    assp_step_parity_state4 *out_states,
+    int8_t *out_hits,
+    uint32_t *out_keys,
+    size_t out_cap
+);
 size_t assp_parse_bpm_map(
     const uint8_t *data,
     size_t len,

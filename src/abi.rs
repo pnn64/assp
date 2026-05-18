@@ -58,6 +58,14 @@ pub struct StepParityState4 {
     pub holding_mask: u8,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StepParityTransition4 {
+    pub placement: [u8; 4],
+    pub state: StepParityState4,
+    pub hit: [i8; 5],
+    pub key: u32,
+}
+
 #[repr(C)]
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct ChartRef {
@@ -272,6 +280,16 @@ unsafe extern "C" {
         out_hit: *mut i8,
         out_key: *mut u32,
     ) -> c_int;
+    fn assp_step_parity_row_transitions_4(
+        initial: *const StepParityState4,
+        note_mask: u32,
+        hold_mask: u32,
+        out_placements: *mut u8,
+        out_states: *mut StepParityState4,
+        out_hits: *mut i8,
+        out_keys: *mut u32,
+        out_cap: usize,
+    ) -> usize;
     fn assp_parse_bpm_map(
         data: *const u8,
         len: usize,
@@ -978,6 +996,65 @@ pub fn step_parity_result_state_holds_4(
         )
     };
     (ok != 0).then_some((state, hit, key))
+}
+
+#[must_use]
+pub fn step_parity_row_transitions_4(
+    initial: &StepParityState4,
+    note_mask: u8,
+    hold_mask: u8,
+) -> Vec<StepParityTransition4> {
+    let count = unsafe {
+        assp_step_parity_row_transitions_4(
+            initial,
+            u32::from(note_mask),
+            u32::from(hold_mask),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            0,
+        )
+    };
+
+    let mut placements = vec![0u8; count.saturating_mul(4)];
+    let mut states = vec![StepParityState4::default(); count];
+    let mut hits = vec![0i8; count.saturating_mul(5)];
+    let mut keys = vec![0u32; count];
+    if count != 0 {
+        unsafe {
+            assp_step_parity_row_transitions_4(
+                initial,
+                u32::from(note_mask),
+                u32::from(hold_mask),
+                placements.as_mut_ptr(),
+                states.as_mut_ptr(),
+                hits.as_mut_ptr(),
+                keys.as_mut_ptr(),
+                count,
+            );
+        }
+    }
+
+    (0..count)
+        .map(|i| StepParityTransition4 {
+            placement: [
+                placements[i * 4],
+                placements[i * 4 + 1],
+                placements[i * 4 + 2],
+                placements[i * 4 + 3],
+            ],
+            state: states[i],
+            hit: [
+                hits[i * 5],
+                hits[i * 5 + 1],
+                hits[i * 5 + 2],
+                hits[i * 5 + 3],
+                hits[i * 5 + 4],
+            ],
+            key: keys[i],
+        })
+        .collect()
 }
 
 #[must_use]

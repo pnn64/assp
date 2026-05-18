@@ -47,6 +47,7 @@ The first implemented pieces are:
 - `assp_step_parity_permutations_4`
 - `assp_step_parity_result_state_no_holds_4`
 - `assp_step_parity_result_state_holds_4`
+- `assp_step_parity_row_transitions_4`
 - `assp_parse_bpm_map`
 - `assp_parse_offset_ms`
 - `assp_bpm_display_range`
@@ -198,6 +199,10 @@ rejection, and bracket-distance rejection.
 `result_state` transition primitives. They compute the resolved state,
 per-foot hit columns, and row-state key used by the DP stage; this is the next
 foundation piece before wiring full row DP and backtracking.
+`assp_step_parity_row_transitions_4` combines the row placement table with
+those result-state primitives for one 4-panel parity row. It emits every legal
+candidate transition in RSSP permutation order; the full DP still needs to add
+action-cost scoring, state-key deduplication, and backtracking.
 `assp_chart_owns_timing_by_index` checks the RSSP chart-local timing ownership
 predicate for SSC `#NOTEDATA` blocks.
 `assp_parse_bpm_map` parses BPM timing maps into sorted fixed-point

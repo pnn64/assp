@@ -4,6 +4,7 @@ default rel
 global assp_step_parity_permutations_4
 global assp_step_parity_result_state_no_holds_4
 global assp_step_parity_result_state_holds_4
+global assp_step_parity_row_transitions_4
 
 section .text
 
@@ -529,6 +530,136 @@ assp_step_parity_result_state_holds_4:
     mov eax, ASSP_TRUE
 
 .done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
+; rcx = initial assp_step_parity_state4, edx = row note mask,
+; r8d = row hold mask, r9 = optional out placements[4 * cap],
+; stack arg 5 = optional out states[12 * cap],
+; stack arg 6 = optional out hits[5 * cap],
+; stack arg 7 = optional out keys[4 * cap],
+; stack arg 8 = output capacity in transitions.
+; rax = total legal transition count.
+assp_step_parity_row_transitions_4:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+    push rbp
+
+    mov r12, rcx
+    mov r13d, edx
+    or r13d, r8d
+    and r13d, 0fh
+    mov r14d, r8d
+    and r14d, 0fh
+    mov r15, r9
+    mov rsi, [rsp + 104]
+    mov rdi, [rsp + 112]
+    mov rbx, [rsp + 120]
+    mov rbp, [rsp + 128]
+
+    test r12, r12
+    jz .fail
+
+    sub rsp, 216
+
+    mov ecx, r13d
+    lea rdx, [rsp + 64]
+    mov r8d, 24
+    call assp_step_parity_permutations_4
+    mov [rsp + 200], rax
+    mov qword [rsp + 192], 0
+
+.loop:
+    mov rax, [rsp + 192]
+    cmp rax, [rsp + 200]
+    jae .success
+
+    lea rdx, [rsp + 64 + rax * 4]
+    test r14d, r14d
+    jnz .with_holds
+
+    mov rcx, r12
+    mov r8d, r13d
+    lea r9, [rsp + 160]
+    lea r10, [rsp + 176]
+    mov [rsp + 32], r10
+    lea r10, [rsp + 184]
+    mov [rsp + 40], r10
+    call assp_step_parity_result_state_no_holds_4
+    jmp .maybe_emit
+
+.with_holds:
+    mov rcx, r12
+    mov r8d, r13d
+    mov r9d, r14d
+    lea r10, [rsp + 160]
+    mov [rsp + 32], r10
+    lea r10, [rsp + 176]
+    mov [rsp + 40], r10
+    lea r10, [rsp + 184]
+    mov [rsp + 48], r10
+    call assp_step_parity_result_state_holds_4
+
+.maybe_emit:
+    mov rax, [rsp + 192]
+    cmp rax, rbp
+    jae .next
+
+    test r15, r15
+    jz .copy_state
+    mov edx, [rsp + 64 + rax * 4]
+    mov [r15 + rax * 4], edx
+
+.copy_state:
+    test rsi, rsi
+    jz .copy_hit
+    lea r10, [rax + rax * 2]
+    lea r10, [rsi + r10 * 4]
+    mov r11, [rsp + 160]
+    mov [r10], r11
+    mov edx, [rsp + 168]
+    mov [r10 + 8], edx
+
+.copy_hit:
+    test rdi, rdi
+    jz .copy_key
+    lea r10, [rax + rax * 4]
+    mov edx, [rsp + 176]
+    mov [rdi + r10], edx
+    mov dl, [rsp + 180]
+    mov [rdi + r10 + 4], dl
+
+.copy_key:
+    test rbx, rbx
+    jz .next
+    mov edx, [rsp + 184]
+    mov [rbx + rax * 4], edx
+
+.next:
+    inc qword [rsp + 192]
+    jmp .loop
+
+.success:
+    mov rax, [rsp + 200]
+    add rsp, 216
+    jmp .done
+
+.fail:
+    xor eax, eax
+
+.done:
+    pop rbp
     pop r15
     pop r14
     pop r13

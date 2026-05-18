@@ -2,7 +2,7 @@ use assp::{
     StepParityState4, TechCounts, calculate_step_tech_counts_from_placements_4,
     count_step_tech_brackets_minimized_4, count_step_tech_brackets_minimized_8,
     parse_tech_notation, step_parity_permutations_4, step_parity_result_state_holds_4,
-    step_parity_result_state_no_holds_4,
+    step_parity_result_state_no_holds_4, step_parity_row_transitions_4,
 };
 
 fn parse(credit: &str, description: &str) -> String {
@@ -259,6 +259,51 @@ fn calculates_hold_result_state_like_rssp_core() {
             step_parity_result_state_holds_4(&initial, &placement, active_mask, hold_mask).unwrap(),
             expected_result_state(initial, placement, active_mask, hold_mask)
         );
+    }
+}
+
+#[test]
+fn enumerates_row_transitions_from_parity_states_like_rssp_core() {
+    let initial_states = [
+        StepParityState4::default(),
+        StepParityState4 {
+            combined_columns: [1, 2, 0, 0],
+            where_feet_are: [-1, 0, 1, -1, -1],
+            occupied_mask: 0b0011,
+            ..StepParityState4::default()
+        },
+        StepParityState4 {
+            combined_columns: [0, 0, 3, 4],
+            where_feet_are: [-1, -1, -1, 2, 3],
+            occupied_mask: 0b1100,
+            ..StepParityState4::default()
+        },
+    ];
+
+    for initial in initial_states {
+        for active_mask in 0..16 {
+            let hold_masks = [0, active_mask & 0b0011, active_mask & 0b1100, active_mask];
+            for hold_mask in hold_masks {
+                let note_mask = active_mask & !hold_mask;
+                let actual = step_parity_row_transitions_4(&initial, note_mask, hold_mask);
+                let expected: Vec<_> = expected_permutations_4(active_mask)
+                    .into_iter()
+                    .map(|placement| {
+                        let (state, hit, key) =
+                            expected_result_state(initial, placement, active_mask, hold_mask);
+                        (placement, state, hit, key)
+                    })
+                    .collect();
+                let actual: Vec<_> = actual
+                    .into_iter()
+                    .map(|t| (t.placement, t.state, t.hit, t.key))
+                    .collect();
+                assert_eq!(
+                    actual, expected,
+                    "active={active_mask:04b} hold={hold_mask:04b}"
+                );
+            }
+        }
     }
 }
 
