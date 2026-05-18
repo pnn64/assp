@@ -2835,6 +2835,18 @@ print_report:
     lea rcx, [label_equally_spaced_measures]
     mov rdx, [equally_spaced_measures]
     call print_field
+    lea rcx, [label_notes_per_measure]
+    lea rdx, [density_buffer]
+    mov r8, [measure_count]
+    call print_u32_array_field
+    lea rcx, [label_nps_per_measure]
+    lea rdx, [nps_buffer]
+    mov r8, [nps_count]
+    call print_milli3_array_field
+    lea rcx, [label_equally_spaced_per_measure]
+    lea rdx, [equally_spaced_buffer]
+    mov r8, [equally_spaced_count]
+    call print_bool_array_field
     lea rcx, [label_candles]
     mov edx, [default_pattern_counts + ASSP_PATTERN_CANDLE_LEFT * 4]
     add edx, [default_pattern_counts + ASSP_PATTERN_CANDLE_RIGHT * 4]
@@ -4001,6 +4013,102 @@ print_bpm_segments_field:
     add rsp, 88
     ret
 
+print_u32_array_field:
+    sub rsp, 88
+    mov [rsp + 32], rdx
+    mov [rsp + 40], r8
+    mov qword [rsp + 48], 0
+    call print_z
+
+.loop:
+    mov rax, [rsp + 48]
+    cmp rax, [rsp + 40]
+    jae .newline
+    test rax, rax
+    jz .value
+    lea rcx, [comma]
+    call print_z
+
+.value:
+    mov rax, [rsp + 48]
+    mov r10, [rsp + 32]
+    mov ecx, [r10 + rax * 4]
+    call print_u64
+    inc qword [rsp + 48]
+    jmp .loop
+
+.newline:
+    lea rcx, [newline]
+    call print_z
+    add rsp, 88
+    ret
+
+print_milli3_array_field:
+    sub rsp, 88
+    mov [rsp + 32], rdx
+    mov [rsp + 40], r8
+    mov qword [rsp + 48], 0
+    call print_z
+
+.loop:
+    mov rax, [rsp + 48]
+    cmp rax, [rsp + 40]
+    jae .newline
+    test rax, rax
+    jz .value
+    lea rcx, [comma]
+    call print_z
+
+.value:
+    mov rax, [rsp + 48]
+    mov r10, [rsp + 32]
+    mov ecx, [r10 + rax * 4]
+    call print_milli3_inline
+    inc qword [rsp + 48]
+    jmp .loop
+
+.newline:
+    lea rcx, [newline]
+    call print_z
+    add rsp, 88
+    ret
+
+print_bool_array_field:
+    sub rsp, 88
+    mov [rsp + 32], rdx
+    mov [rsp + 40], r8
+    mov qword [rsp + 48], 0
+    call print_z
+
+.loop:
+    mov rax, [rsp + 48]
+    cmp rax, [rsp + 40]
+    jae .newline
+    test rax, rax
+    jz .value
+    lea rcx, [comma]
+    call print_z
+
+.value:
+    mov rax, [rsp + 48]
+    mov r10, [rsp + 32]
+    cmp byte [r10 + rax], 0
+    je .false
+    lea rcx, [true_text]
+    jmp .print
+.false:
+    lea rcx, [false_text]
+.print:
+    call print_z
+    inc qword [rsp + 48]
+    jmp .loop
+
+.newline:
+    lea rcx, [newline]
+    call print_z
+    add rsp, 88
+    ret
+
 print_milli6_field:
     sub rsp, 56
     mov [rsp + 32], rdx
@@ -4050,6 +4158,45 @@ print_milli6_inline:
     call print_u64
     lea rcx, [milli_to_six_tail]
     call print_z
+    add rsp, 72
+    ret
+
+print_milli3_inline:
+    sub rsp, 72
+    mov [rsp + 32], rcx
+
+    mov rax, [rsp + 32]
+    test rax, rax
+    jge .positive
+    neg rax
+    mov [rsp + 32], rax
+    lea rcx, [minus]
+    call print_z
+    mov rax, [rsp + 32]
+
+.positive:
+    xor edx, edx
+    mov r9d, 1000
+    div r9
+    mov [rsp + 40], rdx
+    mov rcx, rax
+    call print_u64
+    lea rcx, [dot]
+    call print_z
+    mov rax, [rsp + 40]
+    cmp rax, 100
+    jae .fraction
+    lea rcx, [zero_digit]
+    call print_z
+    mov rax, [rsp + 40]
+    cmp rax, 10
+    jae .fraction
+    lea rcx, [zero_digit]
+    call print_z
+
+.fraction:
+    mov rcx, [rsp + 40]
+    call print_u64
     add rsp, 72
     ret
 
@@ -4372,6 +4519,9 @@ label_average_bpm db "average_bpm: ", 0
 label_median_bpm db "median_bpm: ", 0
 label_measures db "measures: ", 0
 label_equally_spaced_measures db "equally_spaced_measures: ", 0
+label_notes_per_measure db "notes_per_measure: ", 0
+label_nps_per_measure db "nps_per_measure: ", 0
+label_equally_spaced_per_measure db "equally_spaced_per_measure: ", 0
 label_candles db "candles: ", 0
 label_candle_left db "candle_left: ", 0
 label_candle_right db "candle_right: ", 0
@@ -4620,6 +4770,8 @@ zero_digit db "0", 0
 milli_to_six_tail db "000", 0
 minute_suffix db "m ", 0
 second_suffix db "s", 0
+true_text db "true", 0
+false_text db "false", 0
 newline db 13, 10, 0
 
 section .bss
