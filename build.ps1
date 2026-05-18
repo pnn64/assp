@@ -190,6 +190,8 @@ if ($CompareRssp) {
     Compare-Text "step_type" ([string]$chartJson.chart_info.step_type)
     Compare-Text "difficulty" ([string]$chartJson.chart_info.difficulty)
     Compare-Text "rating" ([string]$chartJson.chart_info.rating)
+    Compare-Text "sha1" ([string]$chartJson.chart_info.sha1)
+    Compare-Text "bpm_neutral_sha1" ([string]$chartJson.chart_info.bpm_neutral_sha1)
 
     Compare-Float "tier_bpm" ([double]$chartJson.chart_info.tier_bpm)
     Compare-Float "matrix_rating" ([double]$chartJson.chart_info.matrix_rating)

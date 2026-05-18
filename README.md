@@ -323,6 +323,8 @@ RSSP Rust CLI for one fixture chart:
 
 `-CompareRssp` is an optional parity harness. It runs Cargo only after the NASM
 standalone executable is built, and only to execute the local RSSP reference CLI.
+It checks chart metadata, SHA1 hashes, matrix/tier BPM, NPS, arrow counts, and
+stream metrics.
 
 The standalone executable currently scans SSC files for chart metadata and
 `#NOTES:` / `#NOTES2:` tags. The second argument is a zero-based chart index, or

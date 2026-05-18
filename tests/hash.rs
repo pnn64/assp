@@ -27,11 +27,18 @@ fn slice_from<'a>(data: &'a [u8], ptr: *const u8, len: usize) -> &'a [u8] {
     &data[start..start + len]
 }
 
+fn truncate_hash_newlines(data: &mut Vec<u8>) {
+    while data.last() == Some(&b'\n') {
+        data.pop();
+    }
+}
+
 fn assert_fixture_hash_pipeline(data: &[u8], index: usize) {
     let chart = find_chart_by_index(data, index).unwrap();
     let chart_start = chart.note_data as usize - data.as_ptr() as usize;
     let notes = &data[chart_start..chart_start + chart.note_data_len];
-    let minimized = minimize_chart_4(notes).unwrap();
+    let mut minimized = minimize_chart_4(notes).unwrap();
+    truncate_hash_newlines(&mut minimized);
 
     let bpms = find_bpms_for_chart(data, index).unwrap();
     let raw_bpms = slice_from(data, bpms.data, bpms.len);
@@ -39,6 +46,27 @@ fn assert_fixture_hash_pipeline(data: &[u8], index: usize) {
     let normalized = std::str::from_utf8(&normalized).unwrap();
 
     assert_hash_pair_match(&minimized, normalized);
+}
+
+fn assert_fixture_report_hashes(
+    data: &[u8],
+    index: usize,
+    expected_hash: &str,
+    expected_neutral: &str,
+) {
+    let chart = find_chart_by_index(data, index).unwrap();
+    let chart_start = chart.note_data as usize - data.as_ptr() as usize;
+    let notes = &data[chart_start..chart_start + chart.note_data_len];
+    let mut minimized = minimize_chart_4(notes).unwrap();
+    truncate_hash_newlines(&mut minimized);
+
+    let bpms = find_bpms_for_chart(data, index).unwrap();
+    let raw_bpms = slice_from(data, bpms.data, bpms.len);
+    let normalized = normalize_float_digits(raw_bpms).unwrap();
+    let (hash, neutral) = chart_hash_pair(&minimized, &normalized).unwrap();
+
+    assert_eq!(std::str::from_utf8(&hash).unwrap(), expected_hash);
+    assert_eq!(std::str::from_utf8(&neutral).unwrap(), expected_neutral);
 }
 
 #[test]
@@ -116,4 +144,20 @@ fn sm_fixture_hash_input_matches_rssp_core() {
 fn fixture_hash_pipeline_matches_rssp_core() {
     assert_fixture_hash_pipeline(include_bytes!("../fixtures/camellia_mix.ssc"), 4);
     assert_fixture_hash_pipeline(include_bytes!("../fixtures/200000_step_challenge.sm"), 4);
+}
+
+#[test]
+fn fixture_report_hashes_match_rssp_cli() {
+    assert_fixture_report_hashes(
+        include_bytes!("../fixtures/camellia_mix.ssc"),
+        4,
+        "9dd8b279739ae8da",
+        "4791540518d770c5",
+    );
+    assert_fixture_report_hashes(
+        include_bytes!("../fixtures/200000_step_challenge.sm"),
+        4,
+        "56b8ceeeb9f0d24e",
+        "fb40ca35ce60b5f1",
+    );
 }

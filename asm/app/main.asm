@@ -782,6 +782,16 @@ prepare_hash:
     je .fail
     cmp rax, MINIMIZED_BUFFER_CAP
     ja .fail
+    lea r10, [minimized_buffer]
+.trim_hash_newlines:
+    test rax, rax
+    jz .hash_len_ready
+    cmp byte [r10 + rax - 1], 10
+    jne .hash_len_ready
+    dec rax
+    jmp .trim_hash_newlines
+
+.hash_len_ready:
     mov [minimized_chart_len], rax
 
     lea rcx, [minimized_buffer]
