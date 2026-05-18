@@ -1186,6 +1186,8 @@ prepare_chart_metadata:
 
     mov qword [chart_name_slice + ASSP_BYTE_SLICE_PTR], 0
     mov qword [chart_name_slice + ASSP_BYTE_SLICE_LEN], 0
+    mov qword [display_bpm_slice + ASSP_BYTE_SLICE_PTR], 0
+    mov qword [display_bpm_slice + ASSP_BYTE_SLICE_LEN], 0
     mov qword [step_artist_slice + ASSP_BYTE_SLICE_PTR], 0
     mov qword [step_artist_slice + ASSP_BYTE_SLICE_LEN], 0
 
@@ -1195,6 +1197,15 @@ prepare_chart_metadata:
     lea r9, [tag_chart_name]
     mov qword [rsp + 32], tag_chart_name_end - tag_chart_name
     lea rax, [chart_name_slice]
+    mov [rsp + 40], rax
+    call assp_find_chart_tag_by_index
+
+    lea rcx, [file_buffer]
+    mov rdx, [file_len]
+    mov r8, [chart_index]
+    lea r9, [tag_display_bpm]
+    mov qword [rsp + 32], tag_display_bpm_end - tag_display_bpm
+    lea rax, [display_bpm_slice]
     mov [rsp + 40], rax
     call assp_find_chart_tag_by_index
 
@@ -1379,6 +1390,10 @@ print_report:
     lea rcx, [label_offset]
     mov rdx, [offset_ms]
     call print_fixed3_field
+    lea rcx, [label_display_bpm]
+    mov rdx, [display_bpm_slice + ASSP_BYTE_SLICE_PTR]
+    mov r8, [display_bpm_slice + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
     lea rcx, [label_bpm]
     mov rdx, [min_bpm]
     mov r8, [max_bpm]
@@ -1833,6 +1848,8 @@ tag_offset db "#OFFSET:"
 tag_offset_end:
 tag_chart_name db "#CHARTNAME:"
 tag_chart_name_end:
+tag_display_bpm db "#DISPLAYBPM:"
+tag_display_bpm_end:
 tag_credit db "#CREDIT:"
 tag_credit_end:
 msg_header db "assp standalone", 13, 10, 0
@@ -1858,6 +1875,7 @@ label_hash db "hash: ", 0
 label_bpm_neutral_hash db "bpm_neutral_hash: ", 0
 label_hash_bpms db "hash_bpms: ", 0
 label_offset db "offset: ", 0
+label_display_bpm db "display_bpm_tag: ", 0
 label_bpm db "bpm: ", 0
 label_min_bpm db "min_bpm: ", 0
 label_max_bpm db "max_bpm: ", 0
@@ -1939,6 +1957,7 @@ chart_info resb ASSP_CHART_INFO_SIZE
 bpms_slice resb ASSP_BYTE_SLICE_SIZE
 offset_slice resb ASSP_BYTE_SLICE_SIZE
 chart_name_slice resb ASSP_BYTE_SLICE_SIZE
+display_bpm_slice resb ASSP_BYTE_SLICE_SIZE
 step_artist_slice resb ASSP_BYTE_SLICE_SIZE
 global_timing_tags resb ASSP_TIMING_TAGS_SIZE
 chart_timing_tags resb ASSP_TIMING_TAGS_SIZE
