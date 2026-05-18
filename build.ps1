@@ -268,6 +268,20 @@ if ($CompareRssp -or $CompareAllCharts -or $CompareFixtures) {
         $items -join ","
     }
 
+    function Format-StreamSequences($sequences) {
+        $items = @()
+        foreach ($sequence in @($sequences)) {
+            if ($null -eq $sequence) {
+                continue
+            }
+            $start = [int64]$sequence.stream_start
+            $end = [int64]$sequence.stream_end
+            $isBreak = ([string]$sequence.is_break).ToLowerInvariant()
+            $items += ('{{"stream_start":{0},"stream_end":{1},"is_break":{2}}}' -f $start, $end, $isBreak)
+        }
+        "[" + ($items -join ",") + "]"
+    }
+
     function Split-AsspItems([string]$text) {
         if ($text.Length -eq 0) {
             return @()
@@ -541,6 +555,8 @@ if ($CompareRssp -or $CompareAllCharts -or $CompareFixtures) {
             Compare-Float "stream_percent" ([double]$chartJson.stream_info.stream_percent)
             Compare-Float "adj_stream_percent" ([double]$chartJson.stream_info.adj_stream_percent)
             Compare-Float "break_percent" ([double]$chartJson.stream_info.break_percent)
+            Compare-Int "stream_segments" ([int64]@($chartJson.stream_info.stream_sequences).Count)
+            Compare-Text "stream_sequences" (Format-StreamSequences $chartJson.stream_info.stream_sequences)
         }
 
         if ($failures.Count -eq 0 -and !$CompareFixtures) {

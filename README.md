@@ -349,7 +349,7 @@ built, and only to execute the local RSSP reference CLI. They check chart
 metadata, SHA1 hashes, matrix/tier BPM, NPS summary and per-measure vectors,
 song and chart artist metadata, timing metadata, formatted timing maps,
 breakdown strings, arrow counts, mono/candle stats, default pattern counts,
-gimmick counts, and stream metrics.
+gimmick counts, stream metrics, and stream sequence ranges.
 
 The standalone executable currently scans SSC files for chart metadata and
 `#NOTES:` / `#NOTES2:` tags. The second argument is a zero-based chart index, or
