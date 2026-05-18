@@ -69,7 +69,7 @@ section .text
     push r13
     push r14
     push r15
-    sub rsp, 80
+    sub rsp, 96
 
     test r8, r8
     jz %%fail
@@ -99,6 +99,7 @@ section .text
     mov qword [rsp + 48], 0
     mov qword [rsp + 56], 0
     mov qword [rsp + 64], 0
+    mov qword [rsp + 72], 0
 
 %%line_loop:
     cmp rsi, rdi
@@ -178,6 +179,8 @@ section .text
 
 %%simple_store_third:
     mov [rsp + 32], r13d
+    mov eax, [rsp + 40]
+    mov [rsp + 72], eax
 
 %%simple_check_row:
     cmp r14d, 1
@@ -251,6 +254,61 @@ section .text
     call count_simple_crossovers_4
     add [rbx + ASSP_TECH_COUNTS_CROSSOVERS], eax
 
+%%check_simple_footswitch:
+    cmp dword [rsp], 3
+    jne %%check_simple_jack
+    cmp dword [rsp + 8], 0
+    jne %%check_simple_jack
+    cmp dword [rsp + 64], 0
+    jne %%check_simple_jack
+    cmp dword [rsp + 40], 16
+    jne %%check_simple_jack
+    mov eax, [rsp + 56]
+    sub eax, [rsp + 48]
+    cmp eax, 1
+    jne %%check_simple_jack
+    mov eax, [rsp + 72]
+    sub eax, [rsp + 56]
+    cmp eax, 1
+    jne %%check_simple_jack
+    cmp dword [rsp + 32], 1
+    jne %%check_three_row_jacks
+    mov eax, [rsp + 16]
+    cmp eax, [rsp + 24]
+    jne %%check_three_row_jacks
+    cmp eax, 2
+    je %%count_down_footswitch
+    cmp eax, 4
+    je %%count_up_footswitch
+    jmp %%check_three_row_jacks
+
+%%count_down_footswitch:
+    inc dword [rbx + ASSP_TECH_COUNTS_FOOTSWITCHES]
+    inc dword [rbx + ASSP_TECH_COUNTS_DOWN_FOOTSWITCHES]
+    jmp %%return_true
+
+%%count_up_footswitch:
+    inc dword [rbx + ASSP_TECH_COUNTS_FOOTSWITCHES]
+    inc dword [rbx + ASSP_TECH_COUNTS_UP_FOOTSWITCHES]
+    jmp %%return_true
+
+%%check_three_row_jacks:
+    xor eax, eax
+    mov ecx, [rsp + 16]
+    cmp ecx, [rsp + 24]
+    jne %%check_second_jack_pair
+    inc eax
+
+%%check_second_jack_pair:
+    mov ecx, [rsp + 24]
+    cmp ecx, [rsp + 32]
+    jne %%add_three_row_jacks
+    inc eax
+
+%%add_three_row_jacks:
+    add [rbx + ASSP_TECH_COUNTS_JACKS], eax
+    jmp %%return_true
+
 %%check_simple_jack:
     cmp dword [rsp], 2
     jne %%return_true
@@ -278,7 +336,7 @@ section .text
     xor eax, eax
 
 %%done:
-    add rsp, 80
+    add rsp, 96
     pop r15
     pop r14
     pop r13

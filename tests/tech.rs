@@ -37,6 +37,10 @@ fn assert_basic_tech_match_rssp(data: &[u8], lanes: usize, counts: TechCounts) {
         counts,
         TechCounts {
             crossovers: expected.crossovers,
+            footswitches: expected.footswitches,
+            up_footswitches: expected.up_footswitches,
+            down_footswitches: expected.down_footswitches,
+            sideswitches: expected.sideswitches,
             jacks: expected.jacks,
             brackets: expected.brackets,
             ..TechCounts::default()
@@ -92,6 +96,48 @@ fn counts_single_panel_three_row_crossovers_like_rssp_core() {
         b"0001\n0100\n1000\n".as_slice(),
         b"1000\n0010\n0001\n".as_slice(),
         b"0001\n0010\n1000\n".as_slice(),
+    ] {
+        let counts = count_step_tech_brackets_minimized_4(data).unwrap();
+        assert_basic_tech_match_rssp(data, 4, counts);
+    }
+}
+
+#[test]
+fn counts_single_panel_dense_footswitch_smoke_like_rssp_core() {
+    for data in [
+        concat!(
+            "0100\n", "0100\n", "1000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n",
+            "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n",
+        )
+        .as_bytes(),
+        concat!(
+            "0010\n", "0010\n", "1000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n",
+            "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n",
+        )
+        .as_bytes(),
+    ] {
+        let counts = count_step_tech_brackets_minimized_4(data).unwrap();
+        assert_basic_tech_match_rssp(data, 4, counts);
+    }
+}
+
+#[test]
+fn skips_single_panel_slow_or_mirrored_footswitch_smoke_like_rssp_core() {
+    for data in [
+        concat!(
+            "0100\n", "0100\n", "1000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n",
+        )
+        .as_bytes(),
+        concat!(
+            "0100\n", "0100\n", "0001\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n",
+            "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n",
+        )
+        .as_bytes(),
+        concat!(
+            "0010\n", "0010\n", "0001\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n",
+            "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n",
+        )
+        .as_bytes(),
     ] {
         let counts = count_step_tech_brackets_minimized_4(data).unwrap();
         assert_basic_tech_match_rssp(data, 4, counts);
