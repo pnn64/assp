@@ -214,6 +214,10 @@ for parsed SSC versions below `0.74`, `description` is reported as empty and
 the raw description field is reported as `chart_name`.
 Chart difficulty output is resolved with RSSP's alias and fallback rules, with
 the original raw difficulty still reported separately.
+SM chart descriptions are also reported through the `step_artist` /
+`step_artists` aliases, matching RSSP's SM step-artist fallback. Missing
+song-level artist and artist-translit metadata both report `Unknown artist`
+when RSSP applies that fallback.
 `assp_stream_counts_from_densities` classifies 16th/20th/24th/32nd stream
 measures, SN breaks, and total break measures from those densities.
 `assp_stream_percentages_centi` computes RSSP-style stream, adjusted stream,
@@ -343,8 +347,9 @@ against the local RSSP Rust CLI:
 harness modes. They run Cargo only after the NASM standalone executable is
 built, and only to execute the local RSSP reference CLI. They check chart
 metadata, SHA1 hashes, matrix/tier BPM, NPS summary and per-measure vectors,
-timing metadata, breakdown strings, arrow counts, mono/candle stats, default
-pattern counts, gimmick counts, and stream metrics.
+song and chart artist metadata, timing metadata, formatted timing maps,
+breakdown strings, arrow counts, mono/candle stats, default pattern counts,
+gimmick counts, and stream metrics.
 
 The standalone executable currently scans SSC files for chart metadata and
 `#NOTES:` / `#NOTES2:` tags. The second argument is a zero-based chart index, or

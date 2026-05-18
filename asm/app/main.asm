@@ -1939,6 +1939,17 @@ prepare_global_metadata:
     mov [rsp + 32], rax
     call assp_find_global_tag
 
+    cmp qword [artist_slice + ASSP_BYTE_SLICE_LEN], 0
+    jne .done
+    cmp qword [artist_trans_slice + ASSP_BYTE_SLICE_LEN], 0
+    jne .done
+    lea rax, [unknown_artist]
+    mov [artist_slice + ASSP_BYTE_SLICE_PTR], rax
+    mov [artist_trans_slice + ASSP_BYTE_SLICE_PTR], rax
+    mov qword [artist_slice + ASSP_BYTE_SLICE_LEN], unknown_artist_end - unknown_artist
+    mov qword [artist_trans_slice + ASSP_BYTE_SLICE_LEN], unknown_artist_end - unknown_artist
+
+.done:
     add rsp, 40
     ret
 
@@ -2181,6 +2192,15 @@ prepare_chart_metadata:
     mov [rsp + 40], rax
     call assp_find_chart_tag_by_index
 
+.set_sm_step_artist:
+    cmp qword [timing_format_sm], 0
+    je .done
+    mov rax, [chart_info + ASSP_CHART_INFO_DESC_PTR]
+    mov [step_artist_slice + ASSP_BYTE_SLICE_PTR], rax
+    mov rax, [chart_info + ASSP_CHART_INFO_DESC_LEN]
+    mov [step_artist_slice + ASSP_BYTE_SLICE_LEN], rax
+
+.done:
     add rsp, 56
     ret
 
@@ -2230,8 +2250,17 @@ prepare_tech_notation:
     sub rsp, 56
 
     mov qword [tech_notation_len], 0
+    cmp qword [timing_format_sm], 0
+    je .ssc_credit
+    lea rcx, [newline]
+    xor edx, edx
+    jmp .description
+
+.ssc_credit:
     mov rcx, [step_artist_slice + ASSP_BYTE_SLICE_PTR]
     mov rdx, [step_artist_slice + ASSP_BYTE_SLICE_LEN]
+
+.description:
     cmp qword [chart_name_tag_allowed], 0
     je .legacy_description
     mov r8, [chart_info + ASSP_CHART_INFO_DESC_PTR]
@@ -4509,6 +4538,8 @@ msg_nps_fail db "assembly nps pipeline failed", 13, 10, 0
 msg_duration_fail db "assembly duration pipeline failed", 13, 10, 0
 msg_tech_fail db "assembly tech notation parser failed", 13, 10, 0
 msg_breakdown_too_long db "breakdown output exceeded text buffer", 13, 10, 0
+unknown_artist db "Unknown artist"
+unknown_artist_end:
 label_file db "file: ", 0
 label_title db "title: ", 0
 label_subtitle db "subtitle: ", 0

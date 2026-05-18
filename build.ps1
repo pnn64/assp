@@ -255,6 +255,19 @@ if ($CompareRssp -or $CompareAllCharts -or $CompareFixtures) {
         }
     }
 
+    function Format-TimingPairs($pairs) {
+        $items = @()
+        foreach ($pair in @($pairs)) {
+            if ($null -eq $pair) {
+                continue
+            }
+            $beat = [double]$pair[0]
+            $value = [double]$pair[1]
+            $items += ("{0:F6}={1:F6}" -f $beat, $value)
+        }
+        $items -join ","
+    }
+
     function Split-AsspItems([string]$text) {
         if ($text.Length -eq 0) {
             return @()
@@ -361,9 +374,20 @@ if ($CompareRssp -or $CompareAllCharts -or $CompareFixtures) {
 
             $chartJson = $rssp.charts[$chartIndex]
 
+            Compare-Text "title" ([string]$rssp.title)
+            Compare-Text "subtitle" ([string]$rssp.subtitle)
+            Compare-Text "artist" ([string]$rssp.artist)
+            Compare-Text "title_trans" ([string]$rssp.title_trans)
+            Compare-Text "subtitle_trans" ([string]$rssp.subtitle_trans)
+            Compare-Text "artist_trans" ([string]$rssp.artist_trans)
+            Compare-Text "bpm_data" ([string]$rssp.bpm_data)
+            Compare-Float "offset" ([double]$rssp.offset) 0.001
+
             Compare-Text "step_type" ([string]$chartJson.chart_info.step_type)
             Compare-Text "difficulty" ([string]$chartJson.chart_info.difficulty)
             Compare-Text "rating" ([string]$chartJson.chart_info.rating)
+            Compare-Text "step_artists" ([string]$chartJson.chart_info.step_artists)
+            Compare-Text "tech_notation" ([string]$chartJson.chart_info.tech_notation)
             Compare-Text "sha1" ([string]$chartJson.chart_info.sha1)
             Compare-Text "bpm_neutral_sha1" ([string]$chartJson.chart_info.bpm_neutral_sha1)
 
@@ -379,6 +403,10 @@ if ($CompareRssp -or $CompareAllCharts -or $CompareFixtures) {
             Compare-Float "beat0_group_offset_seconds" ([double]$chartJson.timing.beat0_group_offset_seconds)
             Compare-Text "hash_bpms" ([string]$chartJson.timing.hash_bpms)
             Compare-Text "bpms_formatted" ([string]$chartJson.timing.bpms_formatted)
+            Compare-Text "stops_formatted" (Format-TimingPairs $chartJson.timing.stops)
+            Compare-Text "delays_formatted" (Format-TimingPairs $chartJson.timing.delays)
+            Compare-Text "warps_formatted" (Format-TimingPairs $chartJson.timing.warps)
+            Compare-Text "fakes_formatted" (Format-TimingPairs $chartJson.timing.fakes)
             Compare-IntField "min_bpm" "bpm_min" ([int64]$chartJson.timing.bpm_min)
             Compare-IntField "max_bpm" "bpm_max" ([int64]$chartJson.timing.bpm_max)
             Compare-Text "display_bpm" ([string]$chartJson.timing.display_bpm)
