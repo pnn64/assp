@@ -1379,6 +1379,12 @@ print_report:
     lea rcx, [label_scrolls]
     mov rdx, [scroll_report_count]
     call print_field
+    lea rcx, [label_total_streams]
+    mov rdx, [stream_counts + ASSP_STREAM_COUNTS_RUN16]
+    add rdx, [stream_counts + ASSP_STREAM_COUNTS_RUN20]
+    add rdx, [stream_counts + ASSP_STREAM_COUNTS_RUN24]
+    add rdx, [stream_counts + ASSP_STREAM_COUNTS_RUN32]
+    call print_field
     lea rcx, [label_stream16]
     mov rdx, [stream_counts + ASSP_STREAM_COUNTS_RUN16]
     call print_field
@@ -1741,6 +1747,7 @@ label_delays db "delays: ", 0
 label_warps db "warps: ", 0
 label_speeds db "speeds: ", 0
 label_scrolls db "scrolls: ", 0
+label_total_streams db "total_streams: ", 0
 label_stream16 db "16th_streams: ", 0
 label_stream20 db "20th_streams: ", 0
 label_stream24 db "24th_streams: ", 0

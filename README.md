@@ -265,10 +265,10 @@ report path currently supports `dance-single` and `dance-double` charts. Chart
 reports include RSSP-style chart hashes,
 normalized hash BPMs, min/max/average/median display BPMs, tier BPM, peak and
 median NPS, equally-spaced measure counts, density-derived stream counts,
-stream percentages, fixed-point duration metrics with stops/delays/warps, token
-breakdowns, segment breakdowns, stop/delay/warp/speed/scroll timing segment
-counts, offset adjustment, and note stats with nonfake mine and timing-fake
-counts.
+total stream counts, stream percentages, fixed-point duration metrics with
+stops/delays/warps, token breakdowns, segment breakdowns,
+stop/delay/warp/speed/scroll timing segment counts, offset adjustment, and note
+stats with nonfake mine and timing-fake counts.
 
 Run the optional Rust parity tests:
 
