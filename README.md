@@ -263,8 +263,9 @@ description. SM `#NOTES:` / `#NOTES2:` blocks are also split into their five
 metadata fields before chart rows are passed to the stat counter. The standalone
 report path currently supports `dance-single` and `dance-double` charts. Chart
 reports include RSSP-style chart hashes,
-normalized hash BPMs, offset seconds, min/max/average/median display BPMs,
-tier BPM, peak and median NPS, equally-spaced measure counts,
+normalized hash BPMs, offset seconds, RSSP-style display BPM,
+min/max/average/median display BPMs, tier BPM, peak and median NPS,
+equally-spaced measure counts,
 density-derived stream counts, total stream counts, stream percentages,
 fixed-point duration metrics with stops/delays/warps, token breakdowns,
 segment breakdowns,

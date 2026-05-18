@@ -1334,6 +1334,10 @@ print_report:
     lea rcx, [label_offset]
     mov rdx, [offset_ms]
     call print_fixed3_field
+    lea rcx, [label_bpm]
+    mov rdx, [min_bpm]
+    mov r8, [max_bpm]
+    call print_bpm_field
     lea rcx, [label_min_bpm]
     mov rdx, [min_bpm]
     call print_field
@@ -1537,6 +1541,29 @@ print_field:
     lea rcx, [newline]
     call print_z
     add rsp, 56
+    ret
+
+print_bpm_field:
+    sub rsp, 72
+    mov [rsp + 32], rdx
+    mov [rsp + 40], r8
+    call print_z
+
+    mov rcx, [rsp + 32]
+    call print_u64
+    mov rax, [rsp + 32]
+    cmp rax, [rsp + 40]
+    je .newline
+
+    lea rcx, [minus]
+    call print_z
+    mov rcx, [rsp + 40]
+    call print_u64
+
+.newline:
+    lea rcx, [newline]
+    call print_z
+    add rsp, 72
     ret
 
 print_fixed2_field:
@@ -1777,6 +1804,7 @@ label_hash db "hash: ", 0
 label_bpm_neutral_hash db "bpm_neutral_hash: ", 0
 label_hash_bpms db "hash_bpms: ", 0
 label_offset db "offset: ", 0
+label_bpm db "bpm: ", 0
 label_min_bpm db "min_bpm: ", 0
 label_max_bpm db "max_bpm: ", 0
 label_average_bpm db "average_bpm: ", 0
