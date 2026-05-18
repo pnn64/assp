@@ -43,6 +43,7 @@ The first implemented pieces are:
 - `assp_parse_tech_notation`
 - `assp_count_step_tech_brackets_minimized_4`
 - `assp_count_step_tech_brackets_minimized_8`
+- `assp_calculate_step_tech_counts_from_placements_4`
 - `assp_parse_bpm_map`
 - `assp_parse_offset_ms`
 - `assp_bpm_display_range`
@@ -177,13 +178,15 @@ rules, `No Tech` skipping, and measure-data filtering.
 `assp_count_step_tech_brackets_minimized_8` start the RSSP step-parity
 tech-count port. They emit the `tech_counts` ABI and currently match the
 hold-constrained bracket slice for fixture charts where RSSP's other parity
-counters are zero. The 4-panel path also covers the smallest verified
-single-note crossover triples (`LDR`, `LUR`, `RDL`, `RUL`) and exact dense
-two-row, three-row, and four-row repeated-panel jack smoke cases. It also covers the tiny dense
-footswitch smoke cases RSSP emits for `DDL` and `UUL`, plus RSSP's tiny dense
-`RULD` doublestep smoke case. Full crossover sequence handling,
-timing-aware jack/footswitch coverage, sideswitches, and general doublesteps
-still require the full parity DP port.
+counters are zero. General crossovers, footswitches, sideswitches, jacks, and
+doublesteps require the full parity DP port; do not add pattern-specific
+counter shortcuts here.
+`assp_calculate_step_tech_counts_from_placements_4` is the first direct port of
+RSSP's post-parity tech-count stage for 4-panel charts. It consumes parity row
+tech masks, note counts, row times, and resolved foot placements, then applies
+RSSP's tech-count rules for jacks, doublesteps, brackets, footswitches,
+sideswitches, and crossovers. The remaining work is wiring the actual
+step-parity row builder and DP placement generator ahead of this stage.
 `assp_chart_owns_timing_by_index` checks the RSSP chart-local timing ownership
 predicate for SSC `#NOTEDATA` blocks.
 `assp_parse_bpm_map` parses BPM timing maps into sorted fixed-point

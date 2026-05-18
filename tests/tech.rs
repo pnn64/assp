@@ -1,6 +1,6 @@
 use assp::{
-    TechCounts, count_step_tech_brackets_minimized_4, count_step_tech_brackets_minimized_8,
-    parse_tech_notation,
+    TechCounts, calculate_step_tech_counts_from_placements_4, count_step_tech_brackets_minimized_4,
+    count_step_tech_brackets_minimized_8, parse_tech_notation,
 };
 
 fn parse(credit: &str, description: &str) -> String {
@@ -31,22 +31,15 @@ fn assert_brackets_match_rssp(data: &[u8], lanes: usize, counts: TechCounts) {
     assert_only_brackets(counts, expected.brackets);
 }
 
-fn assert_basic_tech_match_rssp(data: &[u8], lanes: usize, counts: TechCounts) {
-    let expected = rssp_core::step_parity::analyze_lanes(data, &[(0.0, 120.0)], 0.0, lanes);
-    assert_eq!(
-        counts,
-        TechCounts {
-            crossovers: expected.crossovers,
-            footswitches: expected.footswitches,
-            up_footswitches: expected.up_footswitches,
-            down_footswitches: expected.down_footswitches,
-            sideswitches: expected.sideswitches,
-            jacks: expected.jacks,
-            brackets: expected.brackets,
-            doublesteps: expected.doublesteps,
-            ..TechCounts::default()
-        }
-    );
+fn placement_counts(
+    tech_masks: &[u8],
+    note_counts: &[u8],
+    row_ms: &[i32],
+    placements: &[[u8; 4]],
+) -> TechCounts {
+    let placements: Vec<u8> = placements.iter().flatten().copied().collect();
+    calculate_step_tech_counts_from_placements_4(tech_masks, note_counts, row_ms, &placements)
+        .unwrap()
 }
 
 #[test]
@@ -91,158 +84,70 @@ fn counts_single_panel_timing_hold_fixture_bracket_like_rssp_core() {
 }
 
 #[test]
-fn counts_single_panel_three_row_crossovers_like_rssp_core() {
-    for data in [
-        b"1000\n0100\n0001\n".as_slice(),
-        b"0001\n0100\n1000\n".as_slice(),
-        b"1000\n0010\n0001\n".as_slice(),
-        b"0001\n0010\n1000\n".as_slice(),
-    ] {
-        let counts = count_step_tech_brackets_minimized_4(data).unwrap();
-        assert_basic_tech_match_rssp(data, 4, counts);
-    }
+fn calculates_jacks_and_doublesteps_from_parity_placements() {
+    assert_eq!(
+        placement_counts(&[1, 1], &[1, 1], &[0, 125], &[[1, 0, 0, 0], [1, 0, 0, 0]]),
+        TechCounts {
+            jacks: 1,
+            ..TechCounts::default()
+        }
+    );
+
+    assert_eq!(
+        placement_counts(&[1, 2], &[1, 1], &[0, 125], &[[1, 0, 0, 0], [0, 1, 0, 0]]),
+        TechCounts {
+            doublesteps: 1,
+            ..TechCounts::default()
+        }
+    );
 }
 
 #[test]
-fn counts_single_panel_dense_footswitch_smoke_like_rssp_core() {
-    for data in [
-        concat!(
-            "0100\n", "0100\n", "1000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n",
-            "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n",
-        )
-        .as_bytes(),
-        concat!(
-            "0010\n", "0010\n", "1000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n",
-            "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n",
-        )
-        .as_bytes(),
-    ] {
-        let counts = count_step_tech_brackets_minimized_4(data).unwrap();
-        assert_basic_tech_match_rssp(data, 4, counts);
-    }
+fn calculates_switches_from_parity_placements() {
+    assert_eq!(
+        placement_counts(&[2, 2], &[1, 1], &[0, 125], &[[0, 1, 0, 0], [0, 3, 0, 0]]),
+        TechCounts {
+            footswitches: 1,
+            down_footswitches: 1,
+            ..TechCounts::default()
+        }
+    );
+
+    assert_eq!(
+        placement_counts(&[4, 4], &[1, 1], &[0, 125], &[[0, 0, 1, 0], [0, 0, 3, 0]]),
+        TechCounts {
+            footswitches: 1,
+            up_footswitches: 1,
+            ..TechCounts::default()
+        }
+    );
+
+    assert_eq!(
+        placement_counts(&[1, 1], &[1, 1], &[0, 125], &[[1, 0, 0, 0], [3, 0, 0, 0]]),
+        TechCounts {
+            sideswitches: 1,
+            ..TechCounts::default()
+        }
+    );
 }
 
 #[test]
-fn skips_single_panel_slow_or_mirrored_footswitch_smoke_like_rssp_core() {
-    for data in [
-        concat!(
-            "0100\n", "0100\n", "1000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n",
-        )
-        .as_bytes(),
-        concat!(
-            "0100\n", "0100\n", "0001\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n",
-            "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n",
-        )
-        .as_bytes(),
-        concat!(
-            "0010\n", "0010\n", "0001\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n",
-            "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n",
-        )
-        .as_bytes(),
-    ] {
-        let counts = count_step_tech_brackets_minimized_4(data).unwrap();
-        assert_basic_tech_match_rssp(data, 4, counts);
-    }
-}
+fn calculates_brackets_and_crossovers_from_parity_placements() {
+    assert_eq!(
+        placement_counts(&[1, 3], &[1, 2], &[0, 125], &[[1, 0, 0, 0], [1, 2, 0, 0]]),
+        TechCounts {
+            brackets: 1,
+            ..TechCounts::default()
+        }
+    );
 
-#[test]
-fn counts_single_panel_dense_doublestep_smoke_like_rssp_core() {
-    let data = concat!(
-        "0001\n", "0010\n", "1000\n", "0100\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n",
-        "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n",
-    )
-    .as_bytes();
-    let counts = count_step_tech_brackets_minimized_4(data).unwrap();
-    assert_basic_tech_match_rssp(data, 4, counts);
-}
-
-#[test]
-fn skips_single_panel_mirrored_or_slow_doublestep_smoke_like_rssp_core() {
-    for data in [
-        concat!(
-            "1000\n", "0100\n", "0010\n", "0001\n", "0000\n", "0000\n", "0000\n", "0000\n",
-            "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n",
-        )
-        .as_bytes(),
-        concat!(
-            "0001\n", "0010\n", "1000\n", "0100\n", "0000\n", "0000\n", "0000\n", "0000\n",
-        )
-        .as_bytes(),
-    ] {
-        let counts = count_step_tech_brackets_minimized_4(data).unwrap();
-        assert_basic_tech_match_rssp(data, 4, counts);
-    }
-}
-
-#[test]
-fn counts_single_panel_dense_adjacent_jacks_like_rssp_core() {
-    let data = concat!(
-        "1000\n", "1000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n",
-        "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n",
-    )
-    .as_bytes();
-    let counts = count_step_tech_brackets_minimized_4(data).unwrap();
-    assert_basic_tech_match_rssp(data, 4, counts);
-}
-
-#[test]
-fn counts_single_panel_dense_four_row_jacks_like_rssp_core() {
-    for data in [
-        concat!(
-            "1000\n", "1000\n", "1000\n", "1000\n", "0000\n", "0000\n", "0000\n", "0000\n",
-            "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n",
-        )
-        .as_bytes(),
-        concat!(
-            "0100\n", "0100\n", "0100\n", "0100\n", "0000\n", "0000\n", "0000\n", "0000\n",
-            "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n",
-        )
-        .as_bytes(),
-        concat!(
-            "0010\n", "0010\n", "0010\n", "0010\n", "0000\n", "0000\n", "0000\n", "0000\n",
-            "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n",
-        )
-        .as_bytes(),
-        concat!(
-            "0001\n", "0001\n", "0001\n", "0001\n", "0000\n", "0000\n", "0000\n", "0000\n",
-            "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n",
-        )
-        .as_bytes(),
-    ] {
-        let counts = count_step_tech_brackets_minimized_4(data).unwrap();
-        assert_basic_tech_match_rssp(data, 4, counts);
-    }
-}
-
-#[test]
-fn skips_single_panel_slow_or_spaced_jacks_like_rssp_core() {
-    for data in [
-        concat!(
-            "1000\n", "1000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n",
-        )
-        .as_bytes(),
-        concat!(
-            "1000\n", "0000\n", "1000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n",
-            "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n",
-        )
-        .as_bytes(),
-    ] {
-        let counts = count_step_tech_brackets_minimized_4(data).unwrap();
-        assert_basic_tech_match_rssp(data, 4, counts);
-    }
-}
-
-#[test]
-fn skips_single_panel_non_crossover_tap_patterns_like_rssp_core() {
-    for data in [
-        b"0100\n1000\n0001\n".as_slice(),
-        b"0010\n0001\n1000\n".as_slice(),
-        b"1000\n0100\n0010\n0001\n".as_slice(),
-        b"0001\n0010\n0100\n1000\n".as_slice(),
-    ] {
-        let counts = count_step_tech_brackets_minimized_4(data).unwrap();
-        assert_basic_tech_match_rssp(data, 4, counts);
-    }
+    assert_eq!(
+        placement_counts(&[8, 1], &[1, 1], &[0, 125], &[[0, 0, 0, 1], [3, 0, 0, 0]]),
+        TechCounts {
+            crossovers: 1,
+            ..TechCounts::default()
+        }
+    );
 }
 
 #[test]
