@@ -317,6 +317,13 @@ unsafe extern "C" {
         len: usize,
         out62: *mut u32,
     ) -> c_int;
+    fn assp_pattern_percentages_centi(
+        total_steps: u64,
+        candle_total: u32,
+        mono_total: u32,
+        out_candle_percent: *mut u64,
+        out_mono_percent: *mut u64,
+    ) -> c_int;
     fn assp_minimize_measure_4(
         rows: *const u8,
         row_count: usize,
@@ -1093,6 +1100,26 @@ pub fn count_default_patterns_minimized_4(data: &[u8]) -> Option<[u32; PATTERN_C
         assp_count_default_patterns_minimized_4(data.as_ptr(), data.len(), out.as_mut_ptr())
     };
     (ok != 0).then_some(out)
+}
+
+#[must_use]
+pub fn pattern_percentages_centi(
+    total_steps: u64,
+    candle_total: u32,
+    mono_total: u32,
+) -> Option<(u64, u64)> {
+    let mut candle = 0;
+    let mut mono = 0;
+    let ok = unsafe {
+        assp_pattern_percentages_centi(
+            total_steps,
+            candle_total,
+            mono_total,
+            &mut candle,
+            &mut mono,
+        )
+    };
+    (ok != 0).then_some((candle, mono))
 }
 
 #[must_use]

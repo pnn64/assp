@@ -407,6 +407,13 @@ int32_t assp_count_default_patterns_minimized_4(
     size_t len,
     uint32_t *out62
 );
+int32_t assp_pattern_percentages_centi(
+    uint64_t total_steps,
+    uint32_t candle_total,
+    uint32_t mono_total,
+    uint64_t *out_candle_percent,
+    uint64_t *out_mono_percent
+);
 int64_t assp_nps_median_centi(
     const uint32_t *nps_milli,
     size_t len

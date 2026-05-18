@@ -21,6 +21,7 @@ extern assp_count_note_stats_8
 extern assp_count_anchors_minimized_4
 extern assp_count_default_patterns_minimized_4
 extern assp_count_facing_steps_minimized_4
+extern assp_pattern_percentages_centi
 extern assp_count_timing_fakes_4
 extern assp_count_timing_fakes_8
 extern assp_count_timing_segments
@@ -230,6 +231,10 @@ start:
     jz fail_stats
 
     call prepare_facing_steps
+    test eax, eax
+    jz fail_stats
+
+    call prepare_pattern_percentages
     test eax, eax
     jz fail_stats
 
@@ -1013,6 +1018,31 @@ prepare_facing_steps:
     jz .fail
 
 .success:
+    mov eax, ASSP_TRUE
+    jmp .done
+
+.fail:
+    xor eax, eax
+
+.done:
+    add rsp, 40
+    ret
+
+prepare_pattern_percentages:
+    sub rsp, 40
+
+    mov rcx, [note_stats + ASSP_NOTE_STATS_STEPS]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_CANDLE_LEFT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_CANDLE_RIGHT * 4]
+    mov r8d, [facing_counts + 0]
+    add r8d, [facing_counts + 4]
+    lea r9, [candle_percent_centi]
+    lea rax, [mono_percent_centi]
+    mov [rsp + 32], rax
+    call assp_pattern_percentages_centi
+    test eax, eax
+    jz .fail
+
     mov eax, ASSP_TRUE
     jmp .done
 
@@ -2786,6 +2816,9 @@ print_report:
     lea rcx, [label_candle_right]
     mov edx, [default_pattern_counts + ASSP_PATTERN_CANDLE_RIGHT * 4]
     call print_field
+    lea rcx, [label_candle_percent]
+    mov rdx, [candle_percent_centi]
+    call print_fixed2_field
     lea rcx, [label_boxes]
     mov edx, [default_pattern_counts + ASSP_PATTERN_BOX_LR * 4]
     add edx, [default_pattern_counts + ASSP_PATTERN_BOX_UD * 4]
@@ -3094,6 +3127,9 @@ print_report:
     lea rcx, [label_facing_right]
     mov edx, [facing_counts + 4]
     call print_field
+    lea rcx, [label_mono_percent]
+    mov rdx, [mono_percent_centi]
+    call print_fixed2_field
     lea rcx, [label_max_nps]
     mov rdx, [max_nps_centi]
     call print_fixed2_field
@@ -3988,6 +4024,7 @@ label_equally_spaced_measures db "equally_spaced_measures: ", 0
 label_candles db "candles: ", 0
 label_candle_left db "candle_left: ", 0
 label_candle_right db "candle_right: ", 0
+label_candle_percent db "candle_percent: ", 0
 label_boxes db "boxes: ", 0
 label_box_lr db "box_lr: ", 0
 label_box_ud db "box_ud: ", 0
@@ -4072,6 +4109,7 @@ label_anchor_right db "anchor_right: ", 0
 label_mono_total db "mono_total: ", 0
 label_facing_left db "facing_left: ", 0
 label_facing_right db "facing_right: ", 0
+label_mono_percent db "mono_percent: ", 0
 label_max_nps db "max_nps: ", 0
 label_peak_nps_milli db "peak_nps_milli: ", 0
 label_median_nps db "median_nps: ", 0
@@ -4242,6 +4280,8 @@ max_nps_centi resq 1
 median_nps_centi resq 1
 tier_bpm_centi resq 1
 equally_spaced_measures resq 1
+candle_percent_centi resq 1
+mono_percent_centi resq 1
 stream_percent_centi resq 1
 adjusted_stream_percent_centi resq 1
 break_percent_centi resq 1

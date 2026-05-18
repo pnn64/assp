@@ -5,6 +5,7 @@ global assp_count_anchors_minimized_4
 global assp_count_facing_steps_minimized_4
 global assp_count_basic_patterns_minimized_4
 global assp_count_default_patterns_minimized_4
+global assp_pattern_percentages_centi
 
 section .text
 
@@ -1001,6 +1002,73 @@ assp_count_default_patterns_minimized_4:
     pop rdi
     pop rsi
     pop rbx
+    ret
+
+; rcx = total steps, rdx = candle total, r8 = mono total,
+; r9 = out candle percent centi, stack arg 5 = out mono percent centi.
+; Matches RSSP's two-decimal ties-even percentage rounding. eax = 1 on success.
+assp_pattern_percentages_centi:
+    push rbp
+    mov rbp, rsp
+    push rbx
+
+    mov r10, [rbp + 48]
+    test r9, r9
+    jz .percent_fail
+    test r10, r10
+    jz .percent_fail
+
+    mov qword [r9], 0
+    mov qword [r10], 0
+
+    cmp rcx, 1
+    jbe .percent_success
+
+    mov r11, rcx
+    dec r11
+    shr r11, 1
+    test r11, r11
+    jz .percent_mono
+
+    mov eax, edx
+    imul rax, rax, 10000
+    mov rbx, r11
+    call .round_unsigned_div_ties_even
+    mov [r9], rax
+
+.percent_mono:
+    mov eax, r8d
+    imul rax, rax, 10000
+    mov rbx, rcx
+    call .round_unsigned_div_ties_even
+    mov r10, [rbp + 48]
+    mov [r10], rax
+
+.percent_success:
+    mov eax, ASSP_TRUE
+    jmp .percent_done
+
+.percent_fail:
+    xor eax, eax
+
+.percent_done:
+    pop rbx
+    pop rbp
+    ret
+
+.round_unsigned_div_ties_even:
+    xor edx, edx
+    div rbx
+    mov r10, rdx
+    shl r10, 1
+    cmp r10, rbx
+    jb .round_done
+    ja .round_up
+    test al, 1
+    jz .round_done
+.round_up:
+    inc rax
+.round_done:
     ret
 
 section .rdata
