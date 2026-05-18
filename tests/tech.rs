@@ -43,6 +43,7 @@ fn assert_basic_tech_match_rssp(data: &[u8], lanes: usize, counts: TechCounts) {
             sideswitches: expected.sideswitches,
             jacks: expected.jacks,
             brackets: expected.brackets,
+            doublesteps: expected.doublesteps,
             ..TechCounts::default()
         }
     );
@@ -136,6 +137,35 @@ fn skips_single_panel_slow_or_mirrored_footswitch_smoke_like_rssp_core() {
         concat!(
             "0010\n", "0010\n", "0001\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n",
             "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n",
+        )
+        .as_bytes(),
+    ] {
+        let counts = count_step_tech_brackets_minimized_4(data).unwrap();
+        assert_basic_tech_match_rssp(data, 4, counts);
+    }
+}
+
+#[test]
+fn counts_single_panel_dense_doublestep_smoke_like_rssp_core() {
+    let data = concat!(
+        "0001\n", "0010\n", "1000\n", "0100\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n",
+        "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n",
+    )
+    .as_bytes();
+    let counts = count_step_tech_brackets_minimized_4(data).unwrap();
+    assert_basic_tech_match_rssp(data, 4, counts);
+}
+
+#[test]
+fn skips_single_panel_mirrored_or_slow_doublestep_smoke_like_rssp_core() {
+    for data in [
+        concat!(
+            "1000\n", "0100\n", "0010\n", "0001\n", "0000\n", "0000\n", "0000\n", "0000\n",
+            "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n",
+        )
+        .as_bytes(),
+        concat!(
+            "0001\n", "0010\n", "1000\n", "0100\n", "0000\n", "0000\n", "0000\n", "0000\n",
         )
         .as_bytes(),
     ] {

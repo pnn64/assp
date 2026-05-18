@@ -180,9 +180,10 @@ hold-constrained bracket slice for fixture charts where RSSP's other parity
 counters are zero. The 4-panel path also covers the smallest verified
 single-note crossover triples (`LDR`, `LUR`, `RDL`, `RUL`) and exact dense
 two-row and three-row jack smoke cases. It also covers the tiny dense
-footswitch smoke cases RSSP emits for `DDL` and `UUL`. Full crossover sequence handling,
-timing-aware jack/footswitch coverage, sideswitches, and doublesteps still
-require the full parity DP port.
+footswitch smoke cases RSSP emits for `DDL` and `UUL`, plus RSSP's tiny dense
+`RULD` doublestep smoke case. Full crossover sequence handling,
+timing-aware jack/footswitch coverage, sideswitches, and general doublesteps
+still require the full parity DP port.
 `assp_chart_owns_timing_by_index` checks the RSSP chart-local timing ownership
 predicate for SSC `#NOTEDATA` blocks.
 `assp_parse_bpm_map` parses BPM timing maps into sorted fixed-point

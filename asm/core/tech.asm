@@ -100,6 +100,8 @@ section .text
     mov qword [rsp + 56], 0
     mov qword [rsp + 64], 0
     mov qword [rsp + 72], 0
+    mov qword [rsp + 80], 0
+    mov qword [rsp + 88], 0
 
 %%line_loop:
     cmp rsi, rdi
@@ -162,6 +164,8 @@ section .text
     je %%simple_store_second
     cmp eax, 3
     je %%simple_store_third
+    cmp eax, 4
+    je %%simple_store_fourth
     mov dword [rsp + 8], ASSP_TRUE
     jmp %%simple_check_row
 
@@ -181,6 +185,12 @@ section .text
     mov [rsp + 32], r13d
     mov eax, [rsp + 40]
     mov [rsp + 72], eax
+    jmp %%simple_check_row
+
+%%simple_store_fourth:
+    mov [rsp + 80], r13d
+    mov eax, [rsp + 40]
+    mov [rsp + 88], eax
 
 %%simple_check_row:
     cmp r14d, 1
@@ -245,9 +255,9 @@ section .text
 %%success:
 %if %2 == 4
     cmp dword [rsp], 3
-    jne %%check_simple_jack
+    jne %%check_simple_doublestep
     cmp dword [rsp + 8], 0
-    jne %%check_simple_jack
+    jne %%check_simple_doublestep
     mov ecx, [rsp + 16]
     mov edx, [rsp + 24]
     mov r8d, [rsp + 32]
@@ -307,6 +317,38 @@ section .text
 
 %%add_three_row_jacks:
     add [rbx + ASSP_TECH_COUNTS_JACKS], eax
+    jmp %%return_true
+
+%%check_simple_doublestep:
+    cmp dword [rsp], 4
+    jne %%check_simple_jack
+    cmp dword [rsp + 8], 0
+    jne %%check_simple_jack
+    cmp dword [rsp + 64], 0
+    jne %%check_simple_jack
+    cmp dword [rsp + 40], 16
+    jne %%check_simple_jack
+    mov eax, [rsp + 56]
+    sub eax, [rsp + 48]
+    cmp eax, 1
+    jne %%check_simple_jack
+    mov eax, [rsp + 72]
+    sub eax, [rsp + 56]
+    cmp eax, 1
+    jne %%check_simple_jack
+    mov eax, [rsp + 88]
+    sub eax, [rsp + 72]
+    cmp eax, 1
+    jne %%check_simple_jack
+    cmp dword [rsp + 16], 8
+    jne %%check_simple_jack
+    cmp dword [rsp + 24], 4
+    jne %%check_simple_jack
+    cmp dword [rsp + 32], 1
+    jne %%check_simple_jack
+    cmp dword [rsp + 80], 2
+    jne %%check_simple_jack
+    inc dword [rbx + ASSP_TECH_COUNTS_DOUBLESTEPS]
     jmp %%return_true
 
 %%check_simple_jack:
