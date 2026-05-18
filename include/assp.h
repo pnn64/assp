@@ -314,6 +314,12 @@ int32_t assp_count_anchors_minimized_4(
     size_t len,
     uint32_t *out4
 );
+int32_t assp_count_facing_steps_minimized_4(
+    const uint8_t *data,
+    size_t len,
+    size_t mono_threshold,
+    uint32_t *out2
+);
 int64_t assp_nps_median_centi(
     const uint32_t *nps_milli,
     size_t len

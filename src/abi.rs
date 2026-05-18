@@ -287,6 +287,12 @@ unsafe extern "C" {
         out_cap: usize,
     ) -> usize;
     fn assp_count_anchors_minimized_4(data: *const u8, len: usize, out4: *mut u32) -> c_int;
+    fn assp_count_facing_steps_minimized_4(
+        data: *const u8,
+        len: usize,
+        mono_threshold: usize,
+        out2: *mut u32,
+    ) -> c_int;
     fn assp_minimize_measure_4(
         rows: *const u8,
         row_count: usize,
@@ -1036,6 +1042,20 @@ pub fn count_anchors_minimized_4(data: &[u8]) -> Option<[u32; 4]> {
 }
 
 #[must_use]
+pub fn count_facing_steps_minimized_4(data: &[u8], mono_threshold: usize) -> Option<[u32; 2]> {
+    let mut out = [0; 2];
+    let ok = unsafe {
+        assp_count_facing_steps_minimized_4(
+            data.as_ptr(),
+            data.len(),
+            mono_threshold,
+            out.as_mut_ptr(),
+        )
+    };
+    (ok != 0).then_some(out)
+}
+
+#[must_use]
 pub fn minimize_measure_4(rows: &[[u8; 4]]) -> Vec<[u8; 4]> {
     let count = unsafe {
         assp_minimize_measure_4(
@@ -1161,6 +1181,12 @@ pub fn measure_equally_spaced_8(data: &[u8]) -> Option<Vec<bool>> {
 pub fn count_anchors_4(data: &[u8]) -> Option<[u32; 4]> {
     let minimized = minimize_chart_4(data)?;
     count_anchors_minimized_4(&minimized)
+}
+
+#[must_use]
+pub fn count_facing_steps_4(data: &[u8], mono_threshold: usize) -> Option<[u32; 2]> {
+    let minimized = minimize_chart_4(data)?;
+    count_facing_steps_minimized_4(&minimized, mono_threshold)
 }
 
 #[must_use]
