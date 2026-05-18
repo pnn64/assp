@@ -1331,6 +1331,9 @@ print_report:
     lea rdx, [bpm_buffer]
     mov r8, [normalized_bpms_len]
     call print_slice_field
+    lea rcx, [label_offset]
+    mov rdx, [offset_ms]
+    call print_fixed3_field
     lea rcx, [label_min_bpm]
     mov rdx, [min_bpm]
     call print_field
@@ -1573,6 +1576,48 @@ print_fixed2_field:
     add rsp, 72
     ret
 
+print_fixed3_field:
+    sub rsp, 72
+    mov [rsp + 32], rdx
+    call print_z
+
+    mov rax, [rsp + 32]
+    test rax, rax
+    jge .positive
+    neg rax
+    mov [rsp + 32], rax
+    lea rcx, [minus]
+    call print_z
+    mov rax, [rsp + 32]
+
+.positive:
+    xor edx, edx
+    mov r9d, 1000
+    div r9
+    mov [rsp + 40], rdx
+    mov rcx, rax
+    call print_u64
+    lea rcx, [dot]
+    call print_z
+    mov rax, [rsp + 40]
+    cmp rax, 100
+    jae .fraction
+    lea rcx, [zero_digit]
+    call print_z
+    mov rax, [rsp + 40]
+    cmp rax, 10
+    jae .fraction
+    lea rcx, [zero_digit]
+    call print_z
+
+.fraction:
+    mov rcx, [rsp + 40]
+    call print_u64
+    lea rcx, [newline]
+    call print_z
+    add rsp, 72
+    ret
+
 print_slice_field:
     sub rsp, 72
     mov [rsp + 32], rdx
@@ -1731,6 +1776,7 @@ label_description db "description: ", 0
 label_hash db "hash: ", 0
 label_bpm_neutral_hash db "bpm_neutral_hash: ", 0
 label_hash_bpms db "hash_bpms: ", 0
+label_offset db "offset: ", 0
 label_min_bpm db "min_bpm: ", 0
 label_max_bpm db "max_bpm: ", 0
 label_average_bpm db "average_bpm: ", 0
