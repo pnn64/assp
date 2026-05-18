@@ -178,6 +178,10 @@ start:
     test eax, eax
     jz fail_duration
 
+    call prepare_selected_normalized_metadata
+    test eax, eax
+    jz fail_metadata
+
     call prepare_bpm_range
     test eax, eax
     jz fail_duration
@@ -1579,6 +1583,88 @@ prepare_global_normalized_metadata:
     add rsp, 40
     ret
 
+prepare_selected_normalized_metadata:
+    sub rsp, 40
+
+    mov qword [selected_normalized_time_signatures_len], 0
+    mov qword [selected_normalized_labels_len], 0
+    mov qword [selected_normalized_tickcounts_len], 0
+    mov qword [selected_normalized_combos_len], 0
+
+    cmp qword [chart_has_own_timing], 0
+    je .global_time_signatures
+    mov rcx, [chart_time_signatures_slice + ASSP_BYTE_SLICE_PTR]
+    mov rdx, [chart_time_signatures_slice + ASSP_BYTE_SLICE_LEN]
+    jmp .normalize_time_signatures
+.global_time_signatures:
+    mov rcx, [global_time_signatures_slice + ASSP_BYTE_SLICE_PTR]
+    mov rdx, [global_time_signatures_slice + ASSP_BYTE_SLICE_LEN]
+.normalize_time_signatures:
+    lea r8, [selected_normalized_time_signatures_buffer]
+    mov r9d, METADATA_BUFFER_CAP
+    call assp_trim_ascii_bytes
+    cmp rax, ASSP_NOT_FOUND
+    je .fail
+    mov [selected_normalized_time_signatures_len], rax
+
+    cmp qword [chart_has_own_timing], 0
+    je .global_labels
+    mov rcx, [chart_labels_slice + ASSP_BYTE_SLICE_PTR]
+    mov rdx, [chart_labels_slice + ASSP_BYTE_SLICE_LEN]
+    jmp .normalize_labels
+.global_labels:
+    mov rcx, [global_labels_slice + ASSP_BYTE_SLICE_PTR]
+    mov rdx, [global_labels_slice + ASSP_BYTE_SLICE_LEN]
+.normalize_labels:
+    lea r8, [selected_normalized_labels_buffer]
+    mov r9d, METADATA_BUFFER_CAP
+    call assp_normalize_label_tag
+    cmp rax, ASSP_NOT_FOUND
+    je .fail
+    mov [selected_normalized_labels_len], rax
+
+    cmp qword [chart_has_own_timing], 0
+    je .global_tickcounts
+    mov rcx, [chart_tickcounts_slice + ASSP_BYTE_SLICE_PTR]
+    mov rdx, [chart_tickcounts_slice + ASSP_BYTE_SLICE_LEN]
+    jmp .normalize_tickcounts
+.global_tickcounts:
+    mov rcx, [global_tickcounts_slice + ASSP_BYTE_SLICE_PTR]
+    mov rdx, [global_tickcounts_slice + ASSP_BYTE_SLICE_LEN]
+.normalize_tickcounts:
+    lea r8, [selected_normalized_tickcounts_buffer]
+    mov r9d, METADATA_BUFFER_CAP
+    call assp_trim_ascii_bytes
+    cmp rax, ASSP_NOT_FOUND
+    je .fail
+    mov [selected_normalized_tickcounts_len], rax
+
+    cmp qword [chart_has_own_timing], 0
+    je .global_combos
+    mov rcx, [chart_combos_slice + ASSP_BYTE_SLICE_PTR]
+    mov rdx, [chart_combos_slice + ASSP_BYTE_SLICE_LEN]
+    jmp .normalize_combos
+.global_combos:
+    mov rcx, [global_combos_slice + ASSP_BYTE_SLICE_PTR]
+    mov rdx, [global_combos_slice + ASSP_BYTE_SLICE_LEN]
+.normalize_combos:
+    lea r8, [selected_normalized_combos_buffer]
+    mov r9d, METADATA_BUFFER_CAP
+    call assp_trim_ascii_bytes
+    cmp rax, ASSP_NOT_FOUND
+    je .fail
+    mov [selected_normalized_combos_len], rax
+
+    mov eax, ASSP_TRUE
+    jmp .done
+
+.fail:
+    xor eax, eax
+
+.done:
+    add rsp, 40
+    ret
+
 prepare_chart_metadata:
     sub rsp, 56
 
@@ -2006,6 +2092,22 @@ print_report:
     lea rcx, [label_normalized_combos]
     lea rdx, [normalized_combos_buffer]
     mov r8, [normalized_combos_len]
+    call print_slice_field
+    lea rcx, [label_selected_normalized_time_signatures]
+    lea rdx, [selected_normalized_time_signatures_buffer]
+    mov r8, [selected_normalized_time_signatures_len]
+    call print_slice_field
+    lea rcx, [label_selected_normalized_labels]
+    lea rdx, [selected_normalized_labels_buffer]
+    mov r8, [selected_normalized_labels_len]
+    call print_slice_field
+    lea rcx, [label_selected_normalized_tickcounts]
+    lea rdx, [selected_normalized_tickcounts_buffer]
+    mov r8, [selected_normalized_tickcounts_len]
+    call print_slice_field
+    lea rcx, [label_selected_normalized_combos]
+    lea rdx, [selected_normalized_combos_buffer]
+    mov r8, [selected_normalized_combos_len]
     call print_slice_field
     lea rcx, [label_global_bpms]
     mov rdx, [global_timing_tags + ASSP_TIMING_TAGS_BPMS + ASSP_BYTE_SLICE_PTR]
@@ -2965,6 +3067,10 @@ label_normalized_time_signatures db "normalized_time_signatures: ", 0
 label_normalized_labels db "normalized_labels: ", 0
 label_normalized_tickcounts db "normalized_tickcounts: ", 0
 label_normalized_combos db "normalized_combos: ", 0
+label_selected_normalized_time_signatures db "selected_normalized_time_signatures: ", 0
+label_selected_normalized_labels db "selected_normalized_labels: ", 0
+label_selected_normalized_tickcounts db "selected_normalized_tickcounts: ", 0
+label_selected_normalized_combos db "selected_normalized_combos: ", 0
 label_global_bpms db "global_bpms: ", 0
 label_global_stops db "global_stops: ", 0
 label_global_delays db "global_delays: ", 0
@@ -3154,6 +3260,10 @@ normalized_time_signatures_len resq 1
 normalized_labels_len resq 1
 normalized_tickcounts_len resq 1
 normalized_combos_len resq 1
+selected_normalized_time_signatures_len resq 1
+selected_normalized_labels_len resq 1
+selected_normalized_tickcounts_len resq 1
+selected_normalized_combos_len resq 1
 normalized_stops_len resq 1
 normalized_delays_len resq 1
 normalized_warps_len resq 1
@@ -3197,6 +3307,10 @@ normalized_time_signatures_buffer resb METADATA_BUFFER_CAP
 normalized_labels_buffer resb METADATA_BUFFER_CAP
 normalized_tickcounts_buffer resb METADATA_BUFFER_CAP
 normalized_combos_buffer resb METADATA_BUFFER_CAP
+selected_normalized_time_signatures_buffer resb METADATA_BUFFER_CAP
+selected_normalized_labels_buffer resb METADATA_BUFFER_CAP
+selected_normalized_tickcounts_buffer resb METADATA_BUFFER_CAP
+selected_normalized_combos_buffer resb METADATA_BUFFER_CAP
 bpm_buffer resb BPM_BUFFER_CAP
 global_bpm_buffer resb BPM_BUFFER_CAP
 normalized_stops_buffer resb BPM_BUFFER_CAP

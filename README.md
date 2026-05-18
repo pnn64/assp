@@ -130,7 +130,7 @@ maps to RSSP's three-decimal hash input format.
 normalized `#TIMESIGNATURES`, `#TICKCOUNTS`, and `#COMBOS` report fields.
 `assp_normalize_label_tag` keeps the first MSD parameter from `#LABELS`,
 removes ASCII backslash escapes, and drops ASCII control bytes for the
-standalone report's normalized global label field.
+standalone report's normalized global and selected label fields.
 `assp_find_global_tag` and `assp_find_chart_tag_by_index` provide generic
 tag extraction for `#TAG:` sections. Implemented simfile tag names are matched
 case-insensitively, following RSSP's parser behavior. The timing-tag collectors
@@ -168,7 +168,9 @@ The standalone timing path applies RSSP's chart-local timing ownership rule:
 when an SSC chart defines any local timing tag or offset, global timing maps are
 not mixed into that chart's duration/NPS timing context. Chart-local
 `#TIMESIGNATURES:`, `#LABELS:`, `#TICKCOUNTS:`, and `#COMBOS:` tags also mark
-the chart as owning timing, matching RSSP's timing-data ownership check.
+the chart as owning timing, matching RSSP's timing-data ownership check. The
+standalone report normalizes the selected chart/global metadata scope with that
+same ownership rule.
 `assp_stream_counts_from_densities` classifies 16th/20th/24th/32nd stream
 measures, SN breaks, and total break measures from those densities.
 `assp_stream_percentages_centi` computes RSSP-style stream, adjusted stream,
@@ -277,7 +279,8 @@ reports include simfile title/artist/translit metadata, genre, media/artwork
 tags, sample timing tags, chart name, credit/step-artist metadata, parsed tech
 notation, chart-local music/attacks/timing metadata tags, chart-local raw timing
 tags, global raw timing tags, RSSP-style chart hashes, normalized global BPM
-data, normalized global timing maps, normalized hash BPMs, RSSP-compatible
+data, normalized global timing maps, normalized global/selected timing metadata,
+normalized hash BPMs, RSSP-compatible
 hash and step-artist aliases, formatted timing BPM/stop/delay/warp/fake maps,
 global and selected timing metadata tags, selected raw timing tags, chart
 display-BPM tags,
