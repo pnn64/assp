@@ -1,9 +1,9 @@
 use assp::{
     bpm_at_beat_milli, find_bpms_for_chart, find_chart_by_index, measure_densities_4,
-    measure_nps_milli_from_bpms, measure_nps_milli_with_events, nps_median_centi, parse_bpm_map,
-    tier_bpm_centi,
+    measure_nps_milli_from_bpms, measure_nps_milli_with_events, nps_median_centi,
+    nps_peak_milli_from_bpms, parse_bpm_map, tier_bpm_centi,
 };
-use rssp_core::{bpm, math, nps};
+use rssp_core::{bpm, math, nps, timing};
 
 fn slice_from<'a>(data: &'a [u8], ptr: *const u8, len: usize) -> &'a [u8] {
     let start = ptr as usize - data.as_ptr() as usize;
@@ -94,6 +94,41 @@ fn assert_nps_median_match(nps_milli: &[u32]) {
     );
 }
 
+fn rust_peak_nps_milli(densities: &[u32], bpms: &[u8]) -> u32 {
+    let densities: Vec<usize> = densities.iter().map(|&v| v as usize).collect();
+    let bpms = std::str::from_utf8(bpms).unwrap();
+    let timing_segments = timing::compute_timing_segments(
+        None,
+        bpms,
+        None,
+        "",
+        None,
+        "",
+        None,
+        "",
+        None,
+        "",
+        None,
+        "",
+        None,
+        "",
+        timing::TimingFormat::Sm,
+        true,
+    );
+    let timing = timing::timing_data_from_segments(0.0, 0.0, &timing_segments);
+    let nps = nps::compute_measure_nps_vec_with_timing(&densities, &timing);
+    let (max, _) = nps::get_nps_stats(&nps);
+    (max * 1000.0).round_ties_even() as u32
+}
+
+fn assert_peak_nps_match(densities: &[u32], bpms: &[u8]) {
+    let parsed = parse_bpm_map(bpms).unwrap();
+    assert_eq!(
+        nps_peak_milli_from_bpms(densities, &parsed),
+        Some(rust_peak_nps_milli(densities, bpms))
+    );
+}
+
 fn assert_tier_bpm_match(densities: &[u32], bpms: &[u8]) {
     let parsed = parse_bpm_map(bpms).unwrap();
     let densities_usize: Vec<_> = densities.iter().map(|&v| v as usize).collect();
@@ -139,6 +174,15 @@ fn computes_median_nps_from_fixed_point_vector() {
 }
 
 #[test]
+fn computes_peak_nps_like_rssp_fixed_timing() {
+    assert_peak_nps_match(&[], b"0=120");
+    assert_peak_nps_match(&[0, 16, 20, 24, 32, 8], b"0=120");
+
+    let long_stream = vec![16; 12_513];
+    assert_peak_nps_match(&long_stream, b"0=140");
+}
+
+#[test]
 fn computes_tier_bpm_like_rssp_core() {
     assert_tier_bpm_match(&[16, 16, 16, 16], b"0=120");
     assert_tier_bpm_match(&[20, 20, 20, 20], b"0=120");
@@ -164,4 +208,16 @@ fn fixture_measure_nps_matches_rssp_core() {
 
         assert_nps_match(&densities, bpms);
     }
+}
+
+#[test]
+fn fixture_peak_nps_matches_rssp_core() {
+    let simfile = include_bytes!("../fixtures/200000_step_challenge.sm").as_slice();
+    let chart = find_chart_by_index(simfile, 4).unwrap();
+    let note_data = slice_from(simfile, chart.note_data, chart.note_data_len);
+    let densities = measure_densities_4(note_data);
+    let bpms = find_bpms_for_chart(simfile, 4).unwrap();
+    let bpms = slice_from(simfile, bpms.data, bpms.len);
+
+    assert_peak_nps_match(&densities, bpms);
 }

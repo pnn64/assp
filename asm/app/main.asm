@@ -53,6 +53,7 @@ extern assp_measure_equally_spaced_minimized_4
 extern assp_measure_equally_spaced_minimized_8
 extern assp_measure_nps_milli_from_bpms
 extern assp_measure_nps_milli_with_events
+extern assp_nps_peak_milli_from_bpms
 extern assp_nps_median_centi
 extern assp_tier_bpm_centi
 extern assp_matrix_rating_centi
@@ -881,6 +882,22 @@ prepare_nps:
     jmp .peak_loop
 
 .peak_done:
+    mov [rsp + 96], r9
+    mov rax, [stop_segment_count]
+    or rax, [delay_segment_count]
+    or rax, [warp_segment_count]
+    jnz .store_peak
+    lea rcx, [density_buffer]
+    mov rdx, [measure_count]
+    lea r8, [bpm_segment_buffer]
+    mov r9, [bpm_segment_count]
+    call assp_nps_peak_milli_from_bpms
+    cmp rax, ASSP_NOT_FOUND
+    je .store_peak
+    mov [rsp + 96], rax
+
+.store_peak:
+    mov r9, [rsp + 96]
     mov [peak_nps_milli], r9
     mov rax, r9
     add rax, 5

@@ -13,6 +13,7 @@ global assp_elapsed_ms_bpm_only
 global assp_elapsed_ms_with_events
 global assp_measure_nps_milli_from_bpms
 global assp_measure_nps_milli_with_events
+global assp_nps_peak_milli_from_bpms
 global assp_nps_median_centi
 
 section .text
@@ -1369,6 +1370,144 @@ assp_measure_nps_milli_from_bpms:
     pop rbx
     ret
 
+; rcx = u32 densities, rdx = density len, r8 = assp_bpm_segment ptr,
+; r9 = bpm len. rax = peak NPS in thousandths, or ASSP_NOT_FOUND.
+assp_nps_peak_milli_from_bpms:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+
+    test rdx, rdx
+    jz .empty
+    test rcx, rcx
+    jz .invalid
+    test r9, r9
+    jz .empty
+    test r8, r8
+    jz .invalid
+
+    mov rbx, rcx
+    mov rdi, rdx
+    mov rsi, r8
+    mov r12, r9
+    xor r13d, r13d
+    xor r14d, r14d
+
+    cmp r12, 1
+    je .single_bpm_init
+
+.multi_loop:
+    cmp r13, rdi
+    jae .done
+
+    xor eax, eax
+    mov r11d, [rbx + r13 * 4]
+    test r11d, r11d
+    jz .multi_next
+
+    mov r10, r13
+    imul r10, r10, 4000
+    mov rax, [rsi + ASSP_BPM_SEGMENT_BPM_MILLI]
+    xor ecx, ecx
+.multi_bpm_loop:
+    cmp rcx, r12
+    jae .multi_got_bpm
+    mov rdx, rcx
+    shl rdx, 4
+    cmp [rsi + rdx + ASSP_BPM_SEGMENT_BEAT_MILLI], r10
+    jg .multi_got_bpm
+    mov rax, [rsi + rdx + ASSP_BPM_SEGMENT_BPM_MILLI]
+    inc rcx
+    jmp .multi_bpm_loop
+
+.multi_got_bpm:
+    test rax, rax
+    jle .multi_next
+    cmp rax, 10000000
+    jge .multi_next
+    imul rax, r11
+    add rax, 120
+    xor edx, edx
+    mov r10d, 240
+    div r10
+    cmp rax, r14
+    jbe .multi_next
+    mov r14, rax
+
+.multi_next:
+    inc r13
+    jmp .multi_loop
+
+.single_bpm_init:
+    mov rax, [rsi + ASSP_BPM_SEGMENT_BPM_MILLI]
+    test rax, rax
+    jle .empty
+    cvtsi2ss xmm5, rax
+    divss xmm5, [rel nps_f32_60000]
+
+.single_loop:
+    cmp r13, rdi
+    jae .done
+
+    mov r11d, [rbx + r13 * 4]
+    test r11d, r11d
+    jz .single_next
+
+    mov rax, r13
+    imul rax, rax, 192
+    cvtsi2ss xmm0, rax
+    divss xmm0, [rel nps_f32_48]
+    divss xmm0, xmm5
+    cvtss2sd xmm0, xmm0
+
+    mov rax, r13
+    inc rax
+    imul rax, rax, 192
+    cvtsi2ss xmm1, rax
+    divss xmm1, [rel nps_f32_48]
+    divss xmm1, xmm5
+    cvtss2sd xmm1, xmm1
+    subsd xmm1, xmm0
+    comisd xmm1, [rel nps_f64_0_12]
+    jbe .single_next
+
+    cvtsi2sd xmm2, r11
+    divsd xmm2, xmm1
+    mulsd xmm2, [rel nps_f64_1000]
+    cvtsd2si rax, xmm2
+    cmp rax, r14
+    jbe .single_next
+    mov r14, rax
+
+.single_next:
+    inc r13
+    jmp .single_loop
+
+.empty:
+    xor eax, eax
+    jmp .pop_done
+
+.done:
+    mov rax, r14
+    jmp .pop_done
+
+.invalid:
+    mov rax, ASSP_NOT_FOUND
+
+.pop_done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
 ; rcx = u32 densities, rdx = density len, r8 = BPM segments, r9 = BPM count,
 ; stack arg 5 = stop segments, arg 6 = stop count, arg 7 = delay segments,
 ; arg 8 = delay count, arg 9 = warp segments, arg 10 = warp count,
@@ -1515,6 +1654,15 @@ assp_measure_nps_milli_with_events:
     pop rbx
     pop rbp
     ret
+
+section .rdata
+align 8
+nps_f32_48 dd 48.0
+nps_f32_60000 dd 60000.0
+nps_f64_0_12 dq 0.12
+nps_f64_1000 dq 1000.0
+
+section .text
 
 ; rcx = number start, rdx = number end.
 ; rax = absolute thousandths, edx = negative flag. ASSP_NOT_FOUND on parse failure.

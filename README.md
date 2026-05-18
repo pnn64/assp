@@ -52,6 +52,7 @@ The first implemented pieces are:
 - `assp_elapsed_ms_with_events`
 - `assp_measure_nps_milli_from_bpms`
 - `assp_measure_nps_milli_with_events`
+- `assp_nps_peak_milli_from_bpms`
 - `assp_nps_median_centi`
 - `assp_last_beat_milli_4`
 - `assp_last_beat_milli_8`
@@ -188,6 +189,9 @@ duration adjustment.
 first fixed-point NPS path from parsed BPM maps and per-measure densities.
 `assp_measure_nps_milli_with_events` computes measure NPS from elapsed
 measure durations when stops, delays, or warps are present.
+`assp_nps_peak_milli_from_bpms` computes RSSP's fixed-timing peak NPS path,
+including the single-precision measure-time rounding that affects long
+constant-BPM charts.
 `assp_nps_median_centi` computes the median of a fixed-point per-measure NPS
 vector rounded to two decimal places.
 `assp_last_beat_milli_4` and `assp_last_beat_milli_8` find the last object beat

@@ -205,6 +205,7 @@ if ($CompareRssp -or $CompareAllCharts) {
 
         Compare-Float "tier_bpm" ([double]$chartJson.chart_info.tier_bpm)
         Compare-Float "matrix_rating" ([double]$chartJson.chart_info.matrix_rating)
+        Compare-Float "max_nps" ([double]$chartJson.nps.max_nps)
         Compare-Float "median_nps" ([double]$chartJson.nps.median_nps)
 
         Compare-Int "total_arrows" ([int64]$chartJson.arrow_stats.total_arrows)
