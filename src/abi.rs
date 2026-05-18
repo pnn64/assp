@@ -37,6 +37,19 @@ pub struct NoteStats {
 
 #[repr(C)]
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct TechCounts {
+    pub crossovers: u32,
+    pub footswitches: u32,
+    pub up_footswitches: u32,
+    pub down_footswitches: u32,
+    pub sideswitches: u32,
+    pub jacks: u32,
+    pub brackets: u32,
+    pub doublesteps: u32,
+}
+
+#[repr(C)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct ChartRef {
     pub note_data: *const u8,
     pub note_data_len: usize,
@@ -213,6 +226,16 @@ unsafe extern "C" {
         out: *mut u8,
         out_cap: usize,
     ) -> usize;
+    fn assp_count_step_tech_brackets_minimized_4(
+        data: *const u8,
+        len: usize,
+        out: *mut TechCounts,
+    ) -> c_int;
+    fn assp_count_step_tech_brackets_minimized_8(
+        data: *const u8,
+        len: usize,
+        out: *mut TechCounts,
+    ) -> c_int;
     fn assp_parse_bpm_map(
         data: *const u8,
         len: usize,
@@ -810,6 +833,24 @@ pub fn parse_tech_notation(credit: &[u8], description: &[u8]) -> Option<Vec<u8>>
         }
     }
     Some(out)
+}
+
+#[must_use]
+pub fn count_step_tech_brackets_minimized_4(data: &[u8]) -> Option<TechCounts> {
+    let mut counts = TechCounts::default();
+    let ok = unsafe {
+        assp_count_step_tech_brackets_minimized_4(data.as_ptr(), data.len(), &mut counts)
+    };
+    (ok != 0).then_some(counts)
+}
+
+#[must_use]
+pub fn count_step_tech_brackets_minimized_8(data: &[u8]) -> Option<TechCounts> {
+    let mut counts = TechCounts::default();
+    let ok = unsafe {
+        assp_count_step_tech_brackets_minimized_8(data.as_ptr(), data.len(), &mut counts)
+    };
+    (ok != 0).then_some(counts)
 }
 
 #[must_use]
@@ -1685,12 +1726,18 @@ pub fn count_timing_note_stats_no_holds_8(
 
 #[cfg(test)]
 mod tests {
-    use super::NoteStats;
+    use super::{NoteStats, TechCounts};
 
     #[test]
     fn note_stats_layout_is_c_abi() {
         assert_eq!(std::mem::size_of::<NoteStats>(), 120);
         assert_eq!(std::mem::align_of::<NoteStats>(), 8);
+    }
+
+    #[test]
+    fn tech_counts_layout_is_c_abi() {
+        assert_eq!(std::mem::size_of::<TechCounts>(), 32);
+        assert_eq!(std::mem::align_of::<TechCounts>(), 4);
     }
 
     #[test]

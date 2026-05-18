@@ -63,6 +63,8 @@ extern assp_normalize_float_digits
 extern assp_parse_bpm_map
 extern assp_parse_offset_ms
 extern assp_parse_tech_notation
+extern assp_count_step_tech_brackets_minimized_4
+extern assp_count_step_tech_brackets_minimized_8
 extern assp_normalize_label_tag
 extern assp_chart_name_tag_allowed
 extern assp_resolve_difficulty_label
@@ -161,6 +163,10 @@ start:
 .count_stats_done:
     test eax, eax
     jz fail_stats
+
+    call prepare_tech_counts
+    test eax, eax
+    jz fail_tech
 
     mov rcx, [chart_info + ASSP_CHART_INFO_NOTES_PTR]
     mov rdx, [chart_info + ASSP_CHART_INFO_NOTES_LEN]
@@ -2289,6 +2295,24 @@ prepare_tech_notation:
     add rsp, 56
     ret
 
+prepare_tech_counts:
+    sub rsp, 40
+
+    lea rcx, [minimized_buffer]
+    mov rdx, [minimized_chart_len]
+    lea r8, [tech_counts]
+    cmp qword [chart_lanes], 8
+    je .count_8
+    call assp_count_step_tech_brackets_minimized_4
+    jmp .done
+
+.count_8:
+    call assp_count_step_tech_brackets_minimized_8
+
+.done:
+    add rsp, 40
+    ret
+
 prepare_offset:
     sub rsp, 56
 
@@ -2562,6 +2586,30 @@ print_report:
     lea rdx, [tech_notation_buffer]
     mov r8, [tech_notation_len]
     call print_slice_field
+    lea rcx, [label_crossovers]
+    mov edx, [tech_counts + ASSP_TECH_COUNTS_CROSSOVERS]
+    call print_field
+    lea rcx, [label_footswitches]
+    mov edx, [tech_counts + ASSP_TECH_COUNTS_FOOTSWITCHES]
+    call print_field
+    lea rcx, [label_up_footswitches]
+    mov edx, [tech_counts + ASSP_TECH_COUNTS_UP_FOOTSWITCHES]
+    call print_field
+    lea rcx, [label_down_footswitches]
+    mov edx, [tech_counts + ASSP_TECH_COUNTS_DOWN_FOOTSWITCHES]
+    call print_field
+    lea rcx, [label_sideswitches]
+    mov edx, [tech_counts + ASSP_TECH_COUNTS_SIDESWITCHES]
+    call print_field
+    lea rcx, [label_jacks]
+    mov edx, [tech_counts + ASSP_TECH_COUNTS_JACKS]
+    call print_field
+    lea rcx, [label_brackets]
+    mov edx, [tech_counts + ASSP_TECH_COUNTS_BRACKETS]
+    call print_field
+    lea rcx, [label_doublesteps]
+    mov edx, [tech_counts + ASSP_TECH_COUNTS_DOUBLESTEPS]
+    call print_field
     lea rcx, [label_chart_music]
     mov rdx, [chart_music_slice + ASSP_BYTE_SLICE_PTR]
     mov r8, [chart_music_slice + ASSP_BYTE_SLICE_LEN]
@@ -4536,7 +4584,7 @@ msg_hash_fail db "assembly hash pipeline failed", 13, 10, 0
 msg_metadata_fail db "assembly metadata normalization failed", 13, 10, 0
 msg_nps_fail db "assembly nps pipeline failed", 13, 10, 0
 msg_duration_fail db "assembly duration pipeline failed", 13, 10, 0
-msg_tech_fail db "assembly tech notation parser failed", 13, 10, 0
+msg_tech_fail db "assembly tech parser/analyzer failed", 13, 10, 0
 msg_breakdown_too_long db "breakdown output exceeded text buffer", 13, 10, 0
 unknown_artist db "Unknown artist"
 unknown_artist_end:
@@ -4575,6 +4623,14 @@ label_chart_name db "chart_name: ", 0
 label_step_artist db "step_artist: ", 0
 label_step_artists db "step_artists: ", 0
 label_tech_notation db "tech_notation: ", 0
+label_crossovers db "crossovers: ", 0
+label_footswitches db "footswitches: ", 0
+label_up_footswitches db "up_footswitches: ", 0
+label_down_footswitches db "down_footswitches: ", 0
+label_sideswitches db "sideswitches: ", 0
+label_jacks db "jacks: ", 0
+label_brackets db "brackets: ", 0
+label_doublesteps db "doublesteps: ", 0
 label_chart_music db "chart_music: ", 0
 label_chart_attacks db "chart_attacks: ", 0
 label_global_attacks db "global_attacks: ", 0
@@ -4985,6 +5041,7 @@ step_artist_slice resb ASSP_BYTE_SLICE_SIZE
 global_timing_tags resb ASSP_TIMING_TAGS_SIZE
 chart_timing_tags resb ASSP_TIMING_TAGS_SIZE
 note_stats resb ASSP_NOTE_STATS_SIZE
+tech_counts resb ASSP_TECH_COUNTS_SIZE
 stream_counts resb ASSP_STREAM_COUNTS_SIZE
 num_buffer resb 32
 normalized_bpms_len resq 1

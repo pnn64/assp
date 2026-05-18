@@ -101,6 +101,17 @@ typedef struct assp_note_stats {
     uint64_t malformed_rows;
 } assp_note_stats;
 
+typedef struct assp_tech_counts {
+    uint32_t crossovers;
+    uint32_t footswitches;
+    uint32_t up_footswitches;
+    uint32_t down_footswitches;
+    uint32_t sideswitches;
+    uint32_t jacks;
+    uint32_t brackets;
+    uint32_t doublesteps;
+} assp_tech_counts;
+
 typedef struct assp_chart_ref {
     const uint8_t *note_data;
     size_t note_data_len;
@@ -288,6 +299,16 @@ size_t assp_parse_tech_notation(
     size_t description_len,
     uint8_t *out,
     size_t out_cap
+);
+int32_t assp_count_step_tech_brackets_minimized_4(
+    const uint8_t *data,
+    size_t len,
+    assp_tech_counts *out
+);
+int32_t assp_count_step_tech_brackets_minimized_8(
+    const uint8_t *data,
+    size_t len,
+    assp_tech_counts *out
 );
 size_t assp_parse_bpm_map(
     const uint8_t *data,

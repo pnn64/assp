@@ -1,9 +1,193 @@
 default rel
 %include "assp.inc"
 
+global assp_count_step_tech_brackets_minimized_4
+global assp_count_step_tech_brackets_minimized_8
 global assp_parse_tech_notation
 
 section .text
+
+%macro count_tech_lane 2
+    mov al, [rsi + %1]
+    cmp al, '1'
+    je %%active
+    cmp al, '2'
+    je %%active
+    cmp al, '4'
+    je %%active
+    jmp %%done
+
+%%active:
+    or r13d, %2
+    inc r14d
+
+%%done:
+%endmacro
+
+%macro count_bracket_pair 2
+    mov r10d, (1 << %1) | (1 << %2)
+    mov r11d, ecx
+    and r11d, r10d
+    cmp r11d, r10d
+    jne %%done
+    test edx, r10d
+    jnz %%done
+    or edx, r10d
+    inc eax
+
+%%done:
+%endmacro
+
+%macro ASSP_COUNT_STEP_TECH_BRACKETS_MINIMIZED 3
+; rcx = minimized note-data bytes, rdx = byte length, r8 = out assp_tech_counts.
+; eax = 1 on success, 0 on invalid pointers.
+%1:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+
+    test r8, r8
+    jz %%fail
+    test rdx, rdx
+    jz %%zero_only
+    test rcx, rcx
+    jz %%fail
+
+%%zero_only:
+    mov rbx, r8
+    xor eax, eax
+    mov [rbx], rax
+    mov [rbx + 8], rax
+    mov [rbx + 16], rax
+    mov [rbx + 24], rax
+
+    mov rsi, rcx
+    lea rdi, [rcx + rdx]
+    xor r12d, r12d
+
+%%line_loop:
+    cmp rsi, rdi
+    jae %%success
+
+%%skip_separators:
+    cmp rsi, rdi
+    jae %%success
+    mov al, [rsi]
+    cmp al, ';'
+    je %%success
+    cmp al, ','
+    je %%skip_one
+    cmp al, 10
+    je %%skip_one
+    cmp al, 13
+    je %%skip_one
+    cmp al, ' '
+    je %%skip_one
+    cmp al, 9
+    je %%skip_one
+    jmp %%row_start
+
+%%skip_one:
+    inc rsi
+    jmp %%skip_separators
+
+%%row_start:
+    lea rax, [rsi + %2]
+    cmp rax, rdi
+    ja %%success
+
+    xor r13d, r13d
+    xor r14d, r14d
+    count_tech_lane 0, 1
+    count_tech_lane 1, 2
+    count_tech_lane 2, 4
+    count_tech_lane 3, 8
+%if %2 == 8
+    count_tech_lane 4, 16
+    count_tech_lane 5, 32
+    count_tech_lane 6, 64
+    count_tech_lane 7, 128
+%endif
+
+    test r13d, r13d
+    jz %%row_done
+    test r12d, r12d
+    jnz %%count_row
+    mov r12d, ASSP_TRUE
+    jmp %%row_done
+
+%%count_row:
+    cmp r14d, 2
+    jb %%row_done
+    mov ecx, r13d
+    call %3
+    add [rbx + ASSP_TECH_COUNTS_BRACKETS], eax
+
+%%row_done:
+    add rsi, %2
+
+%%skip_to_next_line:
+    cmp rsi, rdi
+    jae %%success
+    mov al, [rsi]
+    cmp al, ';'
+    je %%success
+    inc rsi
+    cmp al, 10
+    je %%line_loop
+    cmp al, ','
+    je %%line_loop
+    jmp %%skip_to_next_line
+
+%%success:
+    mov eax, ASSP_TRUE
+    jmp %%done
+
+%%fail:
+    xor eax, eax
+
+%%done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+%endmacro
+
+ASSP_COUNT_STEP_TECH_BRACKETS_MINIMIZED assp_count_step_tech_brackets_minimized_4, 4, count_brackets_4
+ASSP_COUNT_STEP_TECH_BRACKETS_MINIMIZED assp_count_step_tech_brackets_minimized_8, 8, count_brackets_8
+
+; ecx = active note mask, eax = disjoint bracketable pair count.
+count_brackets_4:
+    xor eax, eax
+    xor edx, edx
+    count_bracket_pair 0, 1
+    count_bracket_pair 0, 2
+    count_bracket_pair 1, 3
+    count_bracket_pair 2, 3
+    ret
+
+; ecx = active note mask, eax = disjoint bracketable pair count.
+count_brackets_8:
+    xor eax, eax
+    xor edx, edx
+    count_bracket_pair 0, 1
+    count_bracket_pair 0, 2
+    count_bracket_pair 1, 3
+    count_bracket_pair 2, 3
+    count_bracket_pair 3, 4
+    count_bracket_pair 4, 5
+    count_bracket_pair 4, 6
+    count_bracket_pair 5, 7
+    count_bracket_pair 6, 7
+    ret
 
 ; rcx = credit bytes, rdx = credit len, r8 = description bytes, r9 = description len,
 ; stack arg 5 = optional output bytes, stack arg 6 = output cap.
