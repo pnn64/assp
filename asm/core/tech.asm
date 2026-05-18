@@ -340,6 +340,17 @@ section .text
     sub eax, [rsp + 72]
     cmp eax, 1
     jne %%check_simple_jack
+    mov eax, [rsp + 16]
+    cmp eax, [rsp + 24]
+    jne %%check_simple_doublestep_pattern
+    cmp eax, [rsp + 32]
+    jne %%check_simple_doublestep_pattern
+    cmp eax, [rsp + 80]
+    jne %%check_simple_doublestep_pattern
+    add dword [rbx + ASSP_TECH_COUNTS_JACKS], 3
+    jmp %%return_true
+
+%%check_simple_doublestep_pattern:
     cmp dword [rsp + 16], 8
     jne %%check_simple_jack
     cmp dword [rsp + 24], 4

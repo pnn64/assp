@@ -186,6 +186,35 @@ fn counts_single_panel_dense_adjacent_jacks_like_rssp_core() {
 }
 
 #[test]
+fn counts_single_panel_dense_four_row_jacks_like_rssp_core() {
+    for data in [
+        concat!(
+            "1000\n", "1000\n", "1000\n", "1000\n", "0000\n", "0000\n", "0000\n", "0000\n",
+            "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n",
+        )
+        .as_bytes(),
+        concat!(
+            "0100\n", "0100\n", "0100\n", "0100\n", "0000\n", "0000\n", "0000\n", "0000\n",
+            "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n",
+        )
+        .as_bytes(),
+        concat!(
+            "0010\n", "0010\n", "0010\n", "0010\n", "0000\n", "0000\n", "0000\n", "0000\n",
+            "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n",
+        )
+        .as_bytes(),
+        concat!(
+            "0001\n", "0001\n", "0001\n", "0001\n", "0000\n", "0000\n", "0000\n", "0000\n",
+            "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n", "0000\n",
+        )
+        .as_bytes(),
+    ] {
+        let counts = count_step_tech_brackets_minimized_4(data).unwrap();
+        assert_basic_tech_match_rssp(data, 4, counts);
+    }
+}
+
+#[test]
 fn skips_single_panel_slow_or_spaced_jacks_like_rssp_core() {
     for data in [
         concat!(
