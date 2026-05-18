@@ -271,8 +271,8 @@ min/max/average/median display BPMs, tier BPM, max/peak/median NPS,
 equally-spaced measure counts,
 density-derived stream counts, total stream counts, stream percentages,
 duration seconds, fixed-point duration metrics with stops/stops-freezes aliases,
-delays, warps, token breakdowns,
-segment breakdowns,
+delays, warps, token/SN breakdown aliases,
+segment/stream breakdown aliases,
 stop/delay/warp/speed/scroll timing segment counts, offset adjustment, and note
 stats with rating, total step/arrow and lane-arrow aliases, nonfake mine, and
 timing-fake counts.

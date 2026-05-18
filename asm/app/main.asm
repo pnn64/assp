@@ -1832,19 +1832,37 @@ print_report:
     lea rcx, [label_breakdown_detailed]
     mov edx, ASSP_BREAKDOWN_DETAILED
     call print_token_breakdown
+    lea rcx, [label_sn_detailed_breakdown]
+    mov edx, ASSP_BREAKDOWN_DETAILED
+    call print_token_breakdown
     lea rcx, [label_breakdown_partial]
+    mov edx, ASSP_BREAKDOWN_PARTIAL
+    call print_token_breakdown
+    lea rcx, [label_sn_partial_breakdown]
     mov edx, ASSP_BREAKDOWN_PARTIAL
     call print_token_breakdown
     lea rcx, [label_breakdown_simplified]
     mov edx, ASSP_BREAKDOWN_SIMPLIFIED
     call print_token_breakdown
+    lea rcx, [label_sn_simple_breakdown]
+    mov edx, ASSP_BREAKDOWN_SIMPLIFIED
+    call print_token_breakdown
     lea rcx, [label_stream_breakdown_detailed]
+    mov edx, ASSP_STREAM_BREAKDOWN_DETAILED
+    call print_segment_breakdown
+    lea rcx, [label_detailed_breakdown]
     mov edx, ASSP_STREAM_BREAKDOWN_DETAILED
     call print_segment_breakdown
     lea rcx, [label_stream_breakdown_partial]
     mov edx, ASSP_STREAM_BREAKDOWN_PARTIAL
     call print_segment_breakdown
+    lea rcx, [label_partial_breakdown]
+    mov edx, ASSP_STREAM_BREAKDOWN_PARTIAL
+    call print_segment_breakdown
     lea rcx, [label_stream_breakdown_simple]
+    mov edx, ASSP_STREAM_BREAKDOWN_SIMPLE
+    call print_segment_breakdown
+    lea rcx, [label_simple_breakdown]
     mov edx, ASSP_STREAM_BREAKDOWN_SIMPLE
     call print_segment_breakdown
     lea rcx, [label_stream_breakdown_total]
@@ -2337,11 +2355,17 @@ label_break_percent db "break_percent: ", 0
 label_stream_segments db "stream_segments: ", 0
 label_stream_tokens db "stream_tokens: ", 0
 label_breakdown_detailed db "breakdown_detailed: ", 0
+label_sn_detailed_breakdown db "sn_detailed_breakdown: ", 0
 label_breakdown_partial db "breakdown_partial: ", 0
+label_sn_partial_breakdown db "sn_partial_breakdown: ", 0
 label_breakdown_simplified db "breakdown_simplified: ", 0
+label_sn_simple_breakdown db "sn_simple_breakdown: ", 0
 label_stream_breakdown_detailed db "stream_breakdown_detailed: ", 0
+label_detailed_breakdown db "detailed_breakdown: ", 0
 label_stream_breakdown_partial db "stream_breakdown_partial: ", 0
+label_partial_breakdown db "partial_breakdown: ", 0
 label_stream_breakdown_simple db "stream_breakdown_simple: ", 0
+label_simple_breakdown db "simple_breakdown: ", 0
 label_stream_breakdown_total db "stream_breakdown_total: ", 0
 label_rows db "rows: ", 0
 label_total_steps db "total_steps: ", 0
