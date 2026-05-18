@@ -11,6 +11,7 @@ global assp_step_parity_basic_action_costs_4
 global assp_step_parity_elapsed_action_costs_4
 global assp_step_parity_switch_action_costs_4
 global assp_step_parity_bracket_tap_action_costs_4
+global assp_step_parity_distance_action_costs_4
 
 section .text
 
@@ -1338,6 +1339,155 @@ assp_step_parity_bracket_tap_action_costs_4:
     xor eax, eax
     ret
 
+; rcx = initial, rdx = result, r8 = hit[5], r9d = hold mask,
+; stack arg 5 = elapsed seconds f32 ptr,
+; stack arg 6 = out assp_step_parity_distance_costs4.
+; eax = 1 on success, 0 on invalid pointers.
+assp_step_parity_distance_action_costs_4:
+    test rcx, rcx
+    jz .fail
+    test rdx, rdx
+    jz .fail
+    test r8, r8
+    jz .fail
+    mov r10, [rsp + 40]
+    test r10, r10
+    jz .fail
+    mov r11, [rsp + 48]
+    test r11, r11
+    jz .fail
+
+    xor eax, eax
+    mov [r11 + ASSP_STEP_PARITY_DISTANCE_COSTS4_HOLD_SWITCH], eax
+    mov [r11 + ASSP_STEP_PARITY_DISTANCE_COSTS4_BIG_MOVEMENT], eax
+    mov [r11 + ASSP_STEP_PARITY_DISTANCE_COSTS4_TOTAL], eax
+    xorps xmm0, xmm0
+
+.hold_switch:
+    movzx r10d, byte [rdx + ASSP_STEP_PARITY_STATE4_OCCUPIED_MASK]
+    and r10d, r9d
+    and r10d, 0fh
+    xor eax, eax
+    xorps xmm1, xmm1
+
+.hold_switch_loop:
+    cmp eax, 4
+    jae .store_hold_switch
+    bt r10d, eax
+    jnc .next_hold_switch_col
+    movzx r11d, byte [rdx + ASSP_STEP_PARITY_STATE4_COMBINED + rax]
+    test r11d, r11d
+    jz .next_hold_switch_col
+    cmp r11d, 4
+    ja .next_hold_switch_col
+    movzx r9d, byte [rcx + ASSP_STEP_PARITY_STATE4_COMBINED + rax]
+
+    cmp r11d, 3
+    jae .result_right
+    cmp r9d, 1
+    jb .hold_switched
+    cmp r9d, 2
+    jbe .next_hold_switch_col
+    jmp .hold_switched
+
+.result_right:
+    cmp r9d, 3
+    jb .hold_switched
+    cmp r9d, 4
+    jbe .next_hold_switch_col
+
+.hold_switched:
+    movsx r9d, byte [rcx + ASSP_STEP_PARITY_STATE4_WHERE_FEET + r11]
+    test r9d, r9d
+    js .hold_missing_prev
+    cmp r9d, 4
+    jae .hold_missing_prev
+    mov r11d, eax
+    shl r11d, 2
+    add r11d, r9d
+    movsxd r11, r11d
+    lea r9, [rel dance_single_distances4]
+    addss xmm1, [r9 + r11 * 4]
+    jmp .next_hold_switch_col
+
+.hold_missing_prev:
+    addss xmm1, [rel cost_one]
+
+.next_hold_switch_col:
+    inc eax
+    jmp .hold_switch_loop
+
+.store_hold_switch:
+    mulss xmm1, [rel cost_hold_switch_weight]
+    mov r11, [rsp + 48]
+    movss [r11 + ASSP_STEP_PARITY_DISTANCE_COSTS4_HOLD_SWITCH], xmm1
+    addss xmm0, xmm1
+
+.big_movement:
+    movzx eax, byte [rdx + ASSP_STEP_PARITY_STATE4_MOVED_MASK]
+    and eax, 0fh
+    xorps xmm1, xmm1
+    xor r10d, r10d
+
+.big_movement_loop:
+    cmp r10d, 4
+    jae .store_big_movement
+    bt eax, r10d
+    jnc .next_big_movement_foot
+    mov r11d, r10d
+    inc r11d
+    movsx r9d, byte [rcx + ASSP_STEP_PARITY_STATE4_WHERE_FEET + r11]
+    test r9d, r9d
+    js .next_big_movement_foot
+    cmp r9d, 4
+    jae .next_big_movement_foot
+    movsx r11d, byte [r8 + r11]
+    test r11d, r11d
+    js .next_big_movement_foot
+    cmp r11d, 4
+    jae .next_big_movement_foot
+
+    shl r9d, 2
+    add r9d, r11d
+    movsxd r9, r9d
+    lea r11, [rel dance_single_distances4]
+    movss xmm2, [r11 + r9 * 4]
+    mulss xmm2, [rel cost_distance_weight]
+    mov r11, [rsp + 40]
+    divss xmm2, [r11]
+
+    mov r11d, r10d
+    xor r11d, 1
+    add r11d, 1
+    movsx r11d, byte [r8 + r11]
+    test r11d, r11d
+    js .add_big_movement
+    movsx r9d, byte [rcx + ASSP_STEP_PARITY_STATE4_WHERE_FEET + r10 + 1]
+    cmp r11d, r9d
+    je .next_big_movement_foot
+    mulss xmm2, [rel cost_big_movement_other_part_factor]
+
+.add_big_movement:
+    addss xmm1, xmm2
+
+.next_big_movement_foot:
+    inc r10d
+    jmp .big_movement_loop
+
+.store_big_movement:
+    mov r11, [rsp + 48]
+    movss [r11 + ASSP_STEP_PARITY_DISTANCE_COSTS4_BIG_MOVEMENT], xmm1
+    addss xmm0, xmm1
+
+.finish:
+    movss [r11 + ASSP_STEP_PARITY_DISTANCE_COSTS4_TOTAL], xmm0
+    mov eax, ASSP_TRUE
+    ret
+
+.fail:
+    xor eax, eax
+    ret
+
 section .rdata
 cost_mine_weight dd 10000.0
 cost_bracket_jack_weight dd 20.0
@@ -1352,4 +1502,12 @@ cost_slow_footswitch_threshold dd 0.2
 cost_slow_footswitch_ignore dd 0.4
 cost_footswitch_weight dd 325.0
 cost_sideswitch_weight dd 130.0
+cost_hold_switch_weight dd 55.0
+cost_distance_weight dd 6.0
+cost_big_movement_other_part_factor dd 0.2
 cost_one dd 1.0
+dance_single_distances4:
+    dd 0.0, 1.4142135623730951, 1.4142135623730951, 2.0
+    dd 1.4142135623730951, 0.0, 2.0, 1.4142135623730951
+    dd 1.4142135623730951, 2.0, 0.0, 1.4142135623730951
+    dd 2.0, 1.4142135623730951, 1.4142135623730951, 0.0
