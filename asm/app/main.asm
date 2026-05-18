@@ -1649,6 +1649,9 @@ print_report:
     lea rcx, [label_stops]
     mov rdx, [stop_report_count]
     call print_field
+    lea rcx, [label_stops_freezes]
+    mov rdx, [stop_report_count]
+    call print_field
     lea rcx, [label_delays]
     mov rdx, [delay_report_count]
     call print_field
@@ -2152,6 +2155,7 @@ label_last_beat_milli db "last_beat_milli: ", 0
 label_duration_seconds db "duration_seconds: ", 0
 label_duration_ms db "duration_ms: ", 0
 label_stops db "stops: ", 0
+label_stops_freezes db "stops_freezes: ", 0
 label_delays db "delays: ", 0
 label_warps db "warps: ", 0
 label_speeds db "speeds: ", 0

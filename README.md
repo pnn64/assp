@@ -269,7 +269,8 @@ seconds, RSSP-style display BPM,
 min/max/average/median display BPMs, tier BPM, max/peak/median NPS,
 equally-spaced measure counts,
 density-derived stream counts, total stream counts, stream percentages,
-duration seconds, fixed-point duration metrics with stops/delays/warps, token breakdowns,
+duration seconds, fixed-point duration metrics with stops/stops-freezes aliases,
+delays, warps, token breakdowns,
 segment breakdowns,
 stop/delay/warp/speed/scroll timing segment counts, offset adjustment, and note
 stats with rating, total step/arrow aliases, nonfake mine, and timing-fake counts.
