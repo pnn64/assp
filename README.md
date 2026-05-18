@@ -63,6 +63,7 @@ The first implemented pieces are:
 - `assp_count_facing_steps_minimized_4`
 - `assp_count_basic_patterns_minimized_4`
 - `assp_count_default_patterns_minimized_4`
+- `assp_pattern_percentages_centi`
 - `assp_minimize_measure_4`
 - `assp_minimize_measure_8`
 - `assp_minimize_chart_4`
@@ -130,6 +131,8 @@ right-facing mono sequences from minimized 4-panel note rows.
 box-family patterns from minimized 4-panel note rows.
 `assp_count_default_patterns_minimized_4` counts RSSP's full 62-entry default
 pattern set from minimized 4-panel note rows.
+`assp_pattern_percentages_centi` computes RSSP's two-decimal candle and mono
+percentages from total steps, candle counts, and mono counts.
 `assp_minimize_measure_4` and `assp_minimize_measure_8` apply RSSP's
 per-measure row reduction for 4-panel and 8-panel charts, which is the first
 piece of the minimized-note/hash pipeline.
@@ -332,7 +335,8 @@ equally-spaced measure counts, formatted length,
 density-derived stream counts, total stream counts, stream percentages,
 RSSP default pattern aggregates including candle/box/tower/triangle,
 staircases, sweeps, copters, spirals, turbo candles, hip breakers, doritos, and
-luchis, anchors, mono/facing-step counts,
+luchis, candle/mono percentages, RSSP-compatible candle/box/anchor/mono
+aliases, anchors, mono/facing-step counts,
 duration seconds, fixed-point duration metrics with stops/stops-freezes aliases,
 delays, warps, token/SN breakdown aliases,
 segment/stream breakdown aliases,

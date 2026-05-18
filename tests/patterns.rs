@@ -2,7 +2,7 @@ use assp::{
     BasicPatterns, PATTERN_COUNT, count_anchors_4, count_anchors_minimized_4,
     count_basic_patterns_4, count_basic_patterns_minimized_4, count_default_patterns_4,
     count_default_patterns_minimized_4, count_facing_steps_4, count_facing_steps_minimized_4,
-    find_chart_by_index,
+    find_chart_by_index, pattern_percentages_centi,
 };
 use rssp_core::{
     patterns::{PatternVariant, count_anchors, count_facing_steps, detect_default_patterns},
@@ -53,6 +53,36 @@ fn basic_patterns(bitmasks: &[u8]) -> BasicPatterns {
 
 fn default_patterns(bitmasks: &[u8]) -> [u32; PATTERN_COUNT] {
     detect_default_patterns(bitmasks)
+}
+
+fn round_ties_even_div(numerator: u128, denominator: u128) -> u64 {
+    let quotient = numerator / denominator;
+    let remainder = numerator % denominator;
+    match (remainder * 2).cmp(&denominator) {
+        std::cmp::Ordering::Less => quotient as u64,
+        std::cmp::Ordering::Greater => (quotient + 1) as u64,
+        std::cmp::Ordering::Equal if quotient & 1 != 0 => (quotient + 1) as u64,
+        std::cmp::Ordering::Equal => quotient as u64,
+    }
+}
+
+fn expected_pattern_percentages(
+    total_steps: u64,
+    candle_total: u32,
+    mono_total: u32,
+) -> (u64, u64) {
+    if total_steps <= 1 {
+        return (0, 0);
+    }
+
+    let max_candles = (total_steps - 1) / 2;
+    let candle = if max_candles > 0 {
+        round_ties_even_div(u128::from(candle_total) * 10000, u128::from(max_candles))
+    } else {
+        0
+    };
+    let mono = round_ties_even_div(u128::from(mono_total) * 10000, u128::from(total_steps));
+    (candle, mono)
 }
 
 fn chart_notes(data: &[u8], index: usize) -> &[u8] {
@@ -181,6 +211,23 @@ fn empty_default_patterns_match_rssp_core() {
         count_default_patterns_minimized_4(b"1000\n0011\n0100\n;\n").unwrap(),
         default_patterns(&bitmasks_from_minimized(b"1000\n0011\n0100\n;\n"))
     );
+}
+
+#[test]
+fn pattern_percentages_match_rssp_formula() {
+    for (total_steps, candle_total, mono_total) in [
+        (0, 5, 5),
+        (1, 5, 5),
+        (5, 1, 2),
+        (32, 1, 1),
+        (32, 3, 3),
+        (4097, 777, 1234),
+    ] {
+        assert_eq!(
+            pattern_percentages_centi(total_steps, candle_total, mono_total).unwrap(),
+            expected_pattern_percentages(total_steps, candle_total, mono_total)
+        );
+    }
 }
 
 #[test]

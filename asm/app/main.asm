@@ -2819,6 +2819,19 @@ print_report:
     lea rcx, [label_candle_percent]
     mov rdx, [candle_percent_centi]
     call print_fixed2_field
+    lea rcx, [label_total_candles]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_CANDLE_LEFT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_CANDLE_RIGHT * 4]
+    call print_field
+    lea rcx, [label_left_foot_candles]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_CANDLE_LEFT * 4]
+    call print_field
+    lea rcx, [label_right_foot_candles]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_CANDLE_RIGHT * 4]
+    call print_field
+    lea rcx, [label_candles_percent]
+    mov rdx, [candle_percent_centi]
+    call print_fixed2_field
     lea rcx, [label_boxes]
     mov edx, [default_pattern_counts + ASSP_PATTERN_BOX_LR * 4]
     add edx, [default_pattern_counts + ASSP_PATTERN_BOX_UD * 4]
@@ -2849,6 +2862,38 @@ print_report:
     mov edx, [default_pattern_counts + ASSP_PATTERN_BOX_CORNER_RD * 4]
     call print_field
     lea rcx, [label_box_ru]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_BOX_CORNER_RU * 4]
+    call print_field
+    lea rcx, [label_total_boxes]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_BOX_LR * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_BOX_UD * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_BOX_CORNER_LD * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_BOX_CORNER_LU * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_BOX_CORNER_RD * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_BOX_CORNER_RU * 4]
+    call print_field
+    lea rcx, [label_lr_boxes]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_BOX_LR * 4]
+    call print_field
+    lea rcx, [label_ud_boxes]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_BOX_UD * 4]
+    call print_field
+    lea rcx, [label_corner_boxes]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_BOX_CORNER_LD * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_BOX_CORNER_LU * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_BOX_CORNER_RD * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_BOX_CORNER_RU * 4]
+    call print_field
+    lea rcx, [label_ld_boxes]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_BOX_CORNER_LD * 4]
+    call print_field
+    lea rcx, [label_lu_boxes]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_BOX_CORNER_LU * 4]
+    call print_field
+    lea rcx, [label_rd_boxes]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_BOX_CORNER_RD * 4]
+    call print_field
+    lea rcx, [label_ru_boxes]
     mov edx, [default_pattern_counts + ASSP_PATTERN_BOX_CORNER_RU * 4]
     call print_field
     lea rcx, [label_towers]
@@ -3117,6 +3162,24 @@ print_report:
     lea rcx, [label_anchor_right]
     mov edx, [anchor_counts + 12]
     call print_field
+    lea rcx, [label_total_anchors]
+    mov edx, [anchor_counts + 0]
+    add edx, [anchor_counts + 4]
+    add edx, [anchor_counts + 8]
+    add edx, [anchor_counts + 12]
+    call print_field
+    lea rcx, [label_left_anchors]
+    mov edx, [anchor_counts + 0]
+    call print_field
+    lea rcx, [label_down_anchors]
+    mov edx, [anchor_counts + 4]
+    call print_field
+    lea rcx, [label_up_anchors]
+    mov edx, [anchor_counts + 8]
+    call print_field
+    lea rcx, [label_right_anchors]
+    mov edx, [anchor_counts + 12]
+    call print_field
     lea rcx, [label_mono_total]
     mov edx, [facing_counts + 0]
     add edx, [facing_counts + 4]
@@ -3130,6 +3193,16 @@ print_report:
     lea rcx, [label_mono_percent]
     mov rdx, [mono_percent_centi]
     call print_fixed2_field
+    lea rcx, [label_total_mono]
+    mov edx, [facing_counts + 0]
+    add edx, [facing_counts + 4]
+    call print_field
+    lea rcx, [label_left_face_mono]
+    mov edx, [facing_counts + 0]
+    call print_field
+    lea rcx, [label_right_face_mono]
+    mov edx, [facing_counts + 4]
+    call print_field
     lea rcx, [label_max_nps]
     mov rdx, [max_nps_centi]
     call print_fixed2_field
@@ -4025,6 +4098,10 @@ label_candles db "candles: ", 0
 label_candle_left db "candle_left: ", 0
 label_candle_right db "candle_right: ", 0
 label_candle_percent db "candle_percent: ", 0
+label_total_candles db "total_candles: ", 0
+label_left_foot_candles db "left_foot_candles: ", 0
+label_right_foot_candles db "right_foot_candles: ", 0
+label_candles_percent db "candles_percent: ", 0
 label_boxes db "boxes: ", 0
 label_box_lr db "box_lr: ", 0
 label_box_ud db "box_ud: ", 0
@@ -4033,6 +4110,14 @@ label_box_ld db "box_ld: ", 0
 label_box_lu db "box_lu: ", 0
 label_box_rd db "box_rd: ", 0
 label_box_ru db "box_ru: ", 0
+label_total_boxes db "total_boxes: ", 0
+label_lr_boxes db "lr_boxes: ", 0
+label_ud_boxes db "ud_boxes: ", 0
+label_corner_boxes db "corner_boxes: ", 0
+label_ld_boxes db "ld_boxes: ", 0
+label_lu_boxes db "lu_boxes: ", 0
+label_rd_boxes db "rd_boxes: ", 0
+label_ru_boxes db "ru_boxes: ", 0
 label_towers db "towers: ", 0
 label_tower_lr db "tower_lr: ", 0
 label_tower_ud db "tower_ud: ", 0
@@ -4106,10 +4191,18 @@ label_anchor_left db "anchor_left: ", 0
 label_anchor_down db "anchor_down: ", 0
 label_anchor_up db "anchor_up: ", 0
 label_anchor_right db "anchor_right: ", 0
+label_total_anchors db "total_anchors: ", 0
+label_left_anchors db "left_anchors: ", 0
+label_down_anchors db "down_anchors: ", 0
+label_up_anchors db "up_anchors: ", 0
+label_right_anchors db "right_anchors: ", 0
 label_mono_total db "mono_total: ", 0
 label_facing_left db "facing_left: ", 0
 label_facing_right db "facing_right: ", 0
 label_mono_percent db "mono_percent: ", 0
+label_total_mono db "total_mono: ", 0
+label_left_face_mono db "left_face_mono: ", 0
+label_right_face_mono db "right_face_mono: ", 0
 label_max_nps db "max_nps: ", 0
 label_peak_nps_milli db "peak_nps_milli: ", 0
 label_median_nps db "median_nps: ", 0
