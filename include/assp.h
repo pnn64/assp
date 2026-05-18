@@ -175,6 +175,14 @@ size_t assp_normalize_label_tag(
     uint8_t *out,
     size_t out_cap
 );
+int32_t assp_resolve_display_bpm(
+    const uint8_t *tag,
+    size_t tag_len,
+    int64_t actual_min_bpm,
+    int64_t actual_max_bpm,
+    int64_t *out_min_bpm,
+    int64_t *out_max_bpm
+);
 size_t assp_parse_tech_notation(
     const uint8_t *credit,
     size_t credit_len,

@@ -1,6 +1,6 @@
 use assp::{
     BpmSegment, bpm_average_centi, bpm_display_range, bpm_median_centi, find_bpms_for_chart,
-    find_global_timing_tags, normalize_float_digits, parse_bpm_map,
+    find_global_timing_tags, normalize_float_digits, parse_bpm_map, resolve_display_bpm,
 };
 use rssp_core::bpm;
 
@@ -47,6 +47,21 @@ fn assert_normalized_timing_tag(data: &[u8], tag: assp::ByteSlice) {
     let asm = normalize_float_digits(raw).unwrap();
     let rust = bpm::normalize_float_digits(std::str::from_utf8(raw).unwrap());
     assert_eq!(std::str::from_utf8(&asm).unwrap(), rust);
+}
+
+fn rust_display_bpm(tag: &[u8], actual_min: i64, actual_max: i64) -> (i64, i64) {
+    let tag = std::str::from_utf8(tag).unwrap();
+    let (min, max, _) =
+        bpm::resolve_display_bpm(Some(tag), actual_min as f64, actual_max as f64, 1.0);
+    let fmt = |v: f64| format!("{v:.0}").parse::<i64>().unwrap();
+    (fmt(min), fmt(max))
+}
+
+fn assert_display_bpm(tag: &[u8], actual_min: i64, actual_max: i64) {
+    assert_eq!(
+        resolve_display_bpm(tag, actual_min, actual_max).unwrap(),
+        rust_display_bpm(tag, actual_min, actual_max)
+    );
 }
 
 fn assert_average_bpm(input: &[u8]) {
@@ -101,6 +116,19 @@ fn computes_display_bpm_range_like_rssp_core() {
     assert_bpm_range(b"0=120,4=15000,8=-10");
     assert_bpm_range(b"0=12000,4=15000");
     assert_bpm_range(b"0=-10,4=-5");
+}
+
+#[test]
+fn resolves_display_bpm_tags_like_rssp_core() {
+    assert_display_bpm(b"", 120, 180);
+    assert_display_bpm(b"*", 120, 180);
+    assert_display_bpm(b"100", 120, 180);
+    assert_display_bpm(b"100:200", 120, 180);
+    assert_display_bpm(b"100.5:101.5", 120, 180);
+    assert_display_bpm(b"100:", 120, 180);
+    assert_display_bpm(b"100:bad", 120, 180);
+    assert_display_bpm(b"0:200", 120, 180);
+    assert_display_bpm(b"100\\:200", 120, 180);
 }
 
 #[test]

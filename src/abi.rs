@@ -170,6 +170,14 @@ unsafe extern "C" {
     fn assp_trim_ascii_bytes(data: *const u8, len: usize, out: *mut u8, out_cap: usize) -> usize;
     fn assp_normalize_label_tag(data: *const u8, len: usize, out: *mut u8, out_cap: usize)
     -> usize;
+    fn assp_resolve_display_bpm(
+        tag: *const u8,
+        tag_len: usize,
+        actual_min_bpm: i64,
+        actual_max_bpm: i64,
+        out_min_bpm: *mut i64,
+        out_max_bpm: *mut i64,
+    ) -> c_int;
     fn assp_parse_tech_notation(
         credit: *const u8,
         credit_len: usize,
@@ -624,6 +632,27 @@ pub fn normalize_label_tag(data: &[u8]) -> Option<Vec<u8>> {
         }
     }
     Some(out)
+}
+
+#[must_use]
+pub fn resolve_display_bpm(
+    tag: &[u8],
+    actual_min_bpm: i64,
+    actual_max_bpm: i64,
+) -> Option<(i64, i64)> {
+    let mut out_min = 0;
+    let mut out_max = 0;
+    let ok = unsafe {
+        assp_resolve_display_bpm(
+            tag.as_ptr(),
+            tag.len(),
+            actual_min_bpm,
+            actual_max_bpm,
+            &mut out_min,
+            &mut out_max,
+        )
+    };
+    (ok != 0).then_some((out_min, out_max))
 }
 
 #[must_use]

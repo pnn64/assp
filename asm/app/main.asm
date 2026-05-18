@@ -57,6 +57,7 @@ extern assp_parse_bpm_map
 extern assp_parse_offset_ms
 extern assp_parse_tech_notation
 extern assp_normalize_label_tag
+extern assp_resolve_display_bpm
 extern assp_trim_ascii_bytes
 extern assp_stream_counts_from_densities
 extern assp_stream_percentages_centi
@@ -1211,12 +1212,7 @@ prepare_bpm_range:
     ret
 
 prepare_display_bpm_range:
-    sub rsp, 40
-
-    mov rax, [min_bpm]
-    mov [display_min_bpm], rax
-    mov rax, [max_bpm]
-    mov [display_max_bpm], rax
+    sub rsp, 56
 
     mov rcx, [display_bpm_slice + ASSP_BYTE_SLICE_PTR]
     mov rdx, [display_bpm_slice + ASSP_BYTE_SLICE_LEN]
@@ -1226,272 +1222,14 @@ prepare_display_bpm_range:
     mov rdx, [global_display_bpm_slice + ASSP_BYTE_SLICE_LEN]
 
 .parse:
-    call parse_display_bpm_pair
-    test eax, eax
-    jz .done
-
-    mov rax, [display_parse_min_milli]
-    test rax, rax
-    jle .done
-    call display_milli_to_int
-    mov r10, rax
-
-    mov rax, [display_parse_max_milli]
-    test rax, rax
-    jle .done
-    call display_milli_to_int
-    mov [display_min_bpm], r10
-    mov [display_max_bpm], rax
-
-.done:
-    add rsp, 40
-    ret
-
-; rcx = display BPM tag bytes, rdx = len. eax = 1 if a non-star tag was parsed.
-parse_display_bpm_pair:
-    push rsi
-    push rdi
-    push r12
-    push r13
-
-    test rdx, rdx
-    jz .fail
-    test rcx, rcx
-    jz .fail
-
-    mov rsi, rcx
-    lea rdi, [rcx + rdx]
-
-.trim_left:
-    cmp rsi, rdi
-    jae .fail
-    cmp byte [rsi], ' '
-    ja .trim_right
-    inc rsi
-    jmp .trim_left
-
-.trim_right:
-    cmp rdi, rsi
-    jbe .fail
-    cmp byte [rdi - 1], ' '
-    ja .check_star
-    dec rdi
-    jmp .trim_right
-
-.check_star:
-    lea rax, [rsi + 1]
-    cmp rax, rdi
-    jne .find_colon_init
-    cmp byte [rsi], '*'
-    je .fail
-
-.find_colon_init:
-    mov r12, rdi
-    mov r13, rsi
-    xor r8d, r8d
-
-.find_colon:
-    cmp r13, rdi
-    jae .parse_min
-    mov al, [r13]
-    cmp al, ':'
-    jne .not_colon
-    test r8b, 1
-    jnz .colon_escaped
-    mov r12, r13
-    jmp .parse_min
-.colon_escaped:
-    xor r8d, r8d
-    inc r13
-    jmp .find_colon
-.not_colon:
-    cmp al, '\'
-    jne .reset_bs
-    inc r8
-    inc r13
-    jmp .find_colon
-.reset_bs:
-    xor r8d, r8d
-    inc r13
-    jmp .find_colon
-
-.parse_min:
-    mov rcx, rsi
-    mov rdx, r12
-    call parse_display_milli_prefix
-    test eax, eax
-    jnz .store_min
-    xor edx, edx
-.store_min:
-    mov [display_parse_min_milli], rdx
-
-    cmp r12, rdi
-    jae .max_same_as_min
-    lea rcx, [r12 + 1]
-    mov rdx, rdi
-    call parse_display_milli_prefix
-    test eax, eax
-    jz .max_same_as_min
-    mov [display_parse_max_milli], rdx
-    jmp .success
-
-.max_same_as_min:
-    mov rax, [display_parse_min_milli]
-    mov [display_parse_max_milli], rax
-
-.success:
-    mov eax, ASSP_TRUE
-    jmp .done
-
-.fail:
-    xor eax, eax
-
-.done:
-    pop r13
-    pop r12
-    pop rdi
-    pop rsi
-    ret
-
-; rcx = segment start, rdx = segment end. eax = success, rdx = signed milli.
-parse_display_milli_prefix:
-    push rsi
-    push rdi
-    push rbx
-    push r12
-
-    mov rsi, rcx
-    mov rdi, rdx
-
-.trim_left:
-    cmp rsi, rdi
-    jae .fail
-    cmp byte [rsi], ' '
-    ja .sign
-    inc rsi
-    jmp .trim_left
-
-.sign:
-    xor r12d, r12d
-    cmp byte [rsi], '+'
-    je .plus
-    cmp byte [rsi], '-'
-    jne .init
-    mov r12d, ASSP_TRUE
-.plus:
-    inc rsi
-    cmp rsi, rdi
-    jae .fail
-
-.init:
-    xor ebx, ebx
-    xor r8d, r8d
-    xor r9d, r9d
-    xor r10d, r10d
-    mov r11d, 100
-
-.int_loop:
-    cmp rsi, rdi
-    jae .scale_frac
-    movzx eax, byte [rsi]
-    cmp al, '0'
-    jb .check_dot
-    cmp al, '9'
-    ja .scale_frac
-    sub eax, '0'
-    imul rbx, rbx, 10
-    add rbx, rax
-    mov r8d, ASSP_TRUE
-    inc rsi
-    jmp .int_loop
-
-.check_dot:
-    cmp al, '.'
-    jne .scale_frac
-    inc rsi
-
-.frac_loop:
-    cmp rsi, rdi
-    jae .scale_frac
-    movzx eax, byte [rsi]
-    cmp al, '0'
-    jb .scale_frac
-    cmp al, '9'
-    ja .scale_frac
-    sub eax, '0'
-    mov r8d, ASSP_TRUE
-    cmp r9d, 3
-    jae .round_digit
-    imul eax, r11d
-    add r10, rax
-    xor edx, edx
-    mov eax, r11d
-    mov ecx, 10
-    div ecx
-    mov r11d, eax
-    inc r9d
-    inc rsi
-    jmp .frac_loop
-
-.round_digit:
-    cmp r9d, 3
-    jne .ignore_extra
-    cmp eax, 5
-    jb .ignore_extra
-    inc r10
-.ignore_extra:
-    inc r9d
-    inc rsi
-    jmp .frac_loop
-
-.scale_frac:
-    test r8d, r8d
-    jz .fail
-    cmp r9d, 0
-    je .frac_done
-.scale_loop:
-    cmp r9d, 3
-    jae .frac_done
-    imul r10, r10, 10
-    inc r9d
-    jmp .scale_loop
-
-.frac_done:
-    imul rbx, rbx, 1000
-    add rbx, r10
-    test r12d, r12d
-    jz .success
-    neg rbx
-
-.success:
-    mov rdx, rbx
-    mov eax, ASSP_TRUE
-    jmp .done
-
-.fail:
-    xor eax, eax
-    xor edx, edx
-
-.done:
-    pop r12
-    pop rbx
-    pop rdi
-    pop rsi
-    ret
-
-; rax = positive milli. rax = integer BPM rounded like Rust {:.0}.
-display_milli_to_int:
-    xor edx, edx
-    mov r8d, 1000
-    div r8
-    cmp rdx, 500
-    ja .round_up
-    jb .done
-    test al, 1
-    jz .done
-.round_up:
-    inc rax
-.done:
+    mov r8, [min_bpm]
+    mov r9, [max_bpm]
+    lea rax, [display_min_bpm]
+    mov [rsp + 32], rax
+    lea rax, [display_max_bpm]
+    mov [rsp + 40], rax
+    call assp_resolve_display_bpm
+    add rsp, 56
     ret
 
 prepare_mines_nonfake:
@@ -3691,8 +3429,6 @@ min_bpm resq 1
 max_bpm resq 1
 display_min_bpm resq 1
 display_max_bpm resq 1
-display_parse_min_milli resq 1
-display_parse_max_milli resq 1
 average_bpm_centi resq 1
 median_bpm_centi resq 1
 mines_nonfake resq 1

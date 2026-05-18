@@ -36,6 +36,7 @@ The first implemented pieces are:
 - `assp_normalize_float_digits`
 - `assp_trim_ascii_bytes`
 - `assp_normalize_label_tag`
+- `assp_resolve_display_bpm`
 - `assp_parse_tech_notation`
 - `assp_parse_bpm_map`
 - `assp_parse_offset_ms`
@@ -131,6 +132,8 @@ normalized `#TIMESIGNATURES`, `#TICKCOUNTS`, and `#COMBOS` report fields.
 `assp_normalize_label_tag` keeps the first MSD parameter from `#LABELS`,
 removes ASCII backslash escapes, and drops ASCII control bytes for the
 standalone report's normalized global and selected label fields.
+`assp_resolve_display_bpm` resolves `#DISPLAYBPM` tags to whole-number display
+min/max values with RSSP's fallback behavior.
 `assp_find_global_tag` and `assp_find_chart_tag_by_index` provide generic
 tag extraction for `#TAG:` sections. Implemented simfile tag names are matched
 case-insensitively, following RSSP's parser behavior. The timing-tag collectors
