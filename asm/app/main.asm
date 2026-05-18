@@ -1363,6 +1363,10 @@ print_report:
     mov rdx, [chart_info + ASSP_CHART_INFO_METER_PTR]
     mov r8, [chart_info + ASSP_CHART_INFO_METER_LEN]
     call print_slice_field
+    lea rcx, [label_rating]
+    mov rdx, [chart_info + ASSP_CHART_INFO_METER_PTR]
+    mov r8, [chart_info + ASSP_CHART_INFO_METER_LEN]
+    call print_slice_field
     lea rcx, [label_description]
     mov rdx, [chart_info + ASSP_CHART_INFO_DESC_PTR]
     mov r8, [chart_info + ASSP_CHART_INFO_DESC_LEN]
@@ -1515,8 +1519,14 @@ print_report:
     lea rcx, [label_rows]
     mov rdx, [note_stats + ASSP_NOTE_STATS_ROWS]
     call print_field
+    lea rcx, [label_total_steps]
+    mov rdx, [note_stats + ASSP_NOTE_STATS_STEPS]
+    call print_field
     lea rcx, [label_steps]
     mov rdx, [note_stats + ASSP_NOTE_STATS_STEPS]
+    call print_field
+    lea rcx, [label_total_arrows]
+    mov rdx, [note_stats + ASSP_NOTE_STATS_ARROWS]
     call print_field
     lea rcx, [label_arrows]
     mov rdx, [note_stats + ASSP_NOTE_STATS_ARROWS]
@@ -1871,6 +1881,7 @@ label_chart db "chart: ", 0
 label_step_type db "step_type: ", 0
 label_difficulty db "difficulty: ", 0
 label_meter db "meter: ", 0
+label_rating db "rating: ", 0
 label_description db "description: ", 0
 label_chart_name db "chart_name: ", 0
 label_step_artist db "step_artist: ", 0
@@ -1918,7 +1929,9 @@ label_stream_breakdown_partial db "stream_breakdown_partial: ", 0
 label_stream_breakdown_simple db "stream_breakdown_simple: ", 0
 label_stream_breakdown_total db "stream_breakdown_total: ", 0
 label_rows db "rows: ", 0
+label_total_steps db "total_steps: ", 0
 label_steps db "steps: ", 0
+label_total_arrows db "total_arrows: ", 0
 label_arrows db "arrows: ", 0
 label_jumps db "jumps: ", 0
 label_hands db "hands: ", 0

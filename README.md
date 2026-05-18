@@ -270,7 +270,7 @@ density-derived stream counts, total stream counts, stream percentages,
 duration seconds, fixed-point duration metrics with stops/delays/warps, token breakdowns,
 segment breakdowns,
 stop/delay/warp/speed/scroll timing segment counts, offset adjustment, and note
-stats with nonfake mine and timing-fake counts.
+stats with rating, total step/arrow aliases, nonfake mine, and timing-fake counts.
 
 Run the optional Rust parity tests:
 
