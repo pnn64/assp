@@ -37,6 +37,7 @@ The first implemented pieces are:
 - `assp_bpm_average_centi`
 - `assp_bpm_median_centi`
 - `assp_bpm_at_beat_milli`
+- `assp_tier_bpm_centi`
 - `assp_elapsed_ms_bpm_only`
 - `assp_elapsed_ms_with_events`
 - `assp_measure_nps_milli_from_bpms`
@@ -122,6 +123,8 @@ including the same high-gimmick BPM filtering and fallback behavior.
 decimal places.
 `assp_bpm_median_centi` computes RSSP-style median display BPM rounded to two
 decimal places.
+`assp_tier_bpm_centi` computes RSSP's density-adjusted tier BPM from measure
+densities and active BPM changes.
 `assp_parse_offset_ms` parses `#OFFSET` values into signed milliseconds for
 duration adjustment.
 `assp_bpm_at_beat_milli` and `assp_measure_nps_milli_from_bpms` provide the
@@ -241,8 +244,8 @@ description. SM `#NOTES:` / `#NOTES2:` blocks are also split into their five
 metadata fields before chart rows are passed to the stat counter. The standalone
 report path currently supports `dance-single` and `dance-double` charts. Chart
 reports include RSSP-style chart hashes,
-normalized hash BPMs, min/max/average display BPMs, peak NPS in thousandths,
-density-derived stream counts, fixed-point duration metrics with
+normalized hash BPMs, min/max/average/median display BPMs, tier BPM, peak NPS
+in thousandths, density-derived stream counts, fixed-point duration metrics with
 stops/delays/warps, token breakdowns, segment breakdowns, offset adjustment, and
 note stats with nonfake mine and timing-fake counts.
 

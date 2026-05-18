@@ -1,8 +1,8 @@
 use assp::{
     bpm_at_beat_milli, find_bpms_for_chart, find_chart_by_index, measure_densities_4,
-    measure_nps_milli_from_bpms, measure_nps_milli_with_events, parse_bpm_map,
+    measure_nps_milli_from_bpms, measure_nps_milli_with_events, parse_bpm_map, tier_bpm_centi,
 };
-use rssp_core::{bpm, nps};
+use rssp_core::{bpm, math, nps};
 
 fn slice_from<'a>(data: &'a [u8], ptr: *const u8, len: usize) -> &'a [u8] {
     let start = ptr as usize - data.as_ptr() as usize;
@@ -81,6 +81,17 @@ fn assert_event_nps_match(
     );
 }
 
+fn assert_tier_bpm_match(densities: &[u32], bpms: &[u8]) {
+    let parsed = parse_bpm_map(bpms).unwrap();
+    let densities_usize: Vec<_> = densities.iter().map(|&v| v as usize).collect();
+    let rust_bpms = bpm::parse_bpm_map(std::str::from_utf8(bpms).unwrap());
+    let rust = math::round_dp(bpm::compute_tier_bpm(&densities_usize, &rust_bpms, 4.0), 2);
+    assert_eq!(
+        tier_bpm_centi(densities, &parsed),
+        (rust * 100.0).round_ties_even() as i64
+    );
+}
+
 #[test]
 fn selects_bpm_at_measure_beats() {
     let bpms = parse_bpm_map(b"8=240,4=120").unwrap();
@@ -103,6 +114,18 @@ fn computes_measure_nps_with_timing_events() {
     assert_event_nps_match(&[16, 16], b"0=60", b"2=1", b"", b"");
     assert_event_nps_match(&[16, 16], b"0=60", b"", b"2=1", b"");
     assert_event_nps_match(&[16, 16], b"0=60", b"", b"", b"0=4");
+}
+
+#[test]
+fn computes_tier_bpm_like_rssp_core() {
+    assert_tier_bpm_match(&[16, 16, 16, 16], b"0=120");
+    assert_tier_bpm_match(&[20, 20, 20, 20], b"0=120");
+    assert_tier_bpm_match(&[16, 16, 16], b"0=120");
+    assert_tier_bpm_match(&[16, 20, 20, 20, 20], b"0=120");
+    assert_tier_bpm_match(&[16, 16, 16, 16, 16, 16], b"0=120,8=240");
+    assert_tier_bpm_match(&[0, 0], b"0=120,8=240");
+    assert_tier_bpm_match(&[32, 32, 32, 32], b"0=120,8=15000");
+    assert_tier_bpm_match(&[0, 0], b"0=12000,8=15000");
 }
 
 #[test]

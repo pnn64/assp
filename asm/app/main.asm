@@ -43,6 +43,7 @@ extern assp_measure_densities_4
 extern assp_measure_densities_8
 extern assp_measure_nps_milli_from_bpms
 extern assp_measure_nps_milli_with_events
+extern assp_tier_bpm_centi
 extern assp_minimize_chart_4
 extern assp_minimize_chart_8
 extern assp_normalize_float_digits
@@ -172,6 +173,8 @@ start:
     call prepare_nps
     test eax, eax
     jz fail_nps
+
+    call prepare_tier_bpm
 
     call prepare_duration
     test eax, eax
@@ -697,6 +700,19 @@ prepare_nps:
     add rsp, 104
     ret
 
+prepare_tier_bpm:
+    sub rsp, 40
+
+    lea rcx, [density_buffer]
+    mov rdx, [measure_count]
+    lea r8, [bpm_segment_buffer]
+    mov r9, [bpm_segment_count]
+    call assp_tier_bpm_centi
+    mov [tier_bpm_centi], rax
+
+    add rsp, 40
+    ret
+
 prepare_timing_events:
     sub rsp, 56
 
@@ -1181,6 +1197,9 @@ print_report:
     lea rcx, [label_peak_nps_milli]
     mov rdx, [peak_nps_milli]
     call print_field
+    lea rcx, [label_tier_bpm]
+    mov rdx, [tier_bpm_centi]
+    call print_fixed2_field
     lea rcx, [label_last_beat_milli]
     mov rdx, [last_beat_milli]
     call print_field
@@ -1530,6 +1549,7 @@ label_average_bpm db "average_bpm: ", 0
 label_median_bpm db "median_bpm: ", 0
 label_measures db "measures: ", 0
 label_peak_nps_milli db "peak_nps_milli: ", 0
+label_tier_bpm db "tier_bpm: ", 0
 label_last_beat_milli db "last_beat_milli: ", 0
 label_duration_ms db "duration_ms: ", 0
 label_stream16 db "16th_streams: ", 0
@@ -1603,6 +1623,7 @@ fake_segment_count resq 1
 minimized_chart_len resq 1
 nps_count resq 1
 peak_nps_milli resq 1
+tier_bpm_centi resq 1
 last_beat_milli resq 1
 offset_ms resq 1
 min_bpm resq 1

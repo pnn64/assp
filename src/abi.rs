@@ -180,6 +180,12 @@ unsafe extern "C" {
     fn assp_bpm_average_centi(segments: *const BpmSegment, len: usize) -> i64;
     fn assp_bpm_median_centi(segments: *const BpmSegment, len: usize) -> i64;
     fn assp_bpm_at_beat_milli(segments: *const BpmSegment, len: usize, beat_milli: i64) -> i64;
+    fn assp_tier_bpm_centi(
+        densities: *const u32,
+        density_len: usize,
+        bpms: *const BpmSegment,
+        bpm_len: usize,
+    ) -> i64;
     fn assp_elapsed_ms_bpm_only(
         segments: *const BpmSegment,
         len: usize,
@@ -579,6 +585,18 @@ pub fn bpm_median_centi(segments: &[BpmSegment]) -> i64 {
 #[must_use]
 pub fn bpm_at_beat_milli(segments: &[BpmSegment], beat_milli: i64) -> i64 {
     unsafe { assp_bpm_at_beat_milli(segments.as_ptr(), segments.len(), beat_milli) }
+}
+
+#[must_use]
+pub fn tier_bpm_centi(densities: &[u32], bpms: &[BpmSegment]) -> i64 {
+    unsafe {
+        assp_tier_bpm_centi(
+            densities.as_ptr(),
+            densities.len(),
+            bpms.as_ptr(),
+            bpms.len(),
+        )
+    }
 }
 
 #[must_use]

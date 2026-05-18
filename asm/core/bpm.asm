@@ -8,6 +8,7 @@ global assp_bpm_display_range
 global assp_bpm_average_centi
 global assp_bpm_median_centi
 global assp_bpm_at_beat_milli
+global assp_tier_bpm_centi
 global assp_elapsed_ms_bpm_only
 global assp_elapsed_ms_with_events
 global assp_measure_nps_milli_from_bpms
@@ -34,6 +35,15 @@ section .text
 %define NPS_DENSITY_LEN -16
 %define NPS_BPMS -24
 %define NPS_BPM_LEN -32
+
+%define TIER_MAX_BPM 0
+%define TIER_MAX_E 8
+%define TIER_RUN_E 16
+%define TIER_CAT 24
+%define TIER_LEN 32
+%define TIER_BPM_IDX 40
+%define TIER_CUR_BPM 48
+%define TIER_NEXT_BEAT 56
 %define NPS_STOPS -40
 %define NPS_STOP_LEN -48
 %define NPS_DELAYS -56
@@ -564,6 +574,211 @@ kth_bpm_segment_value:
     pop r13
     pop r12
     pop rbx
+    ret
+
+; rcx = u32 measure densities, rdx = density count,
+; r8 = BPM segments, r9 = BPM count. rax = RSSP tier BPM * 100.
+assp_tier_bpm_centi:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 64
+
+    test rdx, rdx
+    jz .zero
+    test rcx, rcx
+    jz .zero
+    test r9, r9
+    jz .zero
+    test r8, r8
+    jz .zero
+
+    mov rsi, rcx
+    mov rdi, rdx
+    mov rbx, r8
+    mov r12, r9
+
+    xor r10d, r10d
+    xor r11d, r11d
+.max_display_loop:
+    cmp r10, r12
+    jae .max_display_done
+    mov r13, r10
+    shl r13, 4
+    mov rax, [rbx + r13 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    cmp rax, 0
+    jle .max_display_next
+    cmp rax, 10000000
+    jge .max_display_next
+    test r11, r11
+    jz .first_display_max
+    cmp rax, [rsp + TIER_MAX_BPM]
+    jle .max_display_next
+.first_display_max:
+    mov [rsp + TIER_MAX_BPM], rax
+    mov r11d, 1
+.max_display_next:
+    inc r10
+    jmp .max_display_loop
+
+.max_display_done:
+    test r11, r11
+    jnz .init_run_scan
+
+    mov rax, [rbx + ASSP_BPM_SEGMENT_BPM_MILLI]
+    mov [rsp + TIER_MAX_BPM], rax
+    mov r10d, 1
+.max_fallback_loop:
+    cmp r10, r12
+    jae .init_run_scan
+    mov r13, r10
+    shl r13, 4
+    mov rax, [rbx + r13 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    cmp rax, [rsp + TIER_MAX_BPM]
+    jle .max_fallback_next
+    mov [rsp + TIER_MAX_BPM], rax
+.max_fallback_next:
+    inc r10
+    jmp .max_fallback_loop
+
+.init_run_scan:
+    mov rax, [rbx + ASSP_BPM_SEGMENT_BPM_MILLI]
+    mov [rsp + TIER_CUR_BPM], rax
+    mov qword [rsp + TIER_BPM_IDX], 0
+    cmp r12, 1
+    ja .has_next_bpm
+    mov rax, 0x7fffffffffffffff
+    jmp .store_next_bpm
+.has_next_bpm:
+    mov rax, [rbx + ASSP_BPM_SEGMENT_SIZE + ASSP_BPM_SEGMENT_BEAT_MILLI]
+.store_next_bpm:
+    mov [rsp + TIER_NEXT_BEAT], rax
+    mov qword [rsp + TIER_MAX_E], 0
+    mov qword [rsp + TIER_RUN_E], 0
+    mov qword [rsp + TIER_CAT], 0
+    mov qword [rsp + TIER_LEN], 0
+
+    xor r10d, r10d
+.measure_loop:
+    cmp r10, rdi
+    jae .finish_scan
+
+    mov rax, r10
+    imul rax, rax, 4000
+.bpm_advance_loop:
+    cmp rax, [rsp + TIER_NEXT_BEAT]
+    jl .bpm_ready
+    mov r11, [rsp + TIER_BPM_IDX]
+    inc r11
+    mov [rsp + TIER_BPM_IDX], r11
+    mov r13, r11
+    shl r13, 4
+    mov r14, [rbx + r13 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    mov [rsp + TIER_CUR_BPM], r14
+    lea r14, [r11 + 1]
+    cmp r14, r12
+    jae .next_bpm_inf
+    mov r13, r14
+    shl r13, 4
+    mov r14, [rbx + r13 + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    mov [rsp + TIER_NEXT_BEAT], r14
+    jmp .bpm_advance_loop
+.next_bpm_inf:
+    mov r14, 0x7fffffffffffffff
+    mov [rsp + TIER_NEXT_BEAT], r14
+    jmp .bpm_advance_loop
+
+.bpm_ready:
+    mov eax, [rsi + r10 * 4]
+    cmp eax, 16
+    jb .break_measure
+    mov r11d, 1
+    cmp eax, 20
+    jb .have_category
+    mov r11d, 2
+    cmp eax, 24
+    jb .have_category
+    mov r11d, 3
+    cmp eax, 32
+    jb .have_category
+    mov r11d, 4
+.have_category:
+    cmp qword [rsp + TIER_LEN], 0
+    je .start_run_measure
+    cmp r11, [rsp + TIER_CAT]
+    je .continue_run_measure
+    call tier_commit_run
+    mov qword [rsp + TIER_LEN], 0
+    mov qword [rsp + TIER_RUN_E], 0
+
+.start_run_measure:
+    mov [rsp + TIER_CAT], r11
+.continue_run_measure:
+    inc qword [rsp + TIER_LEN]
+
+    mov r14, [rsp + TIER_CUR_BPM]
+    cmp r14, 0
+    jle .measure_next
+    cmp r14, 10000000
+    jge .measure_next
+    mov eax, [rsi + r10 * 4]
+    imul rax, r14
+    cmp rax, [rsp + TIER_RUN_E]
+    jle .measure_next
+    mov [rsp + TIER_RUN_E], rax
+    jmp .measure_next
+
+.break_measure:
+    call tier_commit_run
+    mov qword [rsp + TIER_CAT], 0
+    mov qword [rsp + TIER_LEN], 0
+    mov qword [rsp + TIER_RUN_E], 0
+
+.measure_next:
+    inc r10
+    jmp .measure_loop
+
+.finish_scan:
+    call tier_commit_run
+    mov rax, [rsp + TIER_MAX_E]
+    test rax, rax
+    jg .round_effective
+    mov rax, [rsp + TIER_MAX_BPM]
+    mov rbx, 10
+    call round_signed_div_ties_even
+    jmp .done
+
+.round_effective:
+    mov rbx, 160
+    call round_signed_div_ties_even
+    jmp .done
+
+.zero:
+    xor eax, eax
+
+.done:
+    add rsp, 64
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
+tier_commit_run:
+    cmp qword [rsp + 8 + TIER_LEN], 4
+    jb .done
+    mov rax, [rsp + 8 + TIER_RUN_E]
+    cmp rax, [rsp + 8 + TIER_MAX_E]
+    jle .done
+    mov [rsp + 8 + TIER_MAX_E], rax
+.done:
     ret
 
 ; rax = signed numerator, rbx = positive denominator. rax = rounded quotient.
