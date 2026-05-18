@@ -1373,6 +1373,10 @@ prepare_global_metadata:
     mov qword [sample_start_slice + ASSP_BYTE_SLICE_LEN], 0
     mov qword [sample_length_slice + ASSP_BYTE_SLICE_PTR], 0
     mov qword [sample_length_slice + ASSP_BYTE_SLICE_LEN], 0
+    mov qword [global_attacks_slice + ASSP_BYTE_SLICE_PTR], 0
+    mov qword [global_attacks_slice + ASSP_BYTE_SLICE_LEN], 0
+    mov qword [global_display_bpm_slice + ASSP_BYTE_SLICE_PTR], 0
+    mov qword [global_display_bpm_slice + ASSP_BYTE_SLICE_LEN], 0
     mov qword [global_time_signatures_slice + ASSP_BYTE_SLICE_PTR], 0
     mov qword [global_time_signatures_slice + ASSP_BYTE_SLICE_LEN], 0
     mov qword [global_labels_slice + ASSP_BYTE_SLICE_PTR], 0
@@ -1491,6 +1495,22 @@ prepare_global_metadata:
     lea r8, [tag_sample_length]
     mov r9d, tag_sample_length_end - tag_sample_length
     lea rax, [sample_length_slice]
+    mov [rsp + 32], rax
+    call assp_find_global_tag
+
+    lea rcx, [file_buffer]
+    mov rdx, [file_len]
+    lea r8, [tag_attacks]
+    mov r9d, tag_attacks_end - tag_attacks
+    lea rax, [global_attacks_slice]
+    mov [rsp + 32], rax
+    call assp_find_global_tag
+
+    lea rcx, [file_buffer]
+    mov rdx, [file_len]
+    lea r8, [tag_display_bpm]
+    mov r9d, tag_display_bpm_end - tag_display_bpm
+    lea rax, [global_display_bpm_slice]
     mov [rsp + 32], rax
     call assp_find_global_tag
 
@@ -2029,6 +2049,14 @@ print_report:
     mov rdx, [chart_attacks_slice + ASSP_BYTE_SLICE_PTR]
     mov r8, [chart_attacks_slice + ASSP_BYTE_SLICE_LEN]
     call print_slice_field
+    lea rcx, [label_global_attacks]
+    mov rdx, [global_attacks_slice + ASSP_BYTE_SLICE_PTR]
+    mov r8, [global_attacks_slice + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+    lea rcx, [label_selected_attacks]
+    lea rdx, [chart_attacks_slice]
+    lea r8, [global_attacks_slice]
+    call print_chart_or_global_tag_by_ptr
     lea rcx, [label_chart_time_signatures]
     mov rdx, [chart_time_signatures_slice + ASSP_BYTE_SLICE_PTR]
     mov r8, [chart_time_signatures_slice + ASSP_BYTE_SLICE_LEN]
@@ -2169,6 +2197,14 @@ print_report:
     mov rdx, [display_bpm_slice + ASSP_BYTE_SLICE_PTR]
     mov r8, [display_bpm_slice + ASSP_BYTE_SLICE_LEN]
     call print_slice_field
+    lea rcx, [label_global_display_bpm]
+    mov rdx, [global_display_bpm_slice + ASSP_BYTE_SLICE_PTR]
+    mov r8, [global_display_bpm_slice + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+    lea rcx, [label_selected_display_bpm]
+    lea rdx, [display_bpm_slice]
+    lea r8, [global_display_bpm_slice]
+    call print_chart_or_global_tag_by_len
     lea rcx, [label_hash]
     lea rdx, [hash_pair]
     mov r8d, 16
@@ -2286,9 +2322,9 @@ print_report:
     mov rdx, [chart_has_own_timing]
     call print_field
     lea rcx, [label_display_bpm]
-    mov rdx, [display_bpm_slice + ASSP_BYTE_SLICE_PTR]
-    mov r8, [display_bpm_slice + ASSP_BYTE_SLICE_LEN]
-    call print_slice_field
+    lea rdx, [display_bpm_slice]
+    lea r8, [global_display_bpm_slice]
+    call print_chart_or_global_tag_by_len
     lea rcx, [label_bpm]
     mov rdx, [min_bpm]
     mov r8, [max_bpm]
@@ -2740,6 +2776,44 @@ print_selected_metadata_tag:
     add rsp, 72
     ret
 
+print_chart_or_global_tag_by_ptr:
+    sub rsp, 72
+    mov [rsp + 32], rcx
+    mov [rsp + 40], rdx
+    mov [rsp + 48], r8
+
+    mov r10, [rsp + 40]
+    cmp qword [r10 + ASSP_BYTE_SLICE_PTR], 0
+    jne .selected
+    mov r10, [rsp + 48]
+
+.selected:
+    mov rcx, [rsp + 32]
+    mov rdx, [r10 + ASSP_BYTE_SLICE_PTR]
+    mov r8, [r10 + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+    add rsp, 72
+    ret
+
+print_chart_or_global_tag_by_len:
+    sub rsp, 72
+    mov [rsp + 32], rcx
+    mov [rsp + 40], rdx
+    mov [rsp + 48], r8
+
+    mov r10, [rsp + 40]
+    cmp qword [r10 + ASSP_BYTE_SLICE_LEN], 0
+    jne .selected
+    mov r10, [rsp + 48]
+
+.selected:
+    mov rcx, [rsp + 32]
+    mov rdx, [r10 + ASSP_BYTE_SLICE_PTR]
+    mov r8, [r10 + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+    add rsp, 72
+    ret
+
 print_bpm_segments_field:
     sub rsp, 88
     mov [rsp + 32], rdx
@@ -3051,6 +3125,8 @@ label_step_artists db "step_artists: ", 0
 label_tech_notation db "tech_notation: ", 0
 label_chart_music db "chart_music: ", 0
 label_chart_attacks db "chart_attacks: ", 0
+label_global_attacks db "global_attacks: ", 0
+label_selected_attacks db "selected_attacks: ", 0
 label_chart_time_signatures db "chart_time_signatures: ", 0
 label_chart_labels db "chart_labels: ", 0
 label_chart_tickcounts db "chart_tickcounts: ", 0
@@ -3113,6 +3189,8 @@ label_selected_warps db "selected_warps: ", 0
 label_selected_fakes db "selected_fakes: ", 0
 label_selected_speeds db "selected_speeds: ", 0
 label_selected_scrolls db "selected_scrolls: ", 0
+label_global_display_bpm db "global_display_bpm: ", 0
+label_selected_display_bpm db "selected_display_bpm: ", 0
 label_offset db "offset: ", 0
 label_chart_offset_seconds db "chart_offset_seconds: ", 0
 label_beat0_offset_seconds db "beat0_offset_seconds: ", 0
@@ -3236,6 +3314,8 @@ cdtitle_slice resb ASSP_BYTE_SLICE_SIZE
 jacket_slice resb ASSP_BYTE_SLICE_SIZE
 sample_start_slice resb ASSP_BYTE_SLICE_SIZE
 sample_length_slice resb ASSP_BYTE_SLICE_SIZE
+global_attacks_slice resb ASSP_BYTE_SLICE_SIZE
+global_display_bpm_slice resb ASSP_BYTE_SLICE_SIZE
 global_time_signatures_slice resb ASSP_BYTE_SLICE_SIZE
 global_labels_slice resb ASSP_BYTE_SLICE_SIZE
 global_tickcounts_slice resb ASSP_BYTE_SLICE_SIZE
