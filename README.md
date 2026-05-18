@@ -337,6 +337,7 @@ min/max/average/median display BPMs, tier BPM, max/peak/median NPS,
 per-measure note/NPS vectors, per-measure equally-spaced flags,
 equally-spaced measure counts, formatted length,
 density-derived stream counts, total stream counts, stream percentages,
+stream sequence start/end/break details,
 RSSP default pattern aggregates including candle/box/tower/triangle,
 staircases, sweeps, copters, spirals, turbo candles, hip breakers, doritos, and
 luchis, candle/mono percentages, RSSP-compatible default-pattern aliases,

@@ -3570,6 +3570,10 @@ print_report:
     lea rcx, [label_stream_segments]
     mov rdx, [stream_segment_count]
     call print_field
+    lea rcx, [label_stream_sequences]
+    lea rdx, [stream_segment_buffer]
+    mov r8, [stream_segment_count]
+    call print_stream_sequences_field
     lea rcx, [label_stream_tokens]
     mov rdx, [stream_token_count]
     call print_field
@@ -4099,6 +4103,54 @@ print_bool_array_field:
 .false:
     lea rcx, [false_text]
 .print:
+    call print_z
+    inc qword [rsp + 48]
+    jmp .loop
+
+.newline:
+    lea rcx, [newline]
+    call print_z
+    add rsp, 88
+    ret
+
+print_stream_sequences_field:
+    sub rsp, 88
+    mov [rsp + 32], rdx
+    mov [rsp + 40], r8
+    mov qword [rsp + 48], 0
+    call print_z
+
+.loop:
+    mov rax, [rsp + 48]
+    cmp rax, [rsp + 40]
+    jae .newline
+    test rax, rax
+    jz .sequence
+    lea rcx, [comma]
+    call print_z
+
+.sequence:
+    mov r10, [rsp + 48]
+    imul r10, ASSP_STREAM_SEGMENT_SIZE
+    add r10, [rsp + 32]
+    mov [rsp + 56], r10
+    mov rcx, [r10 + ASSP_STREAM_SEGMENT_START]
+    call print_u64
+    lea rcx, [minus]
+    call print_z
+    mov r10, [rsp + 56]
+    mov rcx, [r10 + ASSP_STREAM_SEGMENT_END]
+    call print_u64
+    lea rcx, [colon]
+    call print_z
+    mov r10, [rsp + 56]
+    cmp qword [r10 + ASSP_STREAM_SEGMENT_IS_BREAK], 0
+    je .stream
+    lea rcx, [break_text]
+    jmp .print_kind
+.stream:
+    lea rcx, [stream_text]
+.print_kind:
     call print_z
     inc qword [rsp + 48]
     jmp .loop
@@ -4724,6 +4776,7 @@ label_stream_percent db "stream_percent: ", 0
 label_adjusted_stream_percent db "adj_stream_percent: ", 0
 label_break_percent db "break_percent: ", 0
 label_stream_segments db "stream_segments: ", 0
+label_stream_sequences db "stream_sequences: ", 0
 label_stream_tokens db "stream_tokens: ", 0
 label_breakdown_detailed db "breakdown_detailed: ", 0
 label_sn_detailed_breakdown db "sn_detailed_breakdown: ", 0
@@ -4765,6 +4818,7 @@ space db " ", 0
 comma db ",", 0
 equals db "=", 0
 minus db "-", 0
+colon db ":", 0
 dot db ".", 0
 zero_digit db "0", 0
 milli_to_six_tail db "000", 0
@@ -4772,6 +4826,8 @@ minute_suffix db "m ", 0
 second_suffix db "s", 0
 true_text db "true", 0
 false_text db "false", 0
+stream_text db "stream", 0
+break_text db "break", 0
 newline db 13, 10, 0
 
 section .bss
