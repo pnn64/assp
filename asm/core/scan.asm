@@ -3,6 +3,8 @@ default rel
 
 global assp_find_byte
 global assp_count_timing_segments
+global assp_count_gimmick_speed_segments
+global assp_count_gimmick_scroll_segments
 
 section .text
 
@@ -27,6 +29,275 @@ assp_find_byte:
     mov rax, ASSP_NOT_FOUND
 
 .done:
+    ret
+
+; rcx = comma-separated #SPEEDS bytes, rdx = len.
+; rax = count of non-default speed-factor segments, or ASSP_NOT_FOUND.
+assp_count_gimmick_speed_segments:
+; rcx = comma-separated #SCROLLS bytes, rdx = len.
+; rax = count of non-default scroll-value segments, or ASSP_NOT_FOUND.
+assp_count_gimmick_scroll_segments:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+
+    test rdx, rdx
+    jz .zero
+    test rcx, rcx
+    jz .not_found
+
+    mov rsi, rcx
+    lea rdi, [rcx + rdx]
+    xor r12d, r12d
+
+.segment_loop:
+    cmp rsi, rdi
+    jae .done_count
+
+    mov r13, rsi
+.find_comma:
+    cmp r13, rdi
+    jae .segment_bounds
+    cmp byte [r13], ','
+    je .segment_bounds
+    inc r13
+    jmp .find_comma
+
+.segment_bounds:
+    mov r14, rsi
+    mov r15, r13
+
+.trim_left:
+    cmp r14, r15
+    jae .next_segment
+    cmp byte [r14], ' '
+    ja .trim_right
+    inc r14
+    jmp .trim_left
+
+.trim_right:
+    cmp r15, r14
+    jbe .next_segment
+    cmp byte [r15 - 1], ' '
+    ja .find_equal
+    dec r15
+    jmp .trim_right
+
+.find_equal:
+    mov rbx, r14
+.equal_loop:
+    cmp rbx, r15
+    jae .next_segment
+    cmp byte [rbx], '='
+    je .value_bounds
+    inc rbx
+    jmp .equal_loop
+
+.value_bounds:
+    inc rbx
+    mov rcx, rbx
+.find_value_end:
+    cmp rcx, r15
+    jae .parse_value
+    cmp byte [rcx], '='
+    je .parse_value
+    inc rcx
+    jmp .find_value_end
+
+.parse_value:
+    mov rdx, rcx
+    mov rcx, rbx
+    call parse_dec6_signed
+    jc .next_segment
+
+    cmp rax, 999999
+    jl .count_segment
+    cmp rax, 1000001
+    jg .count_segment
+    cmp rax, 1000001
+    jne .next_segment
+    test edx, edx
+    jz .next_segment
+
+.count_segment:
+    inc r12
+
+.next_segment:
+    cmp r13, rdi
+    jae .done_count
+    lea rsi, [r13 + 1]
+    jmp .segment_loop
+
+.done_count:
+    mov rax, r12
+    jmp .pop_done
+
+.zero:
+    xor eax, eax
+    jmp .pop_done
+
+.not_found:
+    mov rax, ASSP_NOT_FOUND
+
+.pop_done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
+; rcx = number start, rdx = number end.
+; rax = signed millionths, edx = has nonzero digits past 6 decimals.
+; CF = parse failure.
+parse_dec6_signed:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+
+    mov rsi, rcx
+    mov rdi, rdx
+
+.trim_left:
+    cmp rsi, rdi
+    jae .fail
+    cmp byte [rsi], ' '
+    ja .trim_right
+    inc rsi
+    jmp .trim_left
+
+.trim_right:
+    cmp rdi, rsi
+    jbe .fail
+    cmp byte [rdi - 1], ' '
+    ja .sign
+    dec rdi
+    jmp .trim_right
+
+.sign:
+    xor ebx, ebx
+    cmp byte [rsi], '+'
+    je .plus
+    cmp byte [rsi], '-'
+    jne .int_init
+    mov ebx, 1
+.plus:
+    inc rsi
+    cmp rsi, rdi
+    jae .fail
+
+.int_init:
+    xor r8d, r8d
+    xor r9d, r9d
+
+.int_loop:
+    cmp rsi, rdi
+    jae .finish_number
+    movzx eax, byte [rsi]
+    cmp al, '0'
+    jb .check_dot
+    cmp al, '9'
+    ja .finish_number
+    sub eax, '0'
+    imul r8, r8, 10
+    add r8, rax
+    inc r9
+    inc rsi
+    jmp .int_loop
+
+.check_dot:
+    cmp al, '.'
+    jne .finish_number
+    inc rsi
+    xor r10d, r10d
+    xor r11d, r11d
+    xor r13d, r13d
+    xor r14d, r14d
+    mov r12d, 100000
+    jmp .frac_loop
+
+.frac_loop:
+    cmp rsi, rdi
+    jae .finish_frac
+    movzx eax, byte [rsi]
+    cmp al, '0'
+    jb .finish_frac
+    cmp al, '9'
+    ja .finish_frac
+    sub eax, '0'
+    inc r9
+    cmp r10d, 6
+    jae .extra_digit
+    imul eax, r12d
+    add r11, rax
+    mov eax, r12d
+    xor edx, edx
+    mov ecx, 10
+    div ecx
+    mov r12d, eax
+    inc r10d
+    inc rsi
+    jmp .frac_loop
+
+.extra_digit:
+    test eax, eax
+    jz .extra_next
+    mov r14d, 1
+.extra_next:
+    inc r10d
+    inc rsi
+    jmp .frac_loop
+
+.finish_frac:
+    jmp .trailing
+
+.finish_number:
+    xor r11d, r11d
+    xor r14d, r14d
+
+.trailing:
+    cmp rsi, rdi
+    jae .finish_scaled
+    cmp byte [rsi], ' '
+    ja .fail
+    inc rsi
+    jmp .trailing
+
+.finish_scaled:
+    test r9, r9
+    jz .fail
+
+    imul r8, r8, 1000000
+    add r8, r11
+    mov rax, r8
+    test ebx, ebx
+    jz .success
+    neg rax
+
+.success:
+    mov edx, r14d
+    clc
+    jmp .done
+
+.fail:
+    stc
+
+.done:
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
     ret
 
 ; rcx = comma-separated timing map bytes, rdx = len.

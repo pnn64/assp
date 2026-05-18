@@ -115,6 +115,8 @@ unsafe extern "C" {
     fn assp_version() -> u32;
     fn assp_find_byte(data: *const u8, len: usize, byte: u32) -> usize;
     fn assp_count_timing_segments(data: *const u8, len: usize) -> usize;
+    fn assp_count_gimmick_speed_segments(data: *const u8, len: usize) -> usize;
+    fn assp_count_gimmick_scroll_segments(data: *const u8, len: usize) -> usize;
     fn assp_count_note_charts(data: *const u8, len: usize) -> usize;
     fn assp_supported_step_type_lanes(data: *const u8, len: usize) -> usize;
     fn assp_find_notes_by_index(
@@ -434,6 +436,18 @@ pub fn find_byte(data: &[u8], byte: u8) -> Option<usize> {
 #[must_use]
 pub fn count_timing_segments(data: &[u8]) -> Option<usize> {
     let count = unsafe { assp_count_timing_segments(data.as_ptr(), data.len()) };
+    (count != NOT_FOUND).then_some(count)
+}
+
+#[must_use]
+pub fn count_gimmick_speed_segments(data: &[u8]) -> Option<usize> {
+    let count = unsafe { assp_count_gimmick_speed_segments(data.as_ptr(), data.len()) };
+    (count != NOT_FOUND).then_some(count)
+}
+
+#[must_use]
+pub fn count_gimmick_scroll_segments(data: &[u8]) -> Option<usize> {
+    let count = unsafe { assp_count_gimmick_scroll_segments(data.as_ptr(), data.len()) };
     (count != NOT_FOUND).then_some(count)
 }
 

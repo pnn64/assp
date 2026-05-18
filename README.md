@@ -21,6 +21,8 @@ The first implemented pieces are:
 - `assp_version`
 - `assp_find_byte`
 - `assp_count_timing_segments`
+- `assp_count_gimmick_speed_segments`
+- `assp_count_gimmick_scroll_segments`
 - `assp_count_note_charts`
 - `assp_supported_step_type_lanes`
 - `assp_find_chart_by_index`
@@ -83,6 +85,9 @@ matching-end rule.
 phantom hold correction for 8-panel chart data.
 `assp_count_timing_segments` counts non-empty comma-separated timing-map
 segments, matching RSSP's stop/delay/warp-style report counters.
+`assp_count_gimmick_speed_segments` and
+`assp_count_gimmick_scroll_segments` count non-default `#SPEEDS` and
+`#SCROLLS` segments, matching RSSP's report-side gimmick filtering.
 `assp_supported_step_type_lanes` resolves RSSP-supported StepMania step types:
 `dance-single` / `dance_single` to 4 lanes, and `dance-double` /
 `dance_double` to 8 lanes.
@@ -261,8 +266,9 @@ reports include RSSP-style chart hashes,
 normalized hash BPMs, min/max/average/median display BPMs, tier BPM, peak and
 median NPS, equally-spaced measure counts, density-derived stream counts,
 stream percentages, fixed-point duration metrics with stops/delays/warps, token
-breakdowns, segment breakdowns, stop/delay/warp timing segment counts, offset
-adjustment, and note stats with nonfake mine and timing-fake counts.
+breakdowns, segment breakdowns, stop/delay/warp/speed/scroll timing segment
+counts, offset adjustment, and note stats with nonfake mine and timing-fake
+counts.
 
 Run the optional Rust parity tests:
 

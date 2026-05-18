@@ -14,6 +14,8 @@ extern WriteFile
 extern assp_chart_hash_pair
 extern assp_count_mines_nonfake_4
 extern assp_count_mines_nonfake_8
+extern assp_count_gimmick_scroll_segments
+extern assp_count_gimmick_speed_segments
 extern assp_count_note_stats_4
 extern assp_count_note_stats_8
 extern assp_count_timing_fakes_4
@@ -805,6 +807,8 @@ prepare_timing_events:
     mov qword [stop_report_count], 0
     mov qword [delay_report_count], 0
     mov qword [warp_report_count], 0
+    mov qword [speed_report_count], 0
+    mov qword [scroll_report_count], 0
 
     lea rcx, [file_buffer]
     mov rdx, [file_len]
@@ -928,6 +932,34 @@ prepare_timing_events:
     cmp rax, BPM_SEGMENT_CAP
     ja .fail
     mov [warp_segment_count], rax
+
+    cmp qword [chart_has_own_timing], 0
+    je .global_speeds
+    mov rcx, [chart_timing_tags + ASSP_TIMING_TAGS_SPEEDS + ASSP_BYTE_SLICE_PTR]
+    mov rdx, [chart_timing_tags + ASSP_TIMING_TAGS_SPEEDS + ASSP_BYTE_SLICE_LEN]
+    jmp .count_speeds
+.global_speeds:
+    mov rcx, [global_timing_tags + ASSP_TIMING_TAGS_SPEEDS + ASSP_BYTE_SLICE_PTR]
+    mov rdx, [global_timing_tags + ASSP_TIMING_TAGS_SPEEDS + ASSP_BYTE_SLICE_LEN]
+.count_speeds:
+    call assp_count_gimmick_speed_segments
+    cmp rax, ASSP_NOT_FOUND
+    je .fail
+    mov [speed_report_count], rax
+
+    cmp qword [chart_has_own_timing], 0
+    je .global_scrolls
+    mov rcx, [chart_timing_tags + ASSP_TIMING_TAGS_SCROLLS + ASSP_BYTE_SLICE_PTR]
+    mov rdx, [chart_timing_tags + ASSP_TIMING_TAGS_SCROLLS + ASSP_BYTE_SLICE_LEN]
+    jmp .count_scrolls
+.global_scrolls:
+    mov rcx, [global_timing_tags + ASSP_TIMING_TAGS_SCROLLS + ASSP_BYTE_SLICE_PTR]
+    mov rdx, [global_timing_tags + ASSP_TIMING_TAGS_SCROLLS + ASSP_BYTE_SLICE_LEN]
+.count_scrolls:
+    call assp_count_gimmick_scroll_segments
+    cmp rax, ASSP_NOT_FOUND
+    je .fail
+    mov [scroll_report_count], rax
 
     cmp qword [chart_has_own_timing], 0
     je .global_fakes
@@ -1341,6 +1373,12 @@ print_report:
     lea rcx, [label_warps]
     mov rdx, [warp_report_count]
     call print_field
+    lea rcx, [label_speeds]
+    mov rdx, [speed_report_count]
+    call print_field
+    lea rcx, [label_scrolls]
+    mov rdx, [scroll_report_count]
+    call print_field
     lea rcx, [label_stream16]
     mov rdx, [stream_counts + ASSP_STREAM_COUNTS_RUN16]
     call print_field
@@ -1701,6 +1739,8 @@ label_duration_ms db "duration_ms: ", 0
 label_stops db "stops: ", 0
 label_delays db "delays: ", 0
 label_warps db "warps: ", 0
+label_speeds db "speeds: ", 0
+label_scrolls db "scrolls: ", 0
 label_stream16 db "16th_streams: ", 0
 label_stream20 db "20th_streams: ", 0
 label_stream24 db "24th_streams: ", 0
@@ -1776,6 +1816,8 @@ fake_segment_count resq 1
 stop_report_count resq 1
 delay_report_count resq 1
 warp_report_count resq 1
+speed_report_count resq 1
+scroll_report_count resq 1
 minimized_chart_len resq 1
 nps_count resq 1
 peak_nps_milli resq 1

@@ -1,4 +1,7 @@
-use assp::{count_timing_segments, find_byte, version};
+use assp::{
+    count_gimmick_scroll_segments, count_gimmick_speed_segments, count_timing_segments, find_byte,
+    version,
+};
 
 #[test]
 fn version_is_initial_project_version() {
@@ -20,4 +23,27 @@ fn counts_nonempty_timing_segments() {
     assert_eq!(count_timing_segments(b"0=120,4=150,8=90"), Some(3));
     assert_eq!(count_timing_segments(b" , 0=120 , , 4=150 "), Some(2));
     assert_eq!(count_timing_segments(b"\r\n,\t,  "), Some(0));
+}
+
+#[test]
+fn counts_nondefault_speed_segments() {
+    assert_eq!(count_gimmick_speed_segments(b""), Some(0));
+    assert_eq!(count_gimmick_speed_segments(b"0=1.000"), Some(0));
+    assert_eq!(
+        count_gimmick_speed_segments(b"0=1.000,4=2.000,8=1.000=4=0,12=0.250=0=0,16=bad"),
+        Some(2)
+    );
+}
+
+#[test]
+fn counts_nondefault_scroll_segments() {
+    assert_eq!(count_gimmick_scroll_segments(b""), Some(0));
+    assert_eq!(
+        count_gimmick_scroll_segments(b"0=1,4=0.5,8=1.25,12=-1,16=bad"),
+        Some(3)
+    );
+    assert_eq!(
+        count_gimmick_scroll_segments(b"0=1.0000009,1=1.000002,2=0.999998"),
+        Some(2)
+    );
 }
