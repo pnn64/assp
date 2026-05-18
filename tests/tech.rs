@@ -7,7 +7,8 @@ use assp::{
     step_parity_action_flags_4, step_parity_basic_action_costs_4,
     step_parity_bracket_tap_action_costs_4, step_parity_count_prepared_rows_4,
     step_parity_distance_action_costs_4, step_parity_elapsed_action_costs_4,
-    step_parity_orientation_action_costs_4, step_parity_permutations_4, step_parity_place_rows_4,
+    step_parity_hold_head_ends_4, step_parity_orientation_action_costs_4,
+    step_parity_permutations_4, step_parity_place_rows_4, step_parity_prepare_hold_rows_4,
     step_parity_prepare_tap_rows_4, step_parity_result_state_holds_4,
     step_parity_result_state_no_holds_4, step_parity_row_best_candidates_4,
     step_parity_row_key_candidates_4, step_parity_row_transitions_4,
@@ -1113,6 +1114,71 @@ fn carries_mine_only_rows_to_next_tap_row() {
     assert_eq!(rows.prev_row_live_holds, [0]);
     assert_eq!(rows.row_seconds, [0.25]);
     assert_eq!(rows.row_ms, [250]);
+}
+
+#[test]
+fn computes_hold_head_end_beats_for_step_parity_rows() {
+    let hold_ends =
+        step_parity_hold_head_ends_4(b"2000\n0000\n0100\n3000\n;\n", &[0.0, 0.5, 1.0]).unwrap();
+
+    assert_eq!(
+        hold_ends,
+        [
+            [1.0, -1.0, -1.0, -1.0],
+            [-1.0, -1.0, -1.0, -1.0],
+            [-1.0, -1.0, -1.0, -1.0],
+        ]
+    );
+}
+
+#[test]
+fn cancels_pending_hold_heads_like_rssp_prepass() {
+    let hold_ends =
+        step_parity_hold_head_ends_4(b"2400\nM000\n0300\n;\n", &[0.0, 0.5, 1.0]).unwrap();
+
+    assert_eq!(
+        hold_ends,
+        [
+            [-1.0, 1.0, -1.0, -1.0],
+            [-1.0, -1.0, -1.0, -1.0],
+            [-1.0, -1.0, -1.0, -1.0],
+        ]
+    );
+}
+
+#[test]
+fn prepares_hold_rows_with_live_hold_masks() {
+    let rows = step_parity_prepare_hold_rows_4(
+        b"2000\n0100\n3100\n1000\n;\n",
+        &[0.0, 0.5, 1.0, 1.5],
+        &[0, 500, 1000, 1500],
+        &[0.0, 0.5, 1.0, 1.5],
+    )
+    .unwrap();
+
+    assert_eq!(rows.note_counts, [1, 1, 1, 1]);
+    assert_eq!(rows.tech_masks, [0b0001, 0b0010, 0b0010, 0b0001]);
+    assert_eq!(rows.note_masks, [0b0001, 0b0010, 0b0010, 0b0001]);
+    assert_eq!(rows.hold_masks, [0, 0b0001, 0b0001, 0]);
+    assert_eq!(rows.mine_masks, [0, 0, 0, 0]);
+    assert_eq!(rows.prev_row_live_holds, [0, 1, 1, 0]);
+    assert_eq!(rows.row_seconds, [0.0, 0.5, 1.0, 1.5]);
+    assert_eq!(rows.row_ms, [0, 500, 1000, 1500]);
+}
+
+#[test]
+fn ignores_hold_heads_without_tails_in_hold_row_preparer() {
+    let rows =
+        step_parity_prepare_hold_rows_4(b"2000\n0100\n;\n", &[0.0, 0.5], &[0, 500], &[0.0, 0.5])
+            .unwrap();
+
+    assert_eq!(rows.note_counts, [1]);
+    assert_eq!(rows.tech_masks, [0b0010]);
+    assert_eq!(rows.note_masks, [0b0010]);
+    assert_eq!(rows.hold_masks, [0]);
+    assert_eq!(rows.prev_row_live_holds, [0]);
+    assert_eq!(rows.row_seconds, [0.5]);
+    assert_eq!(rows.row_ms, [500]);
 }
 
 #[test]

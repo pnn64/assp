@@ -52,6 +52,8 @@ The first implemented pieces are:
 - `assp_step_parity_row_best_candidates_4`
 - `assp_step_parity_place_rows_4`
 - `assp_step_parity_count_prepared_rows_4`
+- `assp_step_parity_hold_head_ends_4`
+- `assp_step_parity_prepare_hold_rows_4`
 - `assp_step_parity_prepare_tap_rows_4`
 - `assp_step_parity_action_flags_4`
 - `assp_step_parity_basic_action_costs_4`
@@ -233,10 +235,16 @@ row handling.
 placements into the post-parity 4-panel tech-count stage, so caller-prepared
 rows can now exercise the same DP-to-count path that chart row construction
 will use.
-`assp_step_parity_prepare_tap_rows_4` starts chart row construction for
-already-minimized 4-panel tap/lift/mine rows. It emits the prepared row masks,
-counts, mine masks, and caller-provided row times for the DP-to-count bridge,
-while rejecting hold and fake rows until those RSSP cases are ported.
+`assp_step_parity_hold_head_ends_4` ports RSSP's hold-head prepass for
+already-minimized 4-panel rows. It records each valid hold or roll head's end
+beat in caller-owned row-major storage and cancels pending heads on taps,
+lifts, mines, and fakes the same way RSSP's array path does.
+`assp_step_parity_prepare_hold_rows_4` builds prepared 4-panel parity rows from
+tap/lift/mine/hold row data plus the precomputed hold ends. It now emits live
+hold masks and previous-row-live-hold flags for the DP action cost path.
+`assp_step_parity_prepare_tap_rows_4` remains the smaller no-hold row builder
+for already-minimized 4-panel tap/lift/mine rows. It emits prepared row masks,
+counts, mine masks, and caller-provided row times for the DP-to-count bridge.
 `assp_step_parity_action_flags_4` ports the boolean prelude used by RSSP's
 `calc_action_cost`: moved-left/right, prior non-holding foot movement,
 did-jump, and left/right jack detection from resolved parity states and hit

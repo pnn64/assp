@@ -19,6 +19,8 @@ global assp_step_parity_action_cost_4
 global assp_step_parity_row_best_candidates_4
 global assp_step_parity_place_rows_4
 global assp_step_parity_count_prepared_rows_4
+global assp_step_parity_hold_head_ends_4
+global assp_step_parity_prepare_hold_rows_4
 global assp_step_parity_prepare_tap_rows_4
 
 section .text
@@ -2624,6 +2626,558 @@ assp_step_parity_count_prepared_rows_4:
 %%done:
 %endmacro
 
+%macro hold_head_end_col4 1
+    mov al, [rsi + %1]
+    cmp al, '0'
+    je %%done
+    cmp al, '1'
+    je %%invalidate
+    cmp al, '2'
+    je %%start
+    cmp al, '4'
+    je %%start
+    cmp al, '3'
+    je %%end_hold
+    cmp al, 'L'
+    je %%invalidate
+    cmp al, 'M'
+    je %%invalidate
+    cmp al, 'F'
+    je %%invalidate
+    jmp .fail
+%%start:
+    mov [rsp + (%1 * 8)], rbx
+    jmp %%done
+%%end_hold:
+    mov rax, [rsp + (%1 * 8)]
+    cmp rax, ASSP_NOT_FOUND
+    je %%done
+    mov ecx, [r13 + rbx * 4]
+    shl rax, 4
+    mov [rdi + rax + (%1 * 4)], ecx
+%%invalidate:
+    mov qword [rsp + (%1 * 8)], ASSP_NOT_FOUND
+%%done:
+%endmacro
+
+; rcx = minimized 4-panel note-data, rdx = byte length,
+; r8 = row beats for each non-empty source row,
+; r9 = source row beat count,
+; stack arg 5 = out hold end beats as row-major f32[rows][4],
+; stack arg 6 = output source row capacity.
+; rax = consumed non-empty source row count, or ASSP_NOT_FOUND.
+assp_step_parity_hold_head_ends_4:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+    push rbp
+    sub rsp, 32
+
+    mov rsi, rcx
+    mov r12, rdx
+    mov r13, r8
+    mov r14, r9
+    mov rdi, [rsp + 136]
+    mov r15, [rsp + 144]
+
+    test r12, r12
+    jz .empty
+    test rsi, rsi
+    jz .fail
+
+    mov qword [rsp], ASSP_NOT_FOUND
+    mov qword [rsp + 8], ASSP_NOT_FOUND
+    mov qword [rsp + 16], ASSP_NOT_FOUND
+    mov qword [rsp + 24], ASSP_NOT_FOUND
+    lea r12, [rsi + r12]
+    xor ebx, ebx
+
+.line_loop:
+    cmp rsi, r12
+    jae .success
+
+.trim_left:
+    cmp rsi, r12
+    jae .success
+    mov al, [rsi]
+    cmp al, ' '
+    je .trim_advance
+    cmp al, 9
+    jb .line_start
+    cmp al, 13
+    jbe .trim_advance
+    jmp .line_start
+
+.trim_advance:
+    inc rsi
+    jmp .trim_left
+
+.line_start:
+    mov al, [rsi]
+    cmp al, '/'
+    je .skip_to_next_line
+    cmp al, ','
+    je .measure_done
+    cmp al, ';'
+    je .success
+
+    lea rax, [rsi + 4]
+    cmp rax, r12
+    ja .success
+
+    cmp dword [rsi], 30303030h
+    je .row_done
+
+    cmp rbx, r14
+    jae .fail
+    cmp rbx, r15
+    jae .fail
+    test r13, r13
+    jz .fail
+    test rdi, rdi
+    jz .fail
+
+    mov rax, rbx
+    shl rax, 4
+    mov ecx, [rel hold_end_none]
+    mov [rdi + rax], ecx
+    mov [rdi + rax + 4], ecx
+    mov [rdi + rax + 8], ecx
+    mov [rdi + rax + 12], ecx
+
+    hold_head_end_col4 0
+    hold_head_end_col4 1
+    hold_head_end_col4 2
+    hold_head_end_col4 3
+    inc rbx
+
+.row_done:
+    add rsi, 4
+    jmp .skip_to_next_line
+
+.measure_done:
+    inc rsi
+    jmp .line_loop
+
+.skip_to_next_line:
+    cmp rsi, r12
+    jae .success
+    mov al, [rsi]
+    cmp al, ';'
+    je .success
+    inc rsi
+    cmp al, 10
+    je .line_loop
+    cmp al, ','
+    je .line_loop
+    jmp .skip_to_next_line
+
+.empty:
+    xor eax, eax
+    jmp .done
+
+.success:
+    mov rax, rbx
+    jmp .done
+
+.fail:
+    mov rax, ASSP_NOT_FOUND
+
+.done:
+    add rsp, 32
+    pop rbp
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
+%macro prepare_hold_reset_current4 0
+    mov qword [rsp + 16], 1
+    mov eax, [rsp + 56]
+    mov [rsp + 24], eax
+    mov eax, [rsp + 60]
+    mov [rsp + 28], eax
+    mov eax, [rsp + 64]
+    mov [rsp + 68], eax
+    mov eax, [rsp + 32]
+    mov [rsp + 36], eax
+    mov dword [rsp + 32], 0
+    mov dword [rsp + 40], 0
+    mov dword [rsp + 44], 0
+    mov dword [rsp + 48], 0
+    mov eax, [rel hold_end_none]
+    mov [rsp + 72], eax
+    mov [rsp + 76], eax
+    mov [rsp + 80], eax
+    mov [rsp + 84], eax
+%endmacro
+
+%macro prepare_hold_live_col4 1
+    movss xmm0, [rsp + 72 + (%1 * 4)]
+    comiss xmm0, [rsp + 68]
+    jbe %%done
+    mov ecx, 1
+%%done:
+%endmacro
+
+%macro prepare_hold_inherit_col4 2
+    movss xmm0, [rsp + 88 + (%1 * 4)]
+    comiss xmm0, [rsp + 68]
+    jb %%done
+    mov eax, [rsp + 72 + (%1 * 4)]
+    cmp eax, [rel hold_end_none]
+    jne %%done
+    or r10d, %2
+    movss [rsp + 72 + (%1 * 4)], xmm0
+%%done:
+%endmacro
+
+%macro prepare_hold_flush_current4 0
+    cmp qword [rsp + 16], 0
+    je %%done
+    mov rax, [rsp]
+    cmp rax, [rsp + 320]
+    jae .fail
+
+    xor r10d, r10d
+    prepare_hold_inherit_col4 0, 1
+    prepare_hold_inherit_col4 1, 2
+    prepare_hold_inherit_col4 2, 4
+    prepare_hold_inherit_col4 3, 8
+
+    mov rax, [rsp]
+    mov ecx, [rsp + 40]
+    mov [r15 + rax], cl
+    mov ecx, [rsp + 44]
+    mov [rbx + rax], cl
+    mov ecx, [rsp + 48]
+    mov [rdi + rax], cl
+    mov [rbp + rax], r10b
+    mov rdx, [rsp + 288]
+    mov ecx, [rsp + 36]
+    mov [rdx + rax], cl
+    mov rdx, [rsp + 296]
+    mov ecx, [rsp + 104]
+    mov [rdx + rax], cl
+    mov rdx, [rsp + 304]
+    mov ecx, [rsp + 24]
+    mov [rdx + rax * 4], ecx
+    mov rdx, [rsp + 312]
+    mov ecx, [rsp + 28]
+    mov [rdx + rax * 4], ecx
+
+    xor ecx, ecx
+    prepare_hold_live_col4 0
+    prepare_hold_live_col4 1
+    prepare_hold_live_col4 2
+    prepare_hold_live_col4 3
+    mov [rsp + 104], ecx
+
+    mov eax, [rsp + 72]
+    mov [rsp + 88], eax
+    mov eax, [rsp + 76]
+    mov [rsp + 92], eax
+    mov eax, [rsp + 80]
+    mov [rsp + 96], eax
+    mov eax, [rsp + 84]
+    mov [rsp + 100], eax
+
+    inc qword [rsp]
+    mov qword [rsp + 16], 0
+%%done:
+%endmacro
+
+%macro prepare_hold_ensure_current4 0
+    cmp qword [rsp + 16], 0
+    je %%reset
+    mov eax, [rsp + 56]
+    cmp eax, [rsp + 24]
+    je %%done
+    prepare_hold_flush_current4
+%%reset:
+    prepare_hold_reset_current4
+%%done:
+%endmacro
+
+%macro prepare_hold_add_note4 2
+    prepare_hold_ensure_current4
+    test dword [rsp + 44], %1
+    jnz %%seen
+    inc dword [rsp + 40]
+%%seen:
+    or dword [rsp + 44], %1
+%if %2
+    or dword [rsp + 48], %1
+%endif
+%endmacro
+
+%macro prepare_hold_add_head4 2
+    mov rax, [rsp + 8]
+    shl rax, 4
+    mov rdx, [rsp + 240]
+    mov ecx, [rdx + rax + (%2 * 4)]
+    cmp ecx, [rel hold_end_none]
+    je %%done
+    mov [rsp + 108], ecx
+    prepare_hold_add_note4 %1, 1
+    mov ecx, [rsp + 108]
+    mov [rsp + 72 + (%2 * 4)], ecx
+%%done:
+%endmacro
+
+%macro prepare_hold_add_mine4 1
+    mov eax, [rsp + 56]
+    and eax, 7fffffffh
+    cmp qword [rsp + 16], 0
+    je %%pending
+    mov ecx, [rsp + 56]
+    cmp ecx, [rsp + 24]
+    jne %%pending
+    cmp qword [rsp], 0
+    je %%pending
+    test eax, eax
+    jz %%clear_next
+    or dword [rsp + 36], %1
+    jmp %%done
+%%clear_next:
+    and dword [rsp + 36], ~%1
+    jmp %%done
+%%pending:
+    test eax, eax
+    jz %%clear_pending
+    or dword [rsp + 32], %1
+    jmp %%done
+%%clear_pending:
+    and dword [rsp + 32], ~%1
+%%done:
+%endmacro
+
+%macro prepare_hold_process_char4 2
+    mov al, [rsi + %1]
+    cmp al, '0'
+    je %%done
+    cmp al, '1'
+    je %%tap
+    cmp al, 'L'
+    je %%lift
+    cmp al, 'M'
+    je %%mine
+    cmp al, '2'
+    je %%head
+    cmp al, '4'
+    je %%head
+    cmp al, '3'
+    je %%done
+    cmp al, 'F'
+    je %%done
+    jmp .fail
+%%tap:
+    prepare_hold_add_note4 %2, 1
+    jmp %%done
+%%lift:
+    prepare_hold_add_note4 %2, 0
+    jmp %%done
+%%mine:
+    prepare_hold_add_mine4 %2
+    jmp %%done
+%%head:
+    prepare_hold_add_head4 %2, %1
+%%done:
+%endmacro
+
+; rcx = minimized 4-panel note-data, rdx = byte length,
+; r8 = input row seconds for each non-empty source row,
+; r9 = input row milliseconds for each non-empty source row,
+; stack arg 5 = input row beats for each non-empty source row,
+; stack arg 6 = input hold end beats as row-major f32[rows][4],
+; stack arg 7 = input source row count,
+; stack arg 8 = out note counts,
+; stack arg 9 = out tech masks,
+; stack arg 10 = out note masks,
+; stack arg 11 = out hold masks,
+; stack arg 12 = out mine masks,
+; stack arg 13 = out prev-row-live-hold flags,
+; stack arg 14 = out row seconds,
+; stack arg 15 = out row milliseconds,
+; stack arg 16 = output row capacity.
+; rax = prepared row count, or ASSP_NOT_FOUND.
+assp_step_parity_prepare_hold_rows_4:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+    push rbp
+    sub rsp, 128
+
+    mov rsi, rcx
+    mov r12, rdx
+    mov r13, r8
+    mov r14, r9
+    mov r15, [rsp + 256]
+    mov rbx, [rsp + 264]
+    mov rdi, [rsp + 272]
+    mov rbp, [rsp + 280]
+
+    test r12, r12
+    jz .init
+    test rsi, rsi
+    jz .fail
+
+.init:
+    test r12, r12
+    jnz .check_outputs
+    xor eax, eax
+    jmp .done
+
+.check_outputs:
+    test r13, r13
+    jz .fail
+    test r14, r14
+    jz .fail
+    cmp qword [rsp + 232], 0
+    je .fail
+    cmp qword [rsp + 240], 0
+    je .fail
+    test r15, r15
+    jz .fail
+    test rbx, rbx
+    jz .fail
+    test rdi, rdi
+    jz .fail
+    test rbp, rbp
+    jz .fail
+    cmp qword [rsp + 288], 0
+    je .fail
+    cmp qword [rsp + 296], 0
+    je .fail
+    cmp qword [rsp + 304], 0
+    je .fail
+    cmp qword [rsp + 312], 0
+    je .fail
+    cmp qword [rsp + 320], 0
+    je .fail
+
+    lea r12, [rsi + r12]
+    mov qword [rsp], 0
+    mov qword [rsp + 8], 0
+    mov qword [rsp + 16], 0
+    mov dword [rsp + 32], 0
+    mov dword [rsp + 36], 0
+    mov dword [rsp + 40], 0
+    mov dword [rsp + 44], 0
+    mov dword [rsp + 48], 0
+    mov eax, [rel hold_end_none]
+    mov [rsp + 88], eax
+    mov [rsp + 92], eax
+    mov [rsp + 96], eax
+    mov [rsp + 100], eax
+    mov dword [rsp + 104], 0
+
+.line_loop:
+    cmp rsi, r12
+    jae .success
+
+.trim_left:
+    cmp rsi, r12
+    jae .success
+    mov al, [rsi]
+    cmp al, ' '
+    je .trim_advance
+    cmp al, 9
+    jb .line_start
+    cmp al, 13
+    jbe .trim_advance
+    jmp .line_start
+
+.trim_advance:
+    inc rsi
+    jmp .trim_left
+
+.line_start:
+    mov al, [rsi]
+    cmp al, '/'
+    je .skip_to_next_line
+    cmp al, ','
+    je .measure_done
+    cmp al, ';'
+    je .success
+
+    lea rax, [rsi + 4]
+    cmp rax, r12
+    ja .success
+
+    cmp dword [rsi], 30303030h
+    je .row_done
+
+    mov rax, [rsp + 8]
+    cmp rax, [rsp + 248]
+    jae .fail
+    mov ecx, [r13 + rax * 4]
+    mov [rsp + 56], ecx
+    mov ecx, [r14 + rax * 4]
+    mov [rsp + 60], ecx
+    mov rdx, [rsp + 232]
+    mov ecx, [rdx + rax * 4]
+    mov [rsp + 64], ecx
+
+    prepare_hold_process_char4 0, 1
+    prepare_hold_process_char4 1, 2
+    prepare_hold_process_char4 2, 4
+    prepare_hold_process_char4 3, 8
+    inc qword [rsp + 8]
+
+.row_done:
+    add rsi, 4
+    jmp .skip_to_next_line
+
+.measure_done:
+    inc rsi
+    jmp .line_loop
+
+.skip_to_next_line:
+    cmp rsi, r12
+    jae .success
+    mov al, [rsi]
+    cmp al, ';'
+    je .success
+    inc rsi
+    cmp al, 10
+    je .line_loop
+    cmp al, ','
+    je .line_loop
+    jmp .skip_to_next_line
+
+.success:
+    prepare_hold_flush_current4
+    mov rax, [rsp]
+    jmp .done
+
+.fail:
+    mov rax, ASSP_NOT_FOUND
+
+.done:
+    add rsp, 128
+    pop rbp
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
 ; rcx = minimized 4-panel note-data, rdx = byte length,
 ; r8 = input row seconds for emitted object rows,
 ; r9 = input row milliseconds for emitted object rows,
@@ -2815,6 +3369,7 @@ cost_twisted_foot_weight dd 100000.0
 cost_facing_weight dd 2.0
 cost_spin_weight dd 1000.0
 cost_one dd 1.0
+hold_end_none dd -1.0
 dance_single_distances4:
     dd 0.0, 1.4142135623730951, 1.4142135623730951, 2.0
     dd 1.4142135623730951, 0.0, 2.0, 1.4142135623730951
