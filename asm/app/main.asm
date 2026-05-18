@@ -1334,8 +1334,20 @@ prepare_chart_metadata:
 
     mov qword [chart_name_slice + ASSP_BYTE_SLICE_PTR], 0
     mov qword [chart_name_slice + ASSP_BYTE_SLICE_LEN], 0
+    mov qword [chart_music_slice + ASSP_BYTE_SLICE_PTR], 0
+    mov qword [chart_music_slice + ASSP_BYTE_SLICE_LEN], 0
+    mov qword [chart_attacks_slice + ASSP_BYTE_SLICE_PTR], 0
+    mov qword [chart_attacks_slice + ASSP_BYTE_SLICE_LEN], 0
     mov qword [display_bpm_slice + ASSP_BYTE_SLICE_PTR], 0
     mov qword [display_bpm_slice + ASSP_BYTE_SLICE_LEN], 0
+    mov qword [chart_time_signatures_slice + ASSP_BYTE_SLICE_PTR], 0
+    mov qword [chart_time_signatures_slice + ASSP_BYTE_SLICE_LEN], 0
+    mov qword [chart_labels_slice + ASSP_BYTE_SLICE_PTR], 0
+    mov qword [chart_labels_slice + ASSP_BYTE_SLICE_LEN], 0
+    mov qword [chart_tickcounts_slice + ASSP_BYTE_SLICE_PTR], 0
+    mov qword [chart_tickcounts_slice + ASSP_BYTE_SLICE_LEN], 0
+    mov qword [chart_combos_slice + ASSP_BYTE_SLICE_PTR], 0
+    mov qword [chart_combos_slice + ASSP_BYTE_SLICE_LEN], 0
     mov qword [step_artist_slice + ASSP_BYTE_SLICE_PTR], 0
     mov qword [step_artist_slice + ASSP_BYTE_SLICE_LEN], 0
 
@@ -1351,9 +1363,63 @@ prepare_chart_metadata:
     lea rcx, [file_buffer]
     mov rdx, [file_len]
     mov r8, [chart_index]
+    lea r9, [tag_music]
+    mov qword [rsp + 32], tag_music_end - tag_music
+    lea rax, [chart_music_slice]
+    mov [rsp + 40], rax
+    call assp_find_chart_tag_by_index
+
+    lea rcx, [file_buffer]
+    mov rdx, [file_len]
+    mov r8, [chart_index]
+    lea r9, [tag_attacks]
+    mov qword [rsp + 32], tag_attacks_end - tag_attacks
+    lea rax, [chart_attacks_slice]
+    mov [rsp + 40], rax
+    call assp_find_chart_tag_by_index
+
+    lea rcx, [file_buffer]
+    mov rdx, [file_len]
+    mov r8, [chart_index]
     lea r9, [tag_display_bpm]
     mov qword [rsp + 32], tag_display_bpm_end - tag_display_bpm
     lea rax, [display_bpm_slice]
+    mov [rsp + 40], rax
+    call assp_find_chart_tag_by_index
+
+    lea rcx, [file_buffer]
+    mov rdx, [file_len]
+    mov r8, [chart_index]
+    lea r9, [tag_time_signatures]
+    mov qword [rsp + 32], tag_time_signatures_end - tag_time_signatures
+    lea rax, [chart_time_signatures_slice]
+    mov [rsp + 40], rax
+    call assp_find_chart_tag_by_index
+
+    lea rcx, [file_buffer]
+    mov rdx, [file_len]
+    mov r8, [chart_index]
+    lea r9, [tag_labels]
+    mov qword [rsp + 32], tag_labels_end - tag_labels
+    lea rax, [chart_labels_slice]
+    mov [rsp + 40], rax
+    call assp_find_chart_tag_by_index
+
+    lea rcx, [file_buffer]
+    mov rdx, [file_len]
+    mov r8, [chart_index]
+    lea r9, [tag_tickcounts]
+    mov qword [rsp + 32], tag_tickcounts_end - tag_tickcounts
+    lea rax, [chart_tickcounts_slice]
+    mov [rsp + 40], rax
+    call assp_find_chart_tag_by_index
+
+    lea rcx, [file_buffer]
+    mov rdx, [file_len]
+    mov r8, [chart_index]
+    lea r9, [tag_combos]
+    mov qword [rsp + 32], tag_combos_end - tag_combos
+    lea rax, [chart_combos_slice]
     mov [rsp + 40], rax
     call assp_find_chart_tag_by_index
 
@@ -1583,6 +1649,30 @@ print_report:
     lea rcx, [label_step_artist]
     mov rdx, [step_artist_slice + ASSP_BYTE_SLICE_PTR]
     mov r8, [step_artist_slice + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+    lea rcx, [label_chart_music]
+    mov rdx, [chart_music_slice + ASSP_BYTE_SLICE_PTR]
+    mov r8, [chart_music_slice + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+    lea rcx, [label_chart_attacks]
+    mov rdx, [chart_attacks_slice + ASSP_BYTE_SLICE_PTR]
+    mov r8, [chart_attacks_slice + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+    lea rcx, [label_chart_time_signatures]
+    mov rdx, [chart_time_signatures_slice + ASSP_BYTE_SLICE_PTR]
+    mov r8, [chart_time_signatures_slice + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+    lea rcx, [label_chart_labels]
+    mov rdx, [chart_labels_slice + ASSP_BYTE_SLICE_PTR]
+    mov r8, [chart_labels_slice + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+    lea rcx, [label_chart_tickcounts]
+    mov rdx, [chart_tickcounts_slice + ASSP_BYTE_SLICE_PTR]
+    mov r8, [chart_tickcounts_slice + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+    lea rcx, [label_chart_combos]
+    mov rdx, [chart_combos_slice + ASSP_BYTE_SLICE_PTR]
+    mov r8, [chart_combos_slice + ASSP_BYTE_SLICE_LEN]
     call print_slice_field
     lea rcx, [label_hash]
     lea rdx, [hash_pair]
@@ -2081,6 +2171,8 @@ tag_artist_trans db "#ARTISTTRANSLIT:"
 tag_artist_trans_end:
 tag_music db "#MUSIC:"
 tag_music_end:
+tag_attacks db "#ATTACKS:"
+tag_attacks_end:
 tag_banner db "#BANNER:"
 tag_banner_end:
 tag_background db "#BACKGROUND:"
@@ -2093,6 +2185,14 @@ tag_sample_start db "#SAMPLESTART:"
 tag_sample_start_end:
 tag_sample_length db "#SAMPLELENGTH:"
 tag_sample_length_end:
+tag_time_signatures db "#TIMESIGNATURES:"
+tag_time_signatures_end:
+tag_labels db "#LABELS:"
+tag_labels_end:
+tag_tickcounts db "#TICKCOUNTS:"
+tag_tickcounts_end:
+tag_combos db "#COMBOS:"
+tag_combos_end:
 tag_offset db "#OFFSET:"
 tag_offset_end:
 tag_chart_name db "#CHARTNAME:"
@@ -2135,6 +2235,12 @@ label_rating db "rating: ", 0
 label_description db "description: ", 0
 label_chart_name db "chart_name: ", 0
 label_step_artist db "step_artist: ", 0
+label_chart_music db "chart_music: ", 0
+label_chart_attacks db "chart_attacks: ", 0
+label_chart_time_signatures db "chart_time_signatures: ", 0
+label_chart_labels db "chart_labels: ", 0
+label_chart_tickcounts db "chart_tickcounts: ", 0
+label_chart_combos db "chart_combos: ", 0
 label_hash db "hash: ", 0
 label_bpm_neutral_hash db "bpm_neutral_hash: ", 0
 label_hash_bpms db "hash_bpms: ", 0
@@ -2239,7 +2345,13 @@ jacket_slice resb ASSP_BYTE_SLICE_SIZE
 sample_start_slice resb ASSP_BYTE_SLICE_SIZE
 sample_length_slice resb ASSP_BYTE_SLICE_SIZE
 chart_name_slice resb ASSP_BYTE_SLICE_SIZE
+chart_music_slice resb ASSP_BYTE_SLICE_SIZE
+chart_attacks_slice resb ASSP_BYTE_SLICE_SIZE
 display_bpm_slice resb ASSP_BYTE_SLICE_SIZE
+chart_time_signatures_slice resb ASSP_BYTE_SLICE_SIZE
+chart_labels_slice resb ASSP_BYTE_SLICE_SIZE
+chart_tickcounts_slice resb ASSP_BYTE_SLICE_SIZE
+chart_combos_slice resb ASSP_BYTE_SLICE_SIZE
 step_artist_slice resb ASSP_BYTE_SLICE_SIZE
 global_timing_tags resb ASSP_TIMING_TAGS_SIZE
 chart_timing_tags resb ASSP_TIMING_TAGS_SIZE
