@@ -55,6 +55,7 @@ extern assp_minimize_chart_8
 extern assp_normalize_float_digits
 extern assp_parse_bpm_map
 extern assp_parse_offset_ms
+extern assp_parse_tech_notation
 extern assp_stream_counts_from_densities
 extern assp_stream_percentages_centi
 extern assp_stream_segments_from_densities
@@ -71,6 +72,7 @@ global start
 %define BPM_SEGMENT_CAP 4096
 %define MINIMIZED_BUFFER_CAP 2097152
 %define ROW_SCRATCH_CAP 262144
+%define TECH_BUFFER_CAP 16384
 
 section .text
 
@@ -114,6 +116,9 @@ start:
     test eax, eax
     jz fail_hash
     call prepare_chart_metadata
+    call prepare_tech_notation
+    test eax, eax
+    jz fail_tech
 
     call prepare_hash
     test eax, eax
@@ -292,6 +297,12 @@ fail_nps:
 
 fail_duration:
     lea rcx, [msg_duration_fail]
+    call print_z
+    mov ecx, 1
+    call ExitProcess
+
+fail_tech:
+    lea rcx, [msg_tech_fail]
     call print_z
     mov ecx, 1
     call ExitProcess
@@ -1514,6 +1525,33 @@ prepare_chart_metadata:
     add rsp, 56
     ret
 
+prepare_tech_notation:
+    sub rsp, 56
+
+    mov qword [tech_notation_len], 0
+    mov rcx, [step_artist_slice + ASSP_BYTE_SLICE_PTR]
+    mov rdx, [step_artist_slice + ASSP_BYTE_SLICE_LEN]
+    mov r8, [chart_info + ASSP_CHART_INFO_DESC_PTR]
+    mov r9, [chart_info + ASSP_CHART_INFO_DESC_LEN]
+    lea rax, [tech_notation_buffer]
+    mov [rsp + 32], rax
+    mov qword [rsp + 40], TECH_BUFFER_CAP
+    call assp_parse_tech_notation
+    cmp rax, ASSP_NOT_FOUND
+    je .fail
+    cmp rax, TECH_BUFFER_CAP
+    ja .fail
+    mov [tech_notation_len], rax
+    mov eax, ASSP_TRUE
+    jmp .done
+
+.fail:
+    xor eax, eax
+
+.done:
+    add rsp, 56
+    ret
+
 prepare_offset:
     sub rsp, 56
 
@@ -1732,6 +1770,10 @@ print_report:
     lea rcx, [label_step_artists]
     mov rdx, [step_artist_slice + ASSP_BYTE_SLICE_PTR]
     mov r8, [step_artist_slice + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+    lea rcx, [label_tech_notation]
+    lea rdx, [tech_notation_buffer]
+    mov r8, [tech_notation_len]
     call print_slice_field
     lea rcx, [label_chart_music]
     mov rdx, [chart_music_slice + ASSP_BYTE_SLICE_PTR]
@@ -2672,6 +2714,7 @@ msg_density_fail db "chart has too many measures for the density buffer", 13, 10
 msg_hash_fail db "assembly hash pipeline failed", 13, 10, 0
 msg_nps_fail db "assembly nps pipeline failed", 13, 10, 0
 msg_duration_fail db "assembly duration pipeline failed", 13, 10, 0
+msg_tech_fail db "assembly tech notation parser failed", 13, 10, 0
 msg_breakdown_too_long db "breakdown output exceeded text buffer", 13, 10, 0
 label_file db "file: ", 0
 label_title db "title: ", 0
@@ -2698,6 +2741,7 @@ label_description db "description: ", 0
 label_chart_name db "chart_name: ", 0
 label_step_artist db "step_artist: ", 0
 label_step_artists db "step_artists: ", 0
+label_tech_notation db "tech_notation: ", 0
 label_chart_music db "chart_music: ", 0
 label_chart_attacks db "chart_attacks: ", 0
 label_chart_time_signatures db "chart_time_signatures: ", 0
@@ -2895,6 +2939,7 @@ stop_segment_count resq 1
 delay_segment_count resq 1
 warp_segment_count resq 1
 fake_segment_count resq 1
+tech_notation_len resq 1
 stop_report_count resq 1
 delay_report_count resq 1
 warp_report_count resq 1
@@ -2921,6 +2966,7 @@ timing_fakes resq 1
 chart_has_own_timing resq 1
 duration_ms resq 1
 hash_pair resb 32
+tech_notation_buffer resb TECH_BUFFER_CAP
 bpm_buffer resb BPM_BUFFER_CAP
 global_bpm_buffer resb BPM_BUFFER_CAP
 bpm_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE

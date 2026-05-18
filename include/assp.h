@@ -163,6 +163,14 @@ size_t assp_normalize_float_digits(
     uint8_t *out,
     size_t out_cap
 );
+size_t assp_parse_tech_notation(
+    const uint8_t *credit,
+    size_t credit_len,
+    const uint8_t *description,
+    size_t description_len,
+    uint8_t *out,
+    size_t out_cap
+);
 size_t assp_parse_bpm_map(
     const uint8_t *data,
     size_t len,

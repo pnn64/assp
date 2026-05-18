@@ -34,6 +34,7 @@ The first implemented pieces are:
 - `assp_find_chart_timing_tags_by_index`
 - `assp_chart_owns_timing_by_index`
 - `assp_normalize_float_digits`
+- `assp_parse_tech_notation`
 - `assp_parse_bpm_map`
 - `assp_parse_offset_ms`
 - `assp_bpm_display_range`
@@ -128,6 +129,9 @@ tag extraction for `#TAG:` sections. Implemented simfile tag names are matched
 case-insensitively, following RSSP's parser behavior. The timing-tag collectors
 gather the RSSP timing maps currently needed for timing parity work: BPMS,
 STOPS, DELAYS, WARPS, SPEEDS, SCROLLS, and FAKES.
+`assp_parse_tech_notation` extracts RSSP's known compact tech notation tokens
+from chart credit and description text with the same greedy longest-prefix
+rules, `No Tech` skipping, and measure-data filtering.
 `assp_chart_owns_timing_by_index` checks the RSSP chart-local timing ownership
 predicate for SSC `#NOTEDATA` blocks.
 `assp_parse_bpm_map` parses BPM timing maps into sorted fixed-point
@@ -263,10 +267,10 @@ description. SM `#NOTES:` / `#NOTES2:` blocks are also split into their five
 metadata fields before chart rows are passed to the stat counter. The standalone
 report path currently supports `dance-single` and `dance-double` charts. Chart
 reports include simfile title/artist/translit metadata, genre, media/artwork
-tags, sample timing tags, chart name, credit/step-artist metadata, chart-local
-music/attacks/timing metadata tags, chart-local raw timing tags, global raw
-timing tags, RSSP-style chart hashes, normalized global BPM data, normalized
-hash BPMs, RSSP-compatible
+tags, sample timing tags, chart name, credit/step-artist metadata, parsed tech
+notation, chart-local music/attacks/timing metadata tags, chart-local raw timing
+tags, global raw timing tags, RSSP-style chart hashes, normalized global BPM
+data, normalized hash BPMs, RSSP-compatible
 hash and step-artist aliases, formatted timing BPM/stop/delay/warp/fake maps,
 global and selected timing metadata tags, selected raw timing tags, chart
 display-BPM tags,

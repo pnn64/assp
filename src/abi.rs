@@ -167,6 +167,14 @@ unsafe extern "C" {
         out: *mut u8,
         out_cap: usize,
     ) -> usize;
+    fn assp_parse_tech_notation(
+        credit: *const u8,
+        credit_len: usize,
+        description: *const u8,
+        description_len: usize,
+        out: *mut u8,
+        out_cap: usize,
+    ) -> usize;
     fn assp_parse_bpm_map(
         data: *const u8,
         len: usize,
@@ -567,6 +575,41 @@ pub fn normalize_float_digits(data: &[u8]) -> Option<Vec<u8>> {
     if count != 0 {
         let written = unsafe {
             assp_normalize_float_digits(data.as_ptr(), data.len(), out.as_mut_ptr(), out.len())
+        };
+        if written == NOT_FOUND {
+            return None;
+        }
+    }
+    Some(out)
+}
+
+#[must_use]
+pub fn parse_tech_notation(credit: &[u8], description: &[u8]) -> Option<Vec<u8>> {
+    let count = unsafe {
+        assp_parse_tech_notation(
+            credit.as_ptr(),
+            credit.len(),
+            description.as_ptr(),
+            description.len(),
+            std::ptr::null_mut(),
+            0,
+        )
+    };
+    if count == NOT_FOUND {
+        return None;
+    }
+
+    let mut out = vec![0; count];
+    if count != 0 {
+        let written = unsafe {
+            assp_parse_tech_notation(
+                credit.as_ptr(),
+                credit.len(),
+                description.as_ptr(),
+                description.len(),
+                out.as_mut_ptr(),
+                out.len(),
+            )
         };
         if written == NOT_FOUND {
             return None;
