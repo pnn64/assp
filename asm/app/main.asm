@@ -711,6 +711,12 @@ prepare_nps:
 
 .peak_done:
     mov [peak_nps_milli], r9
+    mov rax, r9
+    add rax, 5
+    xor edx, edx
+    mov r11d, 10
+    div r11
+    mov [max_nps_centi], rax
     lea rcx, [nps_buffer]
     mov rdx, [nps_count]
     call assp_nps_median_centi
@@ -1356,6 +1362,9 @@ print_report:
     lea rcx, [label_equally_spaced_measures]
     mov rdx, [equally_spaced_measures]
     call print_field
+    lea rcx, [label_max_nps]
+    mov rdx, [max_nps_centi]
+    call print_fixed2_field
     lea rcx, [label_peak_nps_milli]
     mov rdx, [peak_nps_milli]
     call print_field
@@ -1811,6 +1820,7 @@ label_average_bpm db "average_bpm: ", 0
 label_median_bpm db "median_bpm: ", 0
 label_measures db "measures: ", 0
 label_equally_spaced_measures db "equally_spaced_measures: ", 0
+label_max_nps db "max_nps: ", 0
 label_peak_nps_milli db "peak_nps_milli: ", 0
 label_median_nps db "median_nps: ", 0
 label_tier_bpm db "tier_bpm: ", 0
@@ -1902,6 +1912,7 @@ scroll_report_count resq 1
 minimized_chart_len resq 1
 nps_count resq 1
 peak_nps_milli resq 1
+max_nps_centi resq 1
 median_nps_centi resq 1
 tier_bpm_centi resq 1
 equally_spaced_measures resq 1
