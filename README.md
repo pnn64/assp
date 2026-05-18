@@ -335,8 +335,8 @@ equally-spaced measure counts, formatted length,
 density-derived stream counts, total stream counts, stream percentages,
 RSSP default pattern aggregates including candle/box/tower/triangle,
 staircases, sweeps, copters, spirals, turbo candles, hip breakers, doritos, and
-luchis, candle/mono percentages, RSSP-compatible candle/box/anchor/mono
-aliases, anchors, mono/facing-step counts,
+luchis, candle/mono percentages, RSSP-compatible default-pattern aliases,
+anchors, mono/facing-step counts,
 duration seconds, fixed-point duration metrics with stops/stops-freezes aliases,
 delays, warps, token/SN breakdown aliases,
 segment/stream breakdown aliases,

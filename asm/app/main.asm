@@ -3144,6 +3144,254 @@ print_report:
     lea rcx, [label_luchi_right_ud]
     mov edx, [default_pattern_counts + ASSP_PATTERN_LUCHI_RIGHT_UD * 4]
     call print_field
+    lea rcx, [label_total_towers]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_TOWER_LR * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_TOWER_UD * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_TOWER_CORNER_LD * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_TOWER_CORNER_LU * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_TOWER_CORNER_RD * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_TOWER_CORNER_RU * 4]
+    call print_field
+    lea rcx, [label_lr_towers]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_TOWER_LR * 4]
+    call print_field
+    lea rcx, [label_ud_towers]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_TOWER_UD * 4]
+    call print_field
+    lea rcx, [label_corner_towers]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_TOWER_CORNER_LD * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_TOWER_CORNER_LU * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_TOWER_CORNER_RD * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_TOWER_CORNER_RU * 4]
+    call print_field
+    lea rcx, [label_ld_towers]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_TOWER_CORNER_LD * 4]
+    call print_field
+    lea rcx, [label_lu_towers]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_TOWER_CORNER_LU * 4]
+    call print_field
+    lea rcx, [label_rd_towers]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_TOWER_CORNER_RD * 4]
+    call print_field
+    lea rcx, [label_ru_towers]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_TOWER_CORNER_RU * 4]
+    call print_field
+    lea rcx, [label_total_triangles]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_TRIANGLE_LDL * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_TRIANGLE_LUL * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_TRIANGLE_RDR * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_TRIANGLE_RUR * 4]
+    call print_field
+    lea rcx, [label_ldl_triangles]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_TRIANGLE_LDL * 4]
+    call print_field
+    lea rcx, [label_lul_triangles]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_TRIANGLE_LUL * 4]
+    call print_field
+    lea rcx, [label_rdr_triangles]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_TRIANGLE_RDR * 4]
+    call print_field
+    lea rcx, [label_rur_triangles]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_TRIANGLE_RUR * 4]
+    call print_field
+    lea rcx, [label_total_staircases]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_STAIRCASE_LEFT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_STAIRCASE_RIGHT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_STAIRCASE_INV_LEFT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_STAIRCASE_INV_RIGHT * 4]
+    call print_field
+    lea rcx, [label_left_staircases]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_STAIRCASE_LEFT * 4]
+    call print_field
+    lea rcx, [label_right_staircases]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_STAIRCASE_RIGHT * 4]
+    call print_field
+    lea rcx, [label_left_inv_staircases]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_STAIRCASE_INV_LEFT * 4]
+    call print_field
+    lea rcx, [label_right_inv_staircases]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_STAIRCASE_INV_RIGHT * 4]
+    call print_field
+    lea rcx, [label_total_alt_staircases]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_ALT_STAIRCASES_LEFT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_ALT_STAIRCASES_RIGHT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_ALT_STAIRCASES_INV_LEFT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_ALT_STAIRCASES_INV_RIGHT * 4]
+    call print_field
+    lea rcx, [label_left_alt_staircases]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_ALT_STAIRCASES_LEFT * 4]
+    call print_field
+    lea rcx, [label_right_alt_staircases]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_ALT_STAIRCASES_RIGHT * 4]
+    call print_field
+    lea rcx, [label_left_inv_alt_staircases]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_ALT_STAIRCASES_INV_LEFT * 4]
+    call print_field
+    lea rcx, [label_right_inv_alt_staircases]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_ALT_STAIRCASES_INV_RIGHT * 4]
+    call print_field
+    lea rcx, [label_total_double_staircases]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_D_STAIRCASE_LEFT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_D_STAIRCASE_RIGHT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_D_STAIRCASE_INV_LEFT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_D_STAIRCASE_INV_RIGHT * 4]
+    call print_field
+    lea rcx, [label_left_double_staircases]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_D_STAIRCASE_LEFT * 4]
+    call print_field
+    lea rcx, [label_right_double_staircases]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_D_STAIRCASE_RIGHT * 4]
+    call print_field
+    lea rcx, [label_left_inv_double_staircases]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_D_STAIRCASE_INV_LEFT * 4]
+    call print_field
+    lea rcx, [label_right_inv_double_staircases]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_D_STAIRCASE_INV_RIGHT * 4]
+    call print_field
+    lea rcx, [label_total_sweeps]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_SWEEP_LEFT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_SWEEP_RIGHT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_SWEEP_INV_LEFT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_SWEEP_INV_RIGHT * 4]
+    call print_field
+    lea rcx, [label_left_sweeps]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_SWEEP_LEFT * 4]
+    call print_field
+    lea rcx, [label_right_sweeps]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_SWEEP_RIGHT * 4]
+    call print_field
+    lea rcx, [label_left_inv_sweeps]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_SWEEP_INV_LEFT * 4]
+    call print_field
+    lea rcx, [label_right_inv_sweeps]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_SWEEP_INV_RIGHT * 4]
+    call print_field
+    lea rcx, [label_total_candle_sweeps]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_SWEEP_CANDLE_LEFT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_SWEEP_CANDLE_RIGHT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_SWEEP_CANDLE_INV_LEFT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_SWEEP_CANDLE_INV_RIGHT * 4]
+    call print_field
+    lea rcx, [label_left_candle_sweeps]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_SWEEP_CANDLE_LEFT * 4]
+    call print_field
+    lea rcx, [label_right_candle_sweeps]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_SWEEP_CANDLE_RIGHT * 4]
+    call print_field
+    lea rcx, [label_left_inv_candle_sweeps]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_SWEEP_CANDLE_INV_LEFT * 4]
+    call print_field
+    lea rcx, [label_right_inv_candle_sweeps]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_SWEEP_CANDLE_INV_RIGHT * 4]
+    call print_field
+    lea rcx, [label_total_copters]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_COPTER_LEFT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_COPTER_RIGHT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_COPTER_INV_LEFT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_COPTER_INV_RIGHT * 4]
+    call print_field
+    lea rcx, [label_left_copters]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_COPTER_LEFT * 4]
+    call print_field
+    lea rcx, [label_right_copters]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_COPTER_RIGHT * 4]
+    call print_field
+    lea rcx, [label_left_inv_copters]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_COPTER_INV_LEFT * 4]
+    call print_field
+    lea rcx, [label_right_inv_copters]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_COPTER_INV_RIGHT * 4]
+    call print_field
+    lea rcx, [label_total_spirals]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_SPIRAL_LEFT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_SPIRAL_RIGHT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_SPIRAL_INV_LEFT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_SPIRAL_INV_RIGHT * 4]
+    call print_field
+    lea rcx, [label_left_spirals]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_SPIRAL_LEFT * 4]
+    call print_field
+    lea rcx, [label_right_spirals]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_SPIRAL_RIGHT * 4]
+    call print_field
+    lea rcx, [label_left_inv_spirals]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_SPIRAL_INV_LEFT * 4]
+    call print_field
+    lea rcx, [label_right_inv_spirals]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_SPIRAL_INV_RIGHT * 4]
+    call print_field
+    lea rcx, [label_total_turbo_candles]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_TURBO_CANDLE_LEFT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_TURBO_CANDLE_RIGHT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_TURBO_CANDLE_INV_LEFT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_TURBO_CANDLE_INV_RIGHT * 4]
+    call print_field
+    lea rcx, [label_left_turbo_candles]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_TURBO_CANDLE_LEFT * 4]
+    call print_field
+    lea rcx, [label_right_turbo_candles]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_TURBO_CANDLE_RIGHT * 4]
+    call print_field
+    lea rcx, [label_left_inv_turbo_candles]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_TURBO_CANDLE_INV_LEFT * 4]
+    call print_field
+    lea rcx, [label_right_inv_turbo_candles]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_TURBO_CANDLE_INV_RIGHT * 4]
+    call print_field
+    lea rcx, [label_total_hip_breakers]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_HIP_BREAKER_LEFT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_HIP_BREAKER_RIGHT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_HIP_BREAKER_INV_LEFT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_HIP_BREAKER_INV_RIGHT * 4]
+    call print_field
+    lea rcx, [label_left_hip_breakers]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_HIP_BREAKER_LEFT * 4]
+    call print_field
+    lea rcx, [label_right_hip_breakers]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_HIP_BREAKER_RIGHT * 4]
+    call print_field
+    lea rcx, [label_left_inv_hip_breakers]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_HIP_BREAKER_INV_LEFT * 4]
+    call print_field
+    lea rcx, [label_right_inv_hip_breakers]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_HIP_BREAKER_INV_RIGHT * 4]
+    call print_field
+    lea rcx, [label_total_doritos]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_DORITO_LEFT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_DORITO_RIGHT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_DORITO_INV_LEFT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_DORITO_INV_RIGHT * 4]
+    call print_field
+    lea rcx, [label_left_doritos]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_DORITO_LEFT * 4]
+    call print_field
+    lea rcx, [label_right_doritos]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_DORITO_RIGHT * 4]
+    call print_field
+    lea rcx, [label_left_inv_doritos]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_DORITO_INV_LEFT * 4]
+    call print_field
+    lea rcx, [label_right_inv_doritos]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_DORITO_INV_RIGHT * 4]
+    call print_field
+    lea rcx, [label_total_luchis]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_LUCHI_LEFT_DU * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_LUCHI_LEFT_UD * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_LUCHI_RIGHT_DU * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_LUCHI_RIGHT_UD * 4]
+    call print_field
+    lea rcx, [label_left_du_luchis]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_LUCHI_LEFT_DU * 4]
+    call print_field
+    lea rcx, [label_left_ud_luchis]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_LUCHI_LEFT_UD * 4]
+    call print_field
+    lea rcx, [label_right_du_luchis]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_LUCHI_RIGHT_DU * 4]
+    call print_field
+    lea rcx, [label_right_ud_luchis]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_LUCHI_RIGHT_UD * 4]
+    call print_field
     lea rcx, [label_anchors]
     mov edx, [anchor_counts + 0]
     add edx, [anchor_counts + 4]
@@ -4186,6 +4434,74 @@ label_luchi_left_du db "luchi_left_du: ", 0
 label_luchi_left_ud db "luchi_left_ud: ", 0
 label_luchi_right_du db "luchi_right_du: ", 0
 label_luchi_right_ud db "luchi_right_ud: ", 0
+label_total_towers db "total_towers: ", 0
+label_lr_towers db "lr_towers: ", 0
+label_ud_towers db "ud_towers: ", 0
+label_corner_towers db "corner_towers: ", 0
+label_ld_towers db "ld_towers: ", 0
+label_lu_towers db "lu_towers: ", 0
+label_rd_towers db "rd_towers: ", 0
+label_ru_towers db "ru_towers: ", 0
+label_total_triangles db "total_triangles: ", 0
+label_ldl_triangles db "ldl_triangles: ", 0
+label_lul_triangles db "lul_triangles: ", 0
+label_rdr_triangles db "rdr_triangles: ", 0
+label_rur_triangles db "rur_triangles: ", 0
+label_total_staircases db "total_staircases: ", 0
+label_left_staircases db "left_staircases: ", 0
+label_right_staircases db "right_staircases: ", 0
+label_left_inv_staircases db "left_inv_staircases: ", 0
+label_right_inv_staircases db "right_inv_staircases: ", 0
+label_total_alt_staircases db "total_alt_staircases: ", 0
+label_left_alt_staircases db "left_alt_staircases: ", 0
+label_right_alt_staircases db "right_alt_staircases: ", 0
+label_left_inv_alt_staircases db "left_inv_alt_staircases: ", 0
+label_right_inv_alt_staircases db "right_inv_alt_staircases: ", 0
+label_total_double_staircases db "total_double_staircases: ", 0
+label_left_double_staircases db "left_double_staircases: ", 0
+label_right_double_staircases db "right_double_staircases: ", 0
+label_left_inv_double_staircases db "left_inv_double_staircases: ", 0
+label_right_inv_double_staircases db "right_inv_double_staircases: ", 0
+label_total_sweeps db "total_sweeps: ", 0
+label_left_sweeps db "left_sweeps: ", 0
+label_right_sweeps db "right_sweeps: ", 0
+label_left_inv_sweeps db "left_inv_sweeps: ", 0
+label_right_inv_sweeps db "right_inv_sweeps: ", 0
+label_total_candle_sweeps db "total_candle_sweeps: ", 0
+label_left_candle_sweeps db "left_candle_sweeps: ", 0
+label_right_candle_sweeps db "right_candle_sweeps: ", 0
+label_left_inv_candle_sweeps db "left_inv_candle_sweeps: ", 0
+label_right_inv_candle_sweeps db "right_inv_candle_sweeps: ", 0
+label_total_copters db "total_copters: ", 0
+label_left_copters db "left_copters: ", 0
+label_right_copters db "right_copters: ", 0
+label_left_inv_copters db "left_inv_copters: ", 0
+label_right_inv_copters db "right_inv_copters: ", 0
+label_total_spirals db "total_spirals: ", 0
+label_left_spirals db "left_spirals: ", 0
+label_right_spirals db "right_spirals: ", 0
+label_left_inv_spirals db "left_inv_spirals: ", 0
+label_right_inv_spirals db "right_inv_spirals: ", 0
+label_total_turbo_candles db "total_turbo_candles: ", 0
+label_left_turbo_candles db "left_turbo_candles: ", 0
+label_right_turbo_candles db "right_turbo_candles: ", 0
+label_left_inv_turbo_candles db "left_inv_turbo_candles: ", 0
+label_right_inv_turbo_candles db "right_inv_turbo_candles: ", 0
+label_total_hip_breakers db "total_hip_breakers: ", 0
+label_left_hip_breakers db "left_hip_breakers: ", 0
+label_right_hip_breakers db "right_hip_breakers: ", 0
+label_left_inv_hip_breakers db "left_inv_hip_breakers: ", 0
+label_right_inv_hip_breakers db "right_inv_hip_breakers: ", 0
+label_total_doritos db "total_doritos: ", 0
+label_left_doritos db "left_doritos: ", 0
+label_right_doritos db "right_doritos: ", 0
+label_left_inv_doritos db "left_inv_doritos: ", 0
+label_right_inv_doritos db "right_inv_doritos: ", 0
+label_total_luchis db "total_luchis: ", 0
+label_left_du_luchis db "left_du_luchis: ", 0
+label_left_ud_luchis db "left_ud_luchis: ", 0
+label_right_du_luchis db "right_du_luchis: ", 0
+label_right_ud_luchis db "right_ud_luchis: ", 0
 label_anchors db "anchors: ", 0
 label_anchor_left db "anchor_left: ", 0
 label_anchor_down db "anchor_down: ", 0
