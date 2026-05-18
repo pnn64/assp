@@ -264,11 +264,12 @@ metadata fields before chart rows are passed to the stat counter. The standalone
 report path currently supports `dance-single` and `dance-double` charts. Chart
 reports include simfile title/artist/translit metadata, genre, media/artwork
 tags, sample timing tags, chart name, credit/step-artist metadata, chart-local
-music/attacks/timing metadata tags, RSSP-style chart hashes, normalized hash
-BPMs, RSSP-compatible hash and step-artist aliases, chart display-BPM tags,
+music/attacks/timing metadata tags, RSSP-style chart hashes, normalized global
+BPM data, normalized hash BPMs, RSSP-compatible hash and step-artist aliases,
+chart display-BPM tags,
 chart offset seconds, timing ownership, RSSP-style display BPM aliases,
 min/max/average/median display BPMs, tier BPM, max/peak/median NPS,
-equally-spaced measure counts,
+equally-spaced measure counts, formatted length,
 density-derived stream counts, total stream counts, stream percentages,
 duration seconds, fixed-point duration metrics with stops/stops-freezes aliases,
 delays, warps, token/SN breakdown aliases,
@@ -292,4 +293,4 @@ standalone executable build path.
 2. Bring over RSSP's chart minimization and stat counting.
 3. Add `.sm` / `.ssc` section extraction.
 4. Expand timing extraction beyond BPM tags.
-5. Add NPS, duration, and pattern parity.
+5. Continue pattern and tech-count parity.

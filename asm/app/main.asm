@@ -1815,6 +1815,9 @@ print_report:
     lea rcx, [label_duration_ms]
     mov rdx, [duration_ms]
     call print_field
+    lea rcx, [label_length]
+    mov rdx, [duration_ms]
+    call print_duration_field
     lea rcx, [label_stops]
     mov rdx, [stop_report_count]
     call print_field
@@ -2128,6 +2131,50 @@ print_fixed3_field:
     add rsp, 72
     ret
 
+print_duration_field:
+    sub rsp, 72
+    mov [rsp + 32], rdx
+    call print_z
+
+    mov rax, [rsp + 32]
+    test rax, rax
+    jge .positive
+    neg rax
+    mov [rsp + 32], rax
+    lea rcx, [minus]
+    call print_z
+    mov rax, [rsp + 32]
+
+.positive:
+    xor edx, edx
+    mov r9d, 1000
+    div r9
+    xor edx, edx
+    mov r9d, 60
+    div r9
+    mov [rsp + 40], rdx
+
+    mov rcx, rax
+    call print_u64
+    lea rcx, [minute_suffix]
+    call print_z
+
+    mov rax, [rsp + 40]
+    cmp rax, 10
+    jae .seconds
+    lea rcx, [zero_digit]
+    call print_z
+
+.seconds:
+    mov rcx, [rsp + 40]
+    call print_u64
+    lea rcx, [second_suffix]
+    call print_z
+    lea rcx, [newline]
+    call print_z
+    add rsp, 72
+    ret
+
 print_slice_field:
     sub rsp, 72
     mov [rsp + 32], rdx
@@ -2380,6 +2427,7 @@ label_tier_bpm db "tier_bpm: ", 0
 label_last_beat_milli db "last_beat_milli: ", 0
 label_duration_seconds db "duration_seconds: ", 0
 label_duration_ms db "duration_ms: ", 0
+label_length db "length: ", 0
 label_stops db "stops: ", 0
 label_stops_freezes db "stops_freezes: ", 0
 label_delays db "delays: ", 0
@@ -2438,6 +2486,8 @@ space db " ", 0
 minus db "-", 0
 dot db ".", 0
 zero_digit db "0", 0
+minute_suffix db "m ", 0
+second_suffix db "s", 0
 newline db 13, 10, 0
 
 section .bss
