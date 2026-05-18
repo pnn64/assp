@@ -3,6 +3,7 @@ default rel
 
 global assp_count_anchors_minimized_4
 global assp_count_facing_steps_minimized_4
+global assp_count_basic_patterns_minimized_4
 
 section .text
 
@@ -501,4 +502,322 @@ assp_count_facing_steps_minimized_4:
     ret
 .facing_force_right:
     mov eax, 2
+    ret
+
+; rcx = minimized 4-panel note-data bytes, rdx = len, r8 = assp_basic_patterns* out.
+; Counts RSSP's default candle and box-family patterns. eax = 1 on success.
+assp_count_basic_patterns_minimized_4:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    sub rsp, 32
+
+    test r8, r8
+    jz .basic_fail
+    mov rbx, r8
+    mov qword [rbx + 0], 0
+    mov qword [rbx + 8], 0
+    mov qword [rbx + 16], 0
+    mov qword [rbx + 24], 0
+
+    test rdx, rdx
+    jz .basic_success
+    test rcx, rcx
+    jz .basic_fail
+
+    mov rsi, rcx
+    lea rdi, [rcx + rdx]
+    xor r12d, r12d
+    mov dword [rsp + 0], 0
+    mov dword [rsp + 4], 0
+    mov dword [rsp + 8], 0
+
+.basic_line_loop:
+    cmp rsi, rdi
+    jae .basic_success
+
+    mov r10, rsi
+.basic_find_line_end:
+    cmp r10, rdi
+    jae .basic_line_end_found
+    cmp byte [r10], 10
+    je .basic_line_end_found
+    inc r10
+    jmp .basic_find_line_end
+
+.basic_line_end_found:
+    mov r11, r10
+    cmp r11, rsi
+    jbe .basic_trim_cr_done
+    cmp byte [r11 - 1], 13
+    jne .basic_trim_cr_done
+    dec r11
+.basic_trim_cr_done:
+    cmp r10, rdi
+    jae .basic_next_is_end
+    inc r10
+.basic_next_is_end:
+    mov [rsp + 16], r10
+
+    cmp rsi, r11
+    jae .basic_line_done
+    mov al, [rsi]
+    cmp al, ','
+    je .basic_line_done
+    cmp al, ';'
+    je .basic_success
+
+    lea rax, [rsi + 4]
+    cmp rax, r11
+    ja .basic_line_done
+
+    xor ecx, ecx
+    mov al, [rsi + 0]
+    cmp al, '1'
+    je .basic_set_0
+    cmp al, '2'
+    je .basic_set_0
+    cmp al, '4'
+    jne .basic_col_1
+.basic_set_0:
+    or ecx, 1
+.basic_col_1:
+    mov al, [rsi + 1]
+    cmp al, '1'
+    je .basic_set_1
+    cmp al, '2'
+    je .basic_set_1
+    cmp al, '4'
+    jne .basic_col_2
+.basic_set_1:
+    or ecx, 2
+.basic_col_2:
+    mov al, [rsi + 2]
+    cmp al, '1'
+    je .basic_set_2
+    cmp al, '2'
+    je .basic_set_2
+    cmp al, '4'
+    jne .basic_col_3
+.basic_set_2:
+    or ecx, 4
+.basic_col_3:
+    mov al, [rsi + 3]
+    cmp al, '1'
+    je .basic_set_3
+    cmp al, '2'
+    je .basic_set_3
+    cmp al, '4'
+    jne .basic_mask_done
+.basic_set_3:
+    or ecx, 8
+
+.basic_mask_done:
+    cmp r12, 2
+    jb .basic_boxes
+
+    mov eax, [rsp + 4]
+    mov edx, [rsp + 8]
+    cmp eax, 4
+    jne .basic_candle_dlu
+    cmp edx, 1
+    jne .basic_candle_dlu
+    cmp ecx, 2
+    jne .basic_candle_right_urd
+    inc dword [rbx + ASSP_BASIC_PATTERNS_CANDLE_LEFT]
+    jmp .basic_candle_right_urd
+
+.basic_candle_dlu:
+    cmp eax, 2
+    jne .basic_candle_right_urd
+    cmp edx, 1
+    jne .basic_candle_right_urd
+    cmp ecx, 4
+    jne .basic_candle_right_urd
+    inc dword [rbx + ASSP_BASIC_PATTERNS_CANDLE_LEFT]
+
+.basic_candle_right_urd:
+    cmp eax, 4
+    jne .basic_candle_right_dru
+    cmp edx, 8
+    jne .basic_candle_right_dru
+    cmp ecx, 2
+    jne .basic_boxes
+    inc dword [rbx + ASSP_BASIC_PATTERNS_CANDLE_RIGHT]
+    jmp .basic_boxes
+
+.basic_candle_right_dru:
+    cmp eax, 2
+    jne .basic_boxes
+    cmp edx, 8
+    jne .basic_boxes
+    cmp ecx, 4
+    jne .basic_boxes
+    inc dword [rbx + ASSP_BASIC_PATTERNS_CANDLE_RIGHT]
+
+.basic_boxes:
+    cmp r12, 3
+    jb .basic_shift
+
+    mov eax, [rsp + 0]
+    mov edx, [rsp + 4]
+    mov r10d, [rsp + 8]
+
+    cmp eax, 1
+    jne .basic_box_lr_rev
+    cmp edx, 8
+    jne .basic_box_lr_rev
+    cmp r10d, 1
+    jne .basic_box_lr_rev
+    cmp ecx, 8
+    jne .basic_box_ud
+    inc dword [rbx + ASSP_BASIC_PATTERNS_BOX_LR]
+    jmp .basic_box_ud
+.basic_box_lr_rev:
+    cmp eax, 8
+    jne .basic_box_ud
+    cmp edx, 1
+    jne .basic_box_ud
+    cmp r10d, 8
+    jne .basic_box_ud
+    cmp ecx, 1
+    jne .basic_box_ud
+    inc dword [rbx + ASSP_BASIC_PATTERNS_BOX_LR]
+
+.basic_box_ud:
+    cmp eax, 4
+    jne .basic_box_ud_rev
+    cmp edx, 2
+    jne .basic_box_ud_rev
+    cmp r10d, 4
+    jne .basic_box_ud_rev
+    cmp ecx, 2
+    jne .basic_box_ld
+    inc dword [rbx + ASSP_BASIC_PATTERNS_BOX_UD]
+    jmp .basic_box_ld
+.basic_box_ud_rev:
+    cmp eax, 2
+    jne .basic_box_ld
+    cmp edx, 4
+    jne .basic_box_ld
+    cmp r10d, 2
+    jne .basic_box_ld
+    cmp ecx, 4
+    jne .basic_box_ld
+    inc dword [rbx + ASSP_BASIC_PATTERNS_BOX_UD]
+
+.basic_box_ld:
+    cmp eax, 1
+    jne .basic_box_ld_rev
+    cmp edx, 2
+    jne .basic_box_ld_rev
+    cmp r10d, 1
+    jne .basic_box_ld_rev
+    cmp ecx, 2
+    jne .basic_box_lu
+    inc dword [rbx + ASSP_BASIC_PATTERNS_BOX_LD]
+    jmp .basic_box_lu
+.basic_box_ld_rev:
+    cmp eax, 2
+    jne .basic_box_lu
+    cmp edx, 1
+    jne .basic_box_lu
+    cmp r10d, 2
+    jne .basic_box_lu
+    cmp ecx, 1
+    jne .basic_box_lu
+    inc dword [rbx + ASSP_BASIC_PATTERNS_BOX_LD]
+
+.basic_box_lu:
+    cmp eax, 1
+    jne .basic_box_lu_rev
+    cmp edx, 4
+    jne .basic_box_lu_rev
+    cmp r10d, 1
+    jne .basic_box_lu_rev
+    cmp ecx, 4
+    jne .basic_box_rd
+    inc dword [rbx + ASSP_BASIC_PATTERNS_BOX_LU]
+    jmp .basic_box_rd
+.basic_box_lu_rev:
+    cmp eax, 4
+    jne .basic_box_rd
+    cmp edx, 1
+    jne .basic_box_rd
+    cmp r10d, 4
+    jne .basic_box_rd
+    cmp ecx, 1
+    jne .basic_box_rd
+    inc dword [rbx + ASSP_BASIC_PATTERNS_BOX_LU]
+
+.basic_box_rd:
+    cmp eax, 8
+    jne .basic_box_rd_rev
+    cmp edx, 2
+    jne .basic_box_rd_rev
+    cmp r10d, 8
+    jne .basic_box_rd_rev
+    cmp ecx, 2
+    jne .basic_box_ru
+    inc dword [rbx + ASSP_BASIC_PATTERNS_BOX_RD]
+    jmp .basic_box_ru
+.basic_box_rd_rev:
+    cmp eax, 2
+    jne .basic_box_ru
+    cmp edx, 8
+    jne .basic_box_ru
+    cmp r10d, 2
+    jne .basic_box_ru
+    cmp ecx, 8
+    jne .basic_box_ru
+    inc dword [rbx + ASSP_BASIC_PATTERNS_BOX_RD]
+
+.basic_box_ru:
+    cmp eax, 8
+    jne .basic_box_ru_rev
+    cmp edx, 4
+    jne .basic_box_ru_rev
+    cmp r10d, 8
+    jne .basic_box_ru_rev
+    cmp ecx, 4
+    jne .basic_shift
+    inc dword [rbx + ASSP_BASIC_PATTERNS_BOX_RU]
+    jmp .basic_shift
+.basic_box_ru_rev:
+    cmp eax, 4
+    jne .basic_shift
+    cmp edx, 8
+    jne .basic_shift
+    cmp r10d, 4
+    jne .basic_shift
+    cmp ecx, 8
+    jne .basic_shift
+    inc dword [rbx + ASSP_BASIC_PATTERNS_BOX_RU]
+
+.basic_shift:
+    mov edx, [rsp + 4]
+    mov [rsp + 0], edx
+    mov edx, [rsp + 8]
+    mov [rsp + 4], edx
+    mov [rsp + 8], ecx
+    inc r12
+
+.basic_line_done:
+    mov rsi, [rsp + 16]
+    jmp .basic_line_loop
+
+.basic_success:
+    mov eax, ASSP_TRUE
+    jmp .basic_done
+
+.basic_fail:
+    xor eax, eax
+
+.basic_done:
+    add rsp, 32
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
     ret

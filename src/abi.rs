@@ -111,6 +111,19 @@ pub struct StreamToken {
     pub len: usize,
 }
 
+#[repr(C)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct BasicPatterns {
+    pub candle_left: u32,
+    pub candle_right: u32,
+    pub box_lr: u32,
+    pub box_ud: u32,
+    pub box_ld: u32,
+    pub box_lu: u32,
+    pub box_rd: u32,
+    pub box_ru: u32,
+}
+
 unsafe extern "C" {
     fn assp_version() -> u32;
     fn assp_find_byte(data: *const u8, len: usize, byte: u32) -> usize;
@@ -292,6 +305,11 @@ unsafe extern "C" {
         len: usize,
         mono_threshold: usize,
         out2: *mut u32,
+    ) -> c_int;
+    fn assp_count_basic_patterns_minimized_4(
+        data: *const u8,
+        len: usize,
+        out: *mut BasicPatterns,
     ) -> c_int;
     fn assp_minimize_measure_4(
         rows: *const u8,
@@ -1056,6 +1074,13 @@ pub fn count_facing_steps_minimized_4(data: &[u8], mono_threshold: usize) -> Opt
 }
 
 #[must_use]
+pub fn count_basic_patterns_minimized_4(data: &[u8]) -> Option<BasicPatterns> {
+    let mut out = BasicPatterns::default();
+    let ok = unsafe { assp_count_basic_patterns_minimized_4(data.as_ptr(), data.len(), &mut out) };
+    (ok != 0).then_some(out)
+}
+
+#[must_use]
 pub fn minimize_measure_4(rows: &[[u8; 4]]) -> Vec<[u8; 4]> {
     let count = unsafe {
         assp_minimize_measure_4(
@@ -1187,6 +1212,12 @@ pub fn count_anchors_4(data: &[u8]) -> Option<[u32; 4]> {
 pub fn count_facing_steps_4(data: &[u8], mono_threshold: usize) -> Option<[u32; 2]> {
     let minimized = minimize_chart_4(data)?;
     count_facing_steps_minimized_4(&minimized, mono_threshold)
+}
+
+#[must_use]
+pub fn count_basic_patterns_4(data: &[u8]) -> Option<BasicPatterns> {
+    let minimized = minimize_chart_4(data)?;
+    count_basic_patterns_minimized_4(&minimized)
 }
 
 #[must_use]
@@ -1615,5 +1646,11 @@ mod tests {
     fn stream_token_layout_is_c_abi() {
         assert_eq!(std::mem::size_of::<super::StreamToken>(), 16);
         assert_eq!(std::mem::align_of::<super::StreamToken>(), 8);
+    }
+
+    #[test]
+    fn basic_patterns_layout_is_c_abi() {
+        assert_eq!(std::mem::size_of::<super::BasicPatterns>(), 32);
+        assert_eq!(std::mem::align_of::<super::BasicPatterns>(), 4);
     }
 }

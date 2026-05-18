@@ -61,6 +61,7 @@ The first implemented pieces are:
 - `assp_measure_equally_spaced_minimized_8`
 - `assp_count_anchors_minimized_4`
 - `assp_count_facing_steps_minimized_4`
+- `assp_count_basic_patterns_minimized_4`
 - `assp_minimize_measure_4`
 - `assp_minimize_measure_8`
 - `assp_minimize_chart_4`
@@ -124,6 +125,8 @@ equally-spaced flags from already-minimized note data.
 from minimized 4-panel note rows.
 `assp_count_facing_steps_minimized_4` counts RSSP-style left-facing and
 right-facing mono sequences from minimized 4-panel note rows.
+`assp_count_basic_patterns_minimized_4` counts RSSP's default candle and
+box-family patterns from minimized 4-panel note rows.
 `assp_minimize_measure_4` and `assp_minimize_measure_8` apply RSSP's
 per-measure row reduction for 4-panel and 8-panel charts, which is the first
 piece of the minimized-note/hash pipeline.
@@ -323,8 +326,8 @@ chart offset seconds, beat-zero timing offsets, timing ownership,
 RSSP-style display BPM aliases,
 min/max/average/median display BPMs, tier BPM, max/peak/median NPS,
 equally-spaced measure counts, formatted length,
-density-derived stream counts, total stream counts, stream percentages, anchors,
-mono/facing-step counts,
+density-derived stream counts, total stream counts, stream percentages,
+candle/box patterns, anchors, mono/facing-step counts,
 duration seconds, fixed-point duration metrics with stops/stops-freezes aliases,
 delays, warps, token/SN breakdown aliases,
 segment/stream breakdown aliases,

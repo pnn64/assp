@@ -19,6 +19,7 @@ extern assp_count_gimmick_speed_segments
 extern assp_count_note_stats_4
 extern assp_count_note_stats_8
 extern assp_count_anchors_minimized_4
+extern assp_count_basic_patterns_minimized_4
 extern assp_count_facing_steps_minimized_4
 extern assp_count_timing_fakes_4
 extern assp_count_timing_fakes_8
@@ -217,6 +218,10 @@ start:
     jz fail_nps
 
     call prepare_equally_spaced
+    test eax, eax
+    jz fail_stats
+
+    call prepare_basic_patterns
     test eax, eax
     jz fail_stats
 
@@ -917,6 +922,35 @@ prepare_equally_spaced:
 
 .sum_done:
     mov [equally_spaced_measures], r9
+    mov eax, ASSP_TRUE
+    jmp .done
+
+.fail:
+    xor eax, eax
+
+.done:
+    add rsp, 40
+    ret
+
+prepare_basic_patterns:
+    sub rsp, 40
+
+    mov qword [basic_pattern_counts + 0], 0
+    mov qword [basic_pattern_counts + 8], 0
+    mov qword [basic_pattern_counts + 16], 0
+    mov qword [basic_pattern_counts + 24], 0
+
+    cmp qword [chart_lanes], 4
+    jne .success
+
+    lea rcx, [minimized_buffer]
+    mov rdx, [minimized_chart_len]
+    lea r8, [basic_pattern_counts]
+    call assp_count_basic_patterns_minimized_4
+    test eax, eax
+    jz .fail
+
+.success:
     mov eax, ASSP_TRUE
     jmp .done
 
@@ -2737,6 +2771,48 @@ print_report:
     lea rcx, [label_equally_spaced_measures]
     mov rdx, [equally_spaced_measures]
     call print_field
+    lea rcx, [label_candles]
+    mov edx, [basic_pattern_counts + ASSP_BASIC_PATTERNS_CANDLE_LEFT]
+    add edx, [basic_pattern_counts + ASSP_BASIC_PATTERNS_CANDLE_RIGHT]
+    call print_field
+    lea rcx, [label_candle_left]
+    mov edx, [basic_pattern_counts + ASSP_BASIC_PATTERNS_CANDLE_LEFT]
+    call print_field
+    lea rcx, [label_candle_right]
+    mov edx, [basic_pattern_counts + ASSP_BASIC_PATTERNS_CANDLE_RIGHT]
+    call print_field
+    lea rcx, [label_boxes]
+    mov edx, [basic_pattern_counts + ASSP_BASIC_PATTERNS_BOX_LR]
+    add edx, [basic_pattern_counts + ASSP_BASIC_PATTERNS_BOX_UD]
+    add edx, [basic_pattern_counts + ASSP_BASIC_PATTERNS_BOX_LD]
+    add edx, [basic_pattern_counts + ASSP_BASIC_PATTERNS_BOX_LU]
+    add edx, [basic_pattern_counts + ASSP_BASIC_PATTERNS_BOX_RD]
+    add edx, [basic_pattern_counts + ASSP_BASIC_PATTERNS_BOX_RU]
+    call print_field
+    lea rcx, [label_box_lr]
+    mov edx, [basic_pattern_counts + ASSP_BASIC_PATTERNS_BOX_LR]
+    call print_field
+    lea rcx, [label_box_ud]
+    mov edx, [basic_pattern_counts + ASSP_BASIC_PATTERNS_BOX_UD]
+    call print_field
+    lea rcx, [label_box_corner]
+    mov edx, [basic_pattern_counts + ASSP_BASIC_PATTERNS_BOX_LD]
+    add edx, [basic_pattern_counts + ASSP_BASIC_PATTERNS_BOX_LU]
+    add edx, [basic_pattern_counts + ASSP_BASIC_PATTERNS_BOX_RD]
+    add edx, [basic_pattern_counts + ASSP_BASIC_PATTERNS_BOX_RU]
+    call print_field
+    lea rcx, [label_box_ld]
+    mov edx, [basic_pattern_counts + ASSP_BASIC_PATTERNS_BOX_LD]
+    call print_field
+    lea rcx, [label_box_lu]
+    mov edx, [basic_pattern_counts + ASSP_BASIC_PATTERNS_BOX_LU]
+    call print_field
+    lea rcx, [label_box_rd]
+    mov edx, [basic_pattern_counts + ASSP_BASIC_PATTERNS_BOX_RD]
+    call print_field
+    lea rcx, [label_box_ru]
+    mov edx, [basic_pattern_counts + ASSP_BASIC_PATTERNS_BOX_RU]
+    call print_field
     lea rcx, [label_anchors]
     mov edx, [anchor_counts + 0]
     add edx, [anchor_counts + 4]
@@ -3656,6 +3732,17 @@ label_average_bpm db "average_bpm: ", 0
 label_median_bpm db "median_bpm: ", 0
 label_measures db "measures: ", 0
 label_equally_spaced_measures db "equally_spaced_measures: ", 0
+label_candles db "candles: ", 0
+label_candle_left db "candle_left: ", 0
+label_candle_right db "candle_right: ", 0
+label_boxes db "boxes: ", 0
+label_box_lr db "box_lr: ", 0
+label_box_ud db "box_ud: ", 0
+label_box_corner db "box_corner: ", 0
+label_box_ld db "box_ld: ", 0
+label_box_lu db "box_lu: ", 0
+label_box_rd db "box_rd: ", 0
+label_box_ru db "box_ru: ", 0
 label_anchors db "anchors: ", 0
 label_anchor_left db "anchor_left: ", 0
 label_anchor_down db "anchor_down: ", 0
@@ -3885,6 +3972,7 @@ warp_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
 fake_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
 nps_buffer resd DENSITY_CAP
 equally_spaced_buffer resb DENSITY_CAP
+basic_pattern_counts resb ASSP_BASIC_PATTERNS_SIZE
 anchor_counts resd 4
 facing_counts resd 2
 row_scratch resq ROW_SCRATCH_CAP

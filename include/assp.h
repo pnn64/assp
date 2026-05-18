@@ -96,6 +96,17 @@ typedef struct assp_stream_token {
     size_t len;
 } assp_stream_token;
 
+typedef struct assp_basic_patterns {
+    uint32_t candle_left;
+    uint32_t candle_right;
+    uint32_t box_lr;
+    uint32_t box_ud;
+    uint32_t box_ld;
+    uint32_t box_lu;
+    uint32_t box_rd;
+    uint32_t box_ru;
+} assp_basic_patterns;
+
 uint32_t assp_version(void);
 size_t assp_find_byte(const uint8_t *data, size_t len, uint32_t byte);
 size_t assp_count_timing_segments(const uint8_t *data, size_t len);
@@ -319,6 +330,11 @@ int32_t assp_count_facing_steps_minimized_4(
     size_t len,
     size_t mono_threshold,
     uint32_t *out2
+);
+int32_t assp_count_basic_patterns_minimized_4(
+    const uint8_t *data,
+    size_t len,
+    assp_basic_patterns *out
 );
 int64_t assp_nps_median_centi(
     const uint32_t *nps_milli,
