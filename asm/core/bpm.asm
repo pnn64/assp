@@ -13,6 +13,7 @@ global assp_elapsed_ms_bpm_only
 global assp_elapsed_ms_with_events
 global assp_measure_nps_milli_from_bpms
 global assp_measure_nps_milli_with_events
+global assp_nps_median_centi
 
 section .text
 
@@ -779,6 +780,114 @@ tier_commit_run:
     jle .done
     mov [rsp + 8 + TIER_MAX_E], rax
 .done:
+    ret
+
+; rcx = u32 NPS values in thousandths, rdx = count.
+; rax = median NPS rounded to two decimal places.
+assp_nps_median_centi:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+
+    test rdx, rdx
+    jz .zero
+    test rcx, rcx
+    jz .zero
+
+    mov rsi, rcx
+    mov rdi, rdx
+    mov rax, rdx
+    shr rax, 1
+    test rdx, 1
+    jz .even
+
+.odd:
+    mov r8, rax
+    call kth_nps_milli_value
+    mov rbx, 10
+    call round_signed_div_ties_even
+    jmp .done
+
+.even:
+    mov r12, rax
+    mov r8, r12
+    dec r8
+    call kth_nps_milli_value
+    mov r13, rax
+    mov r8, r12
+    call kth_nps_milli_value
+    add rax, r13
+    mov rbx, 20
+    call round_signed_div_ties_even
+    jmp .done
+
+.zero:
+    xor eax, eax
+
+.done:
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
+; rsi = u32 NPS values, rdi = count, r8 = kth index. rax = kth value.
+kth_nps_milli_value:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+
+    xor r10d, r10d
+.candidate_loop:
+    cmp r10, rdi
+    jae .zero
+    mov r11d, [rsi + r10 * 4]
+    xor r14d, r14d
+    xor r15d, r15d
+    xor r12d, r12d
+
+.count_loop:
+    cmp r12, rdi
+    jae .check_candidate
+    mov ebx, [rsi + r12 * 4]
+    cmp ebx, r11d
+    jb .less
+    jbe .less_equal
+    jmp .count_next
+.less:
+    inc r14
+.less_equal:
+    inc r15
+.count_next:
+    inc r12
+    jmp .count_loop
+
+.check_candidate:
+    cmp r14, r8
+    ja .candidate_next
+    cmp r15, r8
+    jbe .candidate_next
+    mov eax, r11d
+    jmp .done
+
+.candidate_next:
+    inc r10
+    jmp .candidate_loop
+
+.zero:
+    xor eax, eax
+
+.done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
     ret
 
 ; rax = signed numerator, rbx = positive denominator. rax = rounded quotient.

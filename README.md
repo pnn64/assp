@@ -42,6 +42,7 @@ The first implemented pieces are:
 - `assp_elapsed_ms_with_events`
 - `assp_measure_nps_milli_from_bpms`
 - `assp_measure_nps_milli_with_events`
+- `assp_nps_median_centi`
 - `assp_last_beat_milli_4`
 - `assp_last_beat_milli_8`
 - `assp_measure_densities_4`
@@ -131,6 +132,8 @@ duration adjustment.
 first fixed-point NPS path from parsed BPM maps and per-measure densities.
 `assp_measure_nps_milli_with_events` computes measure NPS from elapsed
 measure durations when stops, delays, or warps are present.
+`assp_nps_median_centi` computes the median of a fixed-point per-measure NPS
+vector rounded to two decimal places.
 `assp_last_beat_milli_4` and `assp_last_beat_milli_8` find the last object beat
 for 4-panel and 8-panel note data, and `assp_elapsed_ms_bpm_only` computes
 BPM-only elapsed time in milliseconds.
@@ -244,8 +247,8 @@ description. SM `#NOTES:` / `#NOTES2:` blocks are also split into their five
 metadata fields before chart rows are passed to the stat counter. The standalone
 report path currently supports `dance-single` and `dance-double` charts. Chart
 reports include RSSP-style chart hashes,
-normalized hash BPMs, min/max/average/median display BPMs, tier BPM, peak NPS
-in thousandths, density-derived stream counts, fixed-point duration metrics with
+normalized hash BPMs, min/max/average/median display BPMs, tier BPM, peak and
+median NPS, density-derived stream counts, fixed-point duration metrics with
 stops/delays/warps, token breakdowns, segment breakdowns, offset adjustment, and
 note stats with nonfake mine and timing-fake counts.
 

@@ -1,6 +1,7 @@
 use assp::{
     bpm_at_beat_milli, find_bpms_for_chart, find_chart_by_index, measure_densities_4,
-    measure_nps_milli_from_bpms, measure_nps_milli_with_events, parse_bpm_map, tier_bpm_centi,
+    measure_nps_milli_from_bpms, measure_nps_milli_with_events, nps_median_centi, parse_bpm_map,
+    tier_bpm_centi,
 };
 use rssp_core::{bpm, math, nps};
 
@@ -24,6 +25,7 @@ fn assert_nps_match(densities: &[u32], bpms: &[u8]) {
     let parsed = parse_bpm_map(bpms).unwrap();
     let asm = measure_nps_milli_from_bpms(densities, &parsed).unwrap();
     assert_eq!(asm, rust_nps_milli(densities, bpms));
+    assert_nps_median_match(&asm);
 }
 
 fn rust_nps_milli_with_events(
@@ -79,6 +81,17 @@ fn assert_event_nps_match(
         asm,
         rust_nps_milli_with_events(densities, bpms, stops, delays, warps)
     );
+    assert_nps_median_match(&asm);
+}
+
+fn assert_nps_median_match(nps_milli: &[u32]) {
+    let rust_values: Vec<_> = nps_milli.iter().map(|&v| v as f64 / 1000.0).collect();
+    let (_, median) = nps::get_nps_stats(&rust_values);
+    let rust = math::round_dp(median, 2);
+    assert_eq!(
+        nps_median_centi(nps_milli),
+        (rust * 100.0).round_ties_even() as i64
+    );
 }
 
 fn assert_tier_bpm_match(densities: &[u32], bpms: &[u8]) {
@@ -114,6 +127,15 @@ fn computes_measure_nps_with_timing_events() {
     assert_event_nps_match(&[16, 16], b"0=60", b"2=1", b"", b"");
     assert_event_nps_match(&[16, 16], b"0=60", b"", b"2=1", b"");
     assert_event_nps_match(&[16, 16], b"0=60", b"", b"", b"0=4");
+}
+
+#[test]
+fn computes_median_nps_from_fixed_point_vector() {
+    assert_nps_median_match(&[]);
+    assert_nps_median_match(&[0, 8000, 16000]);
+    assert_nps_median_match(&[10010, 10020]);
+    assert_nps_median_match(&[10020, 10030]);
+    assert_nps_median_match(&[0, 0, 2500, 5000, 7500, 10000]);
 }
 
 #[test]

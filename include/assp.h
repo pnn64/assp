@@ -245,6 +245,10 @@ size_t assp_measure_densities_8(
     uint32_t *out,
     size_t out_cap
 );
+int64_t assp_nps_median_centi(
+    const uint32_t *nps_milli,
+    size_t len
+);
 size_t assp_last_beat_milli_4(
     const uint8_t *data,
     size_t len

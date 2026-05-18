@@ -224,6 +224,7 @@ unsafe extern "C" {
         out: *mut u32,
         out_cap: usize,
     ) -> usize;
+    fn assp_nps_median_centi(nps_milli: *const u32, len: usize) -> i64;
     fn assp_last_beat_milli_4(data: *const u8, len: usize) -> usize;
     fn assp_last_beat_milli_8(data: *const u8, len: usize) -> usize;
     fn assp_measure_densities_4(
@@ -721,6 +722,11 @@ pub fn measure_nps_milli_with_events(
         }
     }
     Some(out)
+}
+
+#[must_use]
+pub fn nps_median_centi(nps_milli: &[u32]) -> i64 {
+    unsafe { assp_nps_median_centi(nps_milli.as_ptr(), nps_milli.len()) }
 }
 
 #[must_use]
