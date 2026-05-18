@@ -121,6 +121,26 @@ pub struct StepParityOrientationCosts4 {
     pub total: f32,
 }
 
+#[repr(C)]
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
+pub struct StepParityActionCosts4 {
+    pub mine: f32,
+    pub hold_switch: f32,
+    pub bracket_tap: f32,
+    pub bracket_jack: f32,
+    pub doublestep: f32,
+    pub slow_bracket: f32,
+    pub twisted_foot: f32,
+    pub facing: f32,
+    pub spin: f32,
+    pub footswitch: f32,
+    pub sideswitch: f32,
+    pub missed_footswitch: f32,
+    pub jack: f32,
+    pub big_movement: f32,
+    pub total: f32,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct StepParityTransition4 {
     pub placement: [u8; 4],
@@ -421,6 +441,20 @@ unsafe extern "C" {
         result: *const StepParityState4,
         hit: *const i8,
         out: *mut StepParityOrientationCosts4,
+    ) -> c_int;
+    fn assp_step_parity_action_cost_4(
+        initial: *const StepParityState4,
+        result: *const StepParityState4,
+        placement: *const u8,
+        hit: *const i8,
+        note_count: u32,
+        active_mask: u32,
+        hold_mask: u32,
+        mine_mask: u32,
+        side_mask: u32,
+        prev_row_has_live_hold: c_int,
+        elapsed_seconds: *const f32,
+        out: *mut StepParityActionCosts4,
     ) -> c_int;
     fn assp_parse_bpm_map(
         data: *const u8,
@@ -1378,6 +1412,40 @@ pub fn step_parity_orientation_action_costs_4(
 }
 
 #[must_use]
+pub fn step_parity_action_cost_4(
+    initial: &StepParityState4,
+    result: &StepParityState4,
+    placement: &[u8; 4],
+    hit: &[i8; 5],
+    note_count: u8,
+    active_mask: u8,
+    hold_mask: u8,
+    mine_mask: u8,
+    side_mask: u8,
+    prev_row_has_live_hold: bool,
+    elapsed_seconds: f32,
+) -> Option<StepParityActionCosts4> {
+    let mut out = StepParityActionCosts4::default();
+    let ok = unsafe {
+        assp_step_parity_action_cost_4(
+            initial,
+            result,
+            placement.as_ptr(),
+            hit.as_ptr(),
+            u32::from(note_count),
+            u32::from(active_mask),
+            u32::from(hold_mask),
+            u32::from(mine_mask),
+            u32::from(side_mask),
+            c_int::from(prev_row_has_live_hold),
+            &elapsed_seconds,
+            &mut out,
+        )
+    };
+    (ok != 0).then_some(out)
+}
+
+#[must_use]
 pub fn parse_bpm_map(data: &[u8]) -> Option<Vec<BpmSegment>> {
     let count = unsafe { assp_parse_bpm_map(data.as_ptr(), data.len(), std::ptr::null_mut(), 0) };
     if count == NOT_FOUND {
@@ -2251,9 +2319,9 @@ pub fn count_timing_note_stats_no_holds_8(
 #[cfg(test)]
 mod tests {
     use super::{
-        NoteStats, StepParityActionFlags4, StepParityBasicCosts4, StepParityBracketTapCosts4,
-        StepParityDistanceCosts4, StepParityElapsedCosts4, StepParityOrientationCosts4,
-        StepParityState4, StepParitySwitchCosts4, TechCounts,
+        NoteStats, StepParityActionCosts4, StepParityActionFlags4, StepParityBasicCosts4,
+        StepParityBracketTapCosts4, StepParityDistanceCosts4, StepParityElapsedCosts4,
+        StepParityOrientationCosts4, StepParityState4, StepParitySwitchCosts4, TechCounts,
     };
 
     #[test]
@@ -2314,6 +2382,12 @@ mod tests {
     fn step_parity_orientation_costs4_layout_is_c_abi() {
         assert_eq!(std::mem::size_of::<StepParityOrientationCosts4>(), 16);
         assert_eq!(std::mem::align_of::<StepParityOrientationCosts4>(), 4);
+    }
+
+    #[test]
+    fn step_parity_action_costs4_layout_is_c_abi() {
+        assert_eq!(std::mem::size_of::<StepParityActionCosts4>(), 60);
+        assert_eq!(std::mem::align_of::<StepParityActionCosts4>(), 4);
     }
 
     #[test]

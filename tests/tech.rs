@@ -1,15 +1,15 @@
 use assp::{
-    StepParityActionFlags4, StepParityBasicCosts4, StepParityBracketTapCosts4,
-    StepParityDistanceCosts4, StepParityElapsedCosts4, StepParityOrientationCosts4,
-    StepParityState4, StepParitySwitchCosts4, TechCounts,
+    StepParityActionCosts4, StepParityActionFlags4, StepParityBasicCosts4,
+    StepParityBracketTapCosts4, StepParityDistanceCosts4, StepParityElapsedCosts4,
+    StepParityOrientationCosts4, StepParityState4, StepParitySwitchCosts4, TechCounts,
     calculate_step_tech_counts_from_placements_4, count_step_tech_brackets_minimized_4,
-    count_step_tech_brackets_minimized_8, parse_tech_notation, step_parity_action_flags_4,
-    step_parity_basic_action_costs_4, step_parity_bracket_tap_action_costs_4,
-    step_parity_distance_action_costs_4, step_parity_elapsed_action_costs_4,
-    step_parity_orientation_action_costs_4, step_parity_permutations_4,
-    step_parity_result_state_holds_4, step_parity_result_state_no_holds_4,
-    step_parity_row_key_candidates_4, step_parity_row_transitions_4,
-    step_parity_switch_action_costs_4,
+    count_step_tech_brackets_minimized_8, parse_tech_notation, step_parity_action_cost_4,
+    step_parity_action_flags_4, step_parity_basic_action_costs_4,
+    step_parity_bracket_tap_action_costs_4, step_parity_distance_action_costs_4,
+    step_parity_elapsed_action_costs_4, step_parity_orientation_action_costs_4,
+    step_parity_permutations_4, step_parity_result_state_holds_4,
+    step_parity_result_state_no_holds_4, step_parity_row_key_candidates_4,
+    step_parity_row_transitions_4, step_parity_switch_action_costs_4,
 };
 use std::collections::HashSet;
 
@@ -574,6 +574,81 @@ fn expected_orientation_costs(
         spin,
         total: twisted_foot + facing_cost + spin,
     }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn expected_action_costs(
+    initial: StepParityState4,
+    result: StepParityState4,
+    placement: [u8; 4],
+    hit: [i8; 5],
+    note_count: u8,
+    active_mask: u8,
+    hold_mask: u8,
+    mine_mask: u8,
+    side_mask: u8,
+    prev_row_has_live_hold: bool,
+    elapsed: f32,
+) -> StepParityActionCosts4 {
+    let flags = expected_action_flags(initial, result, hit);
+    let basic = expected_basic_costs(
+        result,
+        flags,
+        active_mask.count_ones() > 1,
+        mine_mask,
+        prev_row_has_live_hold,
+    );
+    let elapsed_costs = expected_elapsed_costs(flags, note_count, elapsed);
+    let switch = expected_switch_costs(
+        initial,
+        result,
+        placement,
+        active_mask,
+        side_mask,
+        mine_mask,
+        elapsed,
+    );
+    let bracket_tap = expected_bracket_tap_costs(initial, hit, hold_mask, elapsed);
+    let distance = expected_distance_costs(initial, result, hit, hold_mask, elapsed);
+    let orientation = expected_orientation_costs(initial, result, hit);
+    let twisted_foot = if active_mask.count_ones() > 1 {
+        orientation.twisted_foot
+    } else {
+        0.0
+    };
+
+    let mut out = StepParityActionCosts4 {
+        mine: basic.mine,
+        hold_switch: distance.hold_switch,
+        bracket_tap: bracket_tap.total,
+        bracket_jack: basic.bracket_jack,
+        doublestep: basic.doublestep,
+        slow_bracket: elapsed_costs.slow_bracket,
+        twisted_foot,
+        facing: orientation.facing,
+        spin: orientation.spin,
+        footswitch: switch.footswitch,
+        sideswitch: switch.sideswitch,
+        missed_footswitch: basic.missed_footswitch,
+        jack: elapsed_costs.jack,
+        big_movement: distance.big_movement,
+        total: 0.0,
+    };
+    out.total = out.mine
+        + out.hold_switch
+        + out.bracket_tap
+        + out.bracket_jack
+        + out.doublestep
+        + out.slow_bracket
+        + out.twisted_foot
+        + out.facing
+        + out.spin
+        + out.footswitch
+        + out.sideswitch
+        + out.missed_footswitch
+        + out.jack
+        + out.big_movement;
+    out
 }
 
 #[test]
@@ -1247,6 +1322,119 @@ fn calculates_orientation_action_cost_terms_like_rssp_core() {
         assert_eq!(
             step_parity_orientation_action_costs_4(&initial, &result, &hit).unwrap(),
             expected_orientation_costs(initial, result, hit)
+        );
+    }
+}
+
+#[test]
+fn calculates_full_action_cost_like_rssp_core_order() {
+    let cases = [
+        (
+            StepParityState4 {
+                combined_columns: [1, 0, 0, 0],
+                where_feet_are: [-1, 0, -1, -1, -1],
+                moved_mask: 0b0001,
+                ..StepParityState4::default()
+            },
+            [1, 0, 0, 0],
+            0b0001,
+            0,
+            0b0001,
+            0,
+            false,
+            0.05f32,
+        ),
+        (
+            StepParityState4 {
+                combined_columns: [1, 0, 0, 0],
+                where_feet_are: [-1, 0, -1, -1, -1],
+                moved_mask: 0b0001,
+                ..StepParityState4::default()
+            },
+            [3, 0, 0, 0],
+            0b0001,
+            0,
+            0,
+            0,
+            false,
+            0.3f32,
+        ),
+        (
+            StepParityState4 {
+                combined_columns: [0, 3, 0, 0],
+                where_feet_are: [-1, -1, -1, 1, -1],
+                ..StepParityState4::default()
+            },
+            [0, 1, 0, 0],
+            0b0010,
+            0b0010,
+            0,
+            0,
+            false,
+            0.25f32,
+        ),
+        (
+            StepParityState4 {
+                combined_columns: [0, 0, 3, 0],
+                where_feet_are: [-1, -1, -1, 2, -1],
+                moved_mask: 0b0100,
+                ..StepParityState4::default()
+            },
+            [1, 0, 4, 0],
+            0b0101,
+            0,
+            0b0100,
+            0b0001,
+            false,
+            0.25f32,
+        ),
+    ];
+
+    for (
+        initial,
+        placement,
+        active_mask,
+        hold_mask,
+        mine_mask,
+        side_mask,
+        prev_live_hold,
+        elapsed,
+    ) in cases
+    {
+        let (result, hit, _) = if hold_mask == 0 {
+            step_parity_result_state_no_holds_4(&initial, &placement, active_mask).unwrap()
+        } else {
+            step_parity_result_state_holds_4(&initial, &placement, active_mask, hold_mask).unwrap()
+        };
+        let expected = expected_action_costs(
+            initial,
+            result,
+            placement,
+            hit,
+            active_mask.count_ones() as u8,
+            active_mask,
+            hold_mask,
+            mine_mask,
+            side_mask,
+            prev_live_hold,
+            elapsed,
+        );
+        assert_eq!(
+            step_parity_action_cost_4(
+                &initial,
+                &result,
+                &placement,
+                &hit,
+                active_mask.count_ones() as u8,
+                active_mask,
+                hold_mask,
+                mine_mask,
+                side_mask,
+                prev_live_hold,
+                elapsed,
+            )
+            .unwrap(),
+            expected
         );
     }
 }

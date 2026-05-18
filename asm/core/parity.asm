@@ -13,6 +13,7 @@ global assp_step_parity_switch_action_costs_4
 global assp_step_parity_bracket_tap_action_costs_4
 global assp_step_parity_distance_action_costs_4
 global assp_step_parity_orientation_action_costs_4
+global assp_step_parity_action_cost_4
 
 section .text
 
@@ -1693,6 +1694,204 @@ orientation_pair_avg_4:
     movzx r11d, byte [r10 + rax]
     lea r10, [rel dance_single_pair_avg_x2]
     movzx eax, byte [r10 + rax]
+    ret
+
+; rcx = initial, rdx = result, r8 = placement[4], r9 = hit[5],
+; stack arg 5 = note count, stack arg 6 = active mask,
+; stack arg 7 = hold mask, stack arg 8 = mine|fake mine mask,
+; stack arg 9 = side mask, stack arg 10 = prev row has live hold,
+; stack arg 11 = elapsed seconds f32 ptr,
+; stack arg 12 = out assp_step_parity_action_costs4.
+; eax = 1 on success, 0 on invalid pointers.
+assp_step_parity_action_cost_4:
+    test rcx, rcx
+    jz .fail_no_stack
+    test rdx, rdx
+    jz .fail_no_stack
+    test r8, r8
+    jz .fail_no_stack
+    test r9, r9
+    jz .fail_no_stack
+    mov rax, [rsp + 88]
+    test rax, rax
+    jz .fail_no_stack
+    mov rax, [rsp + 96]
+    test rax, rax
+    jz .fail_no_stack
+
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 256
+
+    mov r12, rcx
+    mov r13, rdx
+    mov r14, r8
+    mov r15, r9
+    mov rsi, [rsp + 400]
+    mov rdi, [rsp + 408]
+
+    mov rcx, r12
+    mov rdx, r13
+    mov r8, r15
+    lea r9, [rsp + 80]
+    call assp_step_parity_action_flags_4
+    test eax, eax
+    jz .fail
+
+    mov eax, [rsp + 360]
+    and eax, 0fh
+    mov ecx, eax
+    dec ecx
+    test eax, ecx
+    setnz r8b
+    movzx r8d, r8b
+    mov eax, [rsp + 392]
+    mov [rsp + 32], eax
+    lea rax, [rsp + 96]
+    mov [rsp + 40], rax
+    mov rcx, r13
+    lea rdx, [rsp + 80]
+    mov r9d, [rsp + 376]
+    call assp_step_parity_basic_action_costs_4
+    test eax, eax
+    jz .fail
+
+    lea rcx, [rsp + 80]
+    mov edx, [rsp + 352]
+    mov r8, rsi
+    lea r9, [rsp + 120]
+    call assp_step_parity_elapsed_action_costs_4
+    test eax, eax
+    jz .fail
+
+    mov eax, [rsp + 384]
+    mov [rsp + 32], eax
+    mov eax, [rsp + 376]
+    mov [rsp + 40], eax
+    mov [rsp + 48], rsi
+    lea rax, [rsp + 136]
+    mov [rsp + 56], rax
+    mov rcx, r12
+    mov rdx, r13
+    mov r8, r14
+    mov r9d, [rsp + 360]
+    call assp_step_parity_switch_action_costs_4
+    test eax, eax
+    jz .fail
+
+    lea rax, [rsp + 152]
+    mov [rsp + 32], rax
+    mov rcx, r12
+    mov rdx, r15
+    mov r8d, [rsp + 368]
+    mov r9, rsi
+    call assp_step_parity_bracket_tap_action_costs_4
+    test eax, eax
+    jz .fail
+
+    mov [rsp + 32], rsi
+    lea rax, [rsp + 168]
+    mov [rsp + 40], rax
+    mov rcx, r12
+    mov rdx, r13
+    mov r8, r15
+    mov r9d, [rsp + 368]
+    call assp_step_parity_distance_action_costs_4
+    test eax, eax
+    jz .fail
+
+    mov rcx, r12
+    mov rdx, r13
+    mov r8, r15
+    lea r9, [rsp + 184]
+    call assp_step_parity_orientation_action_costs_4
+    test eax, eax
+    jz .fail
+
+    xorps xmm0, xmm0
+    movss xmm1, [rsp + 96 + ASSP_STEP_PARITY_BASIC_COSTS4_MINE]
+    movss [rdi + ASSP_STEP_PARITY_ACTION_COSTS4_MINE], xmm1
+    addss xmm0, xmm1
+    movss xmm1, [rsp + 168 + ASSP_STEP_PARITY_DISTANCE_COSTS4_HOLD_SWITCH]
+    movss [rdi + ASSP_STEP_PARITY_ACTION_COSTS4_HOLD_SWITCH], xmm1
+    addss xmm0, xmm1
+    movss xmm1, [rsp + 152 + ASSP_STEP_PARITY_BRACKET_TAP_COSTS4_TOTAL]
+    movss [rdi + ASSP_STEP_PARITY_ACTION_COSTS4_BRACKET_TAP], xmm1
+    addss xmm0, xmm1
+    movss xmm1, [rsp + 96 + ASSP_STEP_PARITY_BASIC_COSTS4_BRACKET_JACK]
+    movss [rdi + ASSP_STEP_PARITY_ACTION_COSTS4_BRACKET_JACK], xmm1
+    addss xmm0, xmm1
+    movss xmm1, [rsp + 96 + ASSP_STEP_PARITY_BASIC_COSTS4_DOUBLESTEP]
+    movss [rdi + ASSP_STEP_PARITY_ACTION_COSTS4_DOUBLESTEP], xmm1
+    addss xmm0, xmm1
+    movss xmm1, [rsp + 120 + ASSP_STEP_PARITY_ELAPSED_COSTS4_SLOW_BRACKET]
+    movss [rdi + ASSP_STEP_PARITY_ACTION_COSTS4_SLOW_BRACKET], xmm1
+    addss xmm0, xmm1
+
+    mov eax, [rsp + 360]
+    and eax, 0fh
+    mov ecx, eax
+    dec ecx
+    test eax, ecx
+    jz .no_twisted_foot
+    movss xmm1, [rsp + 184 + ASSP_STEP_PARITY_ORIENTATION_COSTS4_TWISTED_FOOT]
+    jmp .store_twisted_foot
+.no_twisted_foot:
+    xorps xmm1, xmm1
+.store_twisted_foot:
+    movss [rdi + ASSP_STEP_PARITY_ACTION_COSTS4_TWISTED_FOOT], xmm1
+    addss xmm0, xmm1
+
+    movss xmm1, [rsp + 184 + ASSP_STEP_PARITY_ORIENTATION_COSTS4_FACING]
+    movss [rdi + ASSP_STEP_PARITY_ACTION_COSTS4_FACING], xmm1
+    addss xmm0, xmm1
+    movss xmm1, [rsp + 184 + ASSP_STEP_PARITY_ORIENTATION_COSTS4_SPIN]
+    movss [rdi + ASSP_STEP_PARITY_ACTION_COSTS4_SPIN], xmm1
+    addss xmm0, xmm1
+    movss xmm1, [rsp + 136 + ASSP_STEP_PARITY_SWITCH_COSTS4_FOOTSWITCH]
+    movss [rdi + ASSP_STEP_PARITY_ACTION_COSTS4_FOOTSWITCH], xmm1
+    addss xmm0, xmm1
+    movss xmm1, [rsp + 136 + ASSP_STEP_PARITY_SWITCH_COSTS4_SIDESWITCH]
+    movss [rdi + ASSP_STEP_PARITY_ACTION_COSTS4_SIDESWITCH], xmm1
+    addss xmm0, xmm1
+    movss xmm1, [rsp + 96 + ASSP_STEP_PARITY_BASIC_COSTS4_MISSED_FOOTSWITCH]
+    movss [rdi + ASSP_STEP_PARITY_ACTION_COSTS4_MISSED_FOOTSWITCH], xmm1
+    addss xmm0, xmm1
+    movss xmm1, [rsp + 120 + ASSP_STEP_PARITY_ELAPSED_COSTS4_JACK]
+    movss [rdi + ASSP_STEP_PARITY_ACTION_COSTS4_JACK], xmm1
+    addss xmm0, xmm1
+    movss xmm1, [rsp + 168 + ASSP_STEP_PARITY_DISTANCE_COSTS4_BIG_MOVEMENT]
+    movss [rdi + ASSP_STEP_PARITY_ACTION_COSTS4_BIG_MOVEMENT], xmm1
+    addss xmm0, xmm1
+    movss [rdi + ASSP_STEP_PARITY_ACTION_COSTS4_TOTAL], xmm0
+
+    add rsp, 256
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    mov eax, ASSP_TRUE
+    ret
+
+.fail:
+    add rsp, 256
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+.fail_no_stack:
+    xor eax, eax
     ret
 
 section .rdata
