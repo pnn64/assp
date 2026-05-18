@@ -58,6 +58,7 @@ extern assp_parse_offset_ms
 extern assp_parse_tech_notation
 extern assp_normalize_label_tag
 extern assp_chart_name_tag_allowed
+extern assp_resolve_difficulty_label
 extern assp_resolve_display_bpm
 extern assp_steps_timing_allowed
 extern assp_trim_ascii_bytes
@@ -125,6 +126,9 @@ start:
     test eax, eax
     jz fail_hash
     call prepare_chart_metadata
+    call prepare_difficulty_label
+    test eax, eax
+    jz fail_metadata
     call prepare_tech_notation
     test eax, eax
     jz fail_tech
@@ -1988,6 +1992,48 @@ prepare_chart_metadata:
     add rsp, 56
     ret
 
+prepare_difficulty_label:
+    sub rsp, 88
+
+    mov qword [difficulty_label_len], 0
+    mov rcx, [chart_info + ASSP_CHART_INFO_DIFFICULTY_PTR]
+    mov rdx, [chart_info + ASSP_CHART_INFO_DIFFICULTY_LEN]
+    cmp qword [chart_name_tag_allowed], 0
+    je .legacy_description
+    mov r8, [chart_info + ASSP_CHART_INFO_DESC_PTR]
+    mov r9, [chart_info + ASSP_CHART_INFO_DESC_LEN]
+    jmp .resolve
+
+.legacy_description:
+    lea r8, [newline]
+    xor r9d, r9d
+
+.resolve:
+    mov rax, [chart_info + ASSP_CHART_INFO_METER_PTR]
+    mov [rsp + 32], rax
+    mov rax, [chart_info + ASSP_CHART_INFO_METER_LEN]
+    mov [rsp + 40], rax
+    mov rax, [timing_format_sm]
+    mov [rsp + 48], rax
+    lea rax, [difficulty_label_buffer]
+    mov [rsp + 56], rax
+    mov qword [rsp + 64], METADATA_BUFFER_CAP
+    call assp_resolve_difficulty_label
+    cmp rax, ASSP_NOT_FOUND
+    je .fail
+    cmp rax, METADATA_BUFFER_CAP
+    ja .fail
+    mov [difficulty_label_len], rax
+    mov eax, ASSP_TRUE
+    jmp .done
+
+.fail:
+    xor eax, eax
+
+.done:
+    add rsp, 88
+    ret
+
 prepare_tech_notation:
     sub rsp, 56
 
@@ -2230,6 +2276,10 @@ print_report:
     mov r8, [chart_info + ASSP_CHART_INFO_STEP_TYPE_LEN]
     call print_slice_field
     lea rcx, [label_difficulty]
+    lea rdx, [difficulty_label_buffer]
+    mov r8, [difficulty_label_len]
+    call print_slice_field
+    lea rcx, [label_raw_difficulty]
     mov rdx, [chart_info + ASSP_CHART_INFO_DIFFICULTY_PTR]
     mov r8, [chart_info + ASSP_CHART_INFO_DIFFICULTY_LEN]
     call print_slice_field
@@ -3411,6 +3461,7 @@ label_charts db "charts: ", 0
 label_chart db "chart: ", 0
 label_step_type db "step_type: ", 0
 label_difficulty db "difficulty: ", 0
+label_raw_difficulty db "raw_difficulty: ", 0
 label_meter db "meter: ", 0
 label_rating db "rating: ", 0
 label_description db "description: ", 0
@@ -3666,6 +3717,7 @@ delay_segment_count resq 1
 warp_segment_count resq 1
 fake_segment_count resq 1
 tech_notation_len resq 1
+difficulty_label_len resq 1
 stop_report_count resq 1
 delay_report_count resq 1
 warp_report_count resq 1
@@ -3706,6 +3758,7 @@ selected_normalized_time_signatures_buffer resb METADATA_BUFFER_CAP
 selected_normalized_labels_buffer resb METADATA_BUFFER_CAP
 selected_normalized_tickcounts_buffer resb METADATA_BUFFER_CAP
 selected_normalized_combos_buffer resb METADATA_BUFFER_CAP
+difficulty_label_buffer resb METADATA_BUFFER_CAP
 bpm_buffer resb BPM_BUFFER_CAP
 global_bpm_buffer resb BPM_BUFFER_CAP
 normalized_stops_buffer resb BPM_BUFFER_CAP

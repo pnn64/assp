@@ -1,6 +1,6 @@
 use assp::{
-    chart_name_tag_allowed, find_global_tag, normalize_label_tag, steps_timing_allowed,
-    trim_ascii_bytes,
+    chart_name_tag_allowed, find_global_tag, normalize_label_tag, resolve_difficulty_label,
+    steps_timing_allowed, trim_ascii_bytes,
 };
 use rssp_core::parse::{clean_tag, decode_bytes, unescape_tag};
 
@@ -91,4 +91,35 @@ fn gates_chart_name_tags_like_rssp_core() {
     assert!(!chart_name_tag_allowed(Some(b"0.73"), false));
     assert!(!chart_name_tag_allowed(Some(b"0.7"), false));
     assert!(!chart_name_tag_allowed(Some(b"0"), false));
+}
+
+fn assert_difficulty(raw: &str, description: &str, meter: &str, is_sm: bool) {
+    let asm = resolve_difficulty_label(
+        raw.as_bytes(),
+        description.as_bytes(),
+        meter.as_bytes(),
+        is_sm,
+    )
+    .unwrap();
+    let ext = if is_sm { "sm" } else { "ssc" };
+    assert_eq!(
+        std::str::from_utf8(&asm).unwrap(),
+        rssp_core::resolve_difficulty_label(raw, description, meter, ext)
+    );
+}
+
+#[test]
+fn resolves_difficulty_labels_like_rssp_core() {
+    assert_difficulty("Challenge", "", "12", false);
+    assert_difficulty("Expert", "", "12", false);
+    assert_difficulty("Expert", "", "12", true);
+    assert_difficulty("Heavy", "Challenge", "9", true);
+    assert_difficulty("", "Edit", "10", false);
+    assert_difficulty("", "", "1", false);
+    assert_difficulty("", "", "4", false);
+    assert_difficulty("", "", "7", false);
+    assert_difficulty("", "", "", true);
+    assert_difficulty(" standard ", "", "5", true);
+    assert_difficulty("unknown", "challenge", "3", false);
+    assert_difficulty("unknown", "unknown", "bad", false);
 }

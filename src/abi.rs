@@ -172,6 +172,17 @@ unsafe extern "C" {
     -> usize;
     fn assp_steps_timing_allowed(version: *const u8, version_len: usize, is_sm: c_int) -> c_int;
     fn assp_chart_name_tag_allowed(version: *const u8, version_len: usize, is_sm: c_int) -> c_int;
+    fn assp_resolve_difficulty_label(
+        difficulty: *const u8,
+        difficulty_len: usize,
+        description: *const u8,
+        description_len: usize,
+        meter: *const u8,
+        meter_len: usize,
+        is_sm: c_int,
+        out: *mut u8,
+        out_cap: usize,
+    ) -> usize;
     fn assp_resolve_display_bpm(
         tag: *const u8,
         tag_len: usize,
@@ -646,6 +657,52 @@ pub fn steps_timing_allowed(version: Option<&[u8]>, is_sm: bool) -> bool {
 pub fn chart_name_tag_allowed(version: Option<&[u8]>, is_sm: bool) -> bool {
     let version = version.unwrap_or_default();
     unsafe { assp_chart_name_tag_allowed(version.as_ptr(), version.len(), c_int::from(is_sm)) != 0 }
+}
+
+#[must_use]
+pub fn resolve_difficulty_label(
+    difficulty: &[u8],
+    description: &[u8],
+    meter: &[u8],
+    is_sm: bool,
+) -> Option<Vec<u8>> {
+    let count = unsafe {
+        assp_resolve_difficulty_label(
+            difficulty.as_ptr(),
+            difficulty.len(),
+            description.as_ptr(),
+            description.len(),
+            meter.as_ptr(),
+            meter.len(),
+            c_int::from(is_sm),
+            std::ptr::null_mut(),
+            0,
+        )
+    };
+    if count == NOT_FOUND {
+        return None;
+    }
+
+    let mut out = vec![0; count];
+    if count != 0 {
+        let written = unsafe {
+            assp_resolve_difficulty_label(
+                difficulty.as_ptr(),
+                difficulty.len(),
+                description.as_ptr(),
+                description.len(),
+                meter.as_ptr(),
+                meter.len(),
+                c_int::from(is_sm),
+                out.as_mut_ptr(),
+                out.len(),
+            )
+        };
+        if written == NOT_FOUND {
+            return None;
+        }
+    }
+    Some(out)
 }
 
 #[must_use]

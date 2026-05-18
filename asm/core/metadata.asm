@@ -5,6 +5,7 @@ global assp_trim_ascii_bytes
 global assp_normalize_label_tag
 global assp_resolve_display_bpm
 global assp_chart_name_tag_allowed
+global assp_resolve_difficulty_label
 global assp_steps_timing_allowed
 
 section .text
@@ -215,6 +216,366 @@ assp_chart_name_tag_allowed:
     mov eax, ASSP_TRUE
     ret
 
+; rcx = difficulty bytes, rdx = difficulty len, r8 = normalized description
+; bytes, r9 = normalized description len, [rsp+40] = meter bytes,
+; [rsp+48] = meter len, [rsp+56] = nonzero for .sm, [rsp+64] = out bytes,
+; [rsp+72] = out cap.
+; rax = bytes required/written, or ASSP_NOT_FOUND.
+assp_resolve_difficulty_label:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 32
+
+    mov rsi, rcx
+    mov rdi, rdx
+    mov r12, r8
+    mov r13, r9
+    mov r14, [rsp + 128]
+    mov r15, [rsp + 136]
+    mov rbx, [rsp + 144]
+
+    test ebx, ebx
+    jz .ssc_raw
+    mov rcx, rsi
+    mov rdx, rdi
+    call match_old_difficulty_label
+    jmp .raw_done
+
+.ssc_raw:
+    mov rcx, rsi
+    mov rdx, rdi
+    call match_canonical_difficulty_label
+
+.raw_done:
+    test rax, rax
+    jz .description_fallback
+    test ebx, ebx
+    jz .emit
+    lea r10, [label_hard]
+    cmp rax, r10
+    jne .emit
+
+    mov rcx, r12
+    mov rdx, r13
+    lea r8, [match_smaniac]
+    mov r9d, match_smaniac_end - match_smaniac
+    call match_trim_ci
+    test eax, eax
+    jnz .force_challenge
+    mov rcx, r12
+    mov rdx, r13
+    lea r8, [match_challenge]
+    mov r9d, match_challenge_end - match_challenge
+    call match_trim_ci
+    test eax, eax
+    jz .emit_hard
+
+.force_challenge:
+    lea rax, [label_challenge]
+    mov edx, label_challenge_end - label_challenge
+    jmp .emit
+
+.emit_hard:
+    lea rax, [label_hard]
+    mov edx, label_hard_end - label_hard
+    jmp .emit
+
+.description_fallback:
+    mov rcx, r12
+    mov rdx, r13
+    call match_canonical_difficulty_label
+    test rax, rax
+    jnz .emit
+
+    mov rcx, r14
+    mov rdx, r15
+    mov r8, rbx
+    call meter_difficulty_label
+
+.emit:
+    mov r10, rax
+    mov r11, rdx
+    mov r8, [rsp + 152]
+    mov r9, [rsp + 160]
+    test r8, r8
+    jz .success
+    cmp r11, r9
+    ja .fail
+    xor ecx, ecx
+
+.copy_loop:
+    cmp rcx, r11
+    jae .success
+    mov al, [r10 + rcx]
+    mov [r8 + rcx], al
+    inc rcx
+    jmp .copy_loop
+
+.success:
+    mov rax, r11
+    jmp .done
+
+.fail:
+    mov rax, ASSP_NOT_FOUND
+
+.done:
+    add rsp, 32
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
+%macro try_difficulty 4
+    mov rcx, rsi
+    mov rdx, rdi
+    lea r8, [%1]
+    mov r9d, %2 - %1
+    call match_trim_ci
+    test eax, eax
+    jz %%next
+    lea rax, [%3]
+    mov edx, %4 - %3
+    jmp .done
+%%next:
+%endmacro
+
+match_canonical_difficulty_label:
+    push rsi
+    push rdi
+    push r12
+    sub rsp, 32
+    mov rsi, rcx
+    mov rdi, rdx
+
+    try_difficulty match_beginner, match_beginner_end, label_beginner, label_beginner_end
+    try_difficulty match_easy, match_easy_end, label_easy, label_easy_end
+    try_difficulty match_medium, match_medium_end, label_medium, label_medium_end
+    try_difficulty match_hard, match_hard_end, label_hard, label_hard_end
+    try_difficulty match_challenge, match_challenge_end, label_challenge, label_challenge_end
+    try_difficulty match_edit, match_edit_end, label_edit, label_edit_end
+    xor eax, eax
+    xor edx, edx
+
+.done:
+    add rsp, 32
+    pop r12
+    pop rdi
+    pop rsi
+    ret
+
+match_old_difficulty_label:
+    push rsi
+    push rdi
+    push r12
+    sub rsp, 32
+    mov rsi, rcx
+    mov rdi, rdx
+
+    try_difficulty match_beginner, match_beginner_end, label_beginner, label_beginner_end
+    try_difficulty match_easy, match_easy_end, label_easy, label_easy_end
+    try_difficulty match_basic, match_basic_end, label_easy, label_easy_end
+    try_difficulty match_light, match_light_end, label_easy, label_easy_end
+    try_difficulty match_medium, match_medium_end, label_medium, label_medium_end
+    try_difficulty match_another, match_another_end, label_medium, label_medium_end
+    try_difficulty match_trick, match_trick_end, label_medium, label_medium_end
+    try_difficulty match_standard, match_standard_end, label_medium, label_medium_end
+    try_difficulty match_difficult, match_difficult_end, label_medium, label_medium_end
+    try_difficulty match_hard, match_hard_end, label_hard, label_hard_end
+    try_difficulty match_ssr, match_ssr_end, label_hard, label_hard_end
+    try_difficulty match_maniac, match_maniac_end, label_hard, label_hard_end
+    try_difficulty match_heavy, match_heavy_end, label_hard, label_hard_end
+    try_difficulty match_challenge, match_challenge_end, label_challenge, label_challenge_end
+    try_difficulty match_expert, match_expert_end, label_challenge, label_challenge_end
+    try_difficulty match_oni, match_oni_end, label_challenge, label_challenge_end
+    try_difficulty match_smaniac, match_smaniac_end, label_challenge, label_challenge_end
+    try_difficulty match_edit, match_edit_end, label_edit, label_edit_end
+    xor eax, eax
+    xor edx, edx
+
+.done:
+    add rsp, 32
+    pop r12
+    pop rdi
+    pop rsi
+    ret
+
+; rcx = bytes, rdx = len, r8 = lowercase tag, r9 = tag len. eax = match.
+match_trim_ci:
+    test rdx, rdx
+    jz .check_empty
+    test rcx, rcx
+    jz .false
+    mov r10, rcx
+    lea r11, [rcx + rdx]
+
+.trim_left:
+    cmp r10, r11
+    jae .empty
+    cmp byte [r10], ' '
+    ja .trim_right
+    inc r10
+    jmp .trim_left
+
+.trim_right:
+    cmp r11, r10
+    jbe .empty
+    cmp byte [r11 - 1], ' '
+    ja .len
+    dec r11
+    jmp .trim_right
+
+.empty:
+    xor edx, edx
+    jmp .compare_len
+
+.len:
+    mov rdx, r11
+    sub rdx, r10
+
+.compare_len:
+    cmp rdx, r9
+    jne .false
+    xor ecx, ecx
+
+.loop:
+    cmp rcx, rdx
+    jae .true
+    mov al, [r10 + rcx]
+    cmp al, 'A'
+    jb .input_ready
+    cmp al, 'Z'
+    ja .input_ready
+    or al, 20h
+.input_ready:
+    mov r11b, [r8 + rcx]
+    cmp r11b, 'A'
+    jb .tag_ready
+    cmp r11b, 'Z'
+    ja .tag_ready
+    or r11b, 20h
+.tag_ready:
+    cmp al, r11b
+    jne .false
+    inc rcx
+    jmp .loop
+
+.check_empty:
+    test r9, r9
+    jnz .false
+.true:
+    mov eax, ASSP_TRUE
+    ret
+.false:
+    xor eax, eax
+    ret
+
+; rcx = meter bytes, rdx = len, r8 = nonzero for .sm. rax/rdx = label.
+meter_difficulty_label:
+    test rdx, rdx
+    jz .empty
+    test rcx, rcx
+    jz .invalid
+
+    mov r10, rcx
+    lea r11, [rcx + rdx]
+
+.trim_left:
+    cmp r10, r11
+    jae .empty
+    cmp byte [r10], ' '
+    ja .trim_right
+    inc r10
+    jmp .trim_left
+
+.trim_right:
+    cmp r11, r10
+    jbe .empty
+    cmp byte [r11 - 1], ' '
+    ja .sign
+    dec r11
+    jmp .trim_right
+
+.empty:
+    test r8, r8
+    jz .invalid
+    mov eax, 1
+    jmp .select
+
+.sign:
+    xor r9d, r9d
+    cmp byte [r10], '+'
+    je .plus
+    cmp byte [r10], '-'
+    jne .digits_init
+    mov r9d, ASSP_TRUE
+.plus:
+    inc r10
+    cmp r10, r11
+    jae .invalid
+
+.digits_init:
+    xor eax, eax
+    xor r8d, r8d
+
+.digits:
+    cmp r10, r11
+    jae .digits_done
+    movzx ecx, byte [r10]
+    cmp cl, '0'
+    jb .invalid
+    cmp cl, '9'
+    ja .invalid
+    imul eax, eax, 10
+    sub ecx, '0'
+    add eax, ecx
+    mov r8d, ASSP_TRUE
+    inc r10
+    jmp .digits
+
+.digits_done:
+    test r8d, r8d
+    jz .invalid
+    test r9d, r9d
+    jz .select
+    neg eax
+    jmp .select
+
+.invalid:
+    xor eax, eax
+
+.select:
+    cmp eax, 1
+    je .beginner
+    cmp eax, 3
+    jle .easy
+    cmp eax, 6
+    jle .medium
+    lea rax, [label_hard]
+    mov edx, label_hard_end - label_hard
+    ret
+
+.beginner:
+    lea rax, [label_beginner]
+    mov edx, label_beginner_end - label_beginner
+    ret
+.easy:
+    lea rax, [label_easy]
+    mov edx, label_easy_end - label_easy
+    ret
+.medium:
+    lea rax, [label_medium]
+    mov edx, label_medium_end - label_medium
+    ret
+
 ; rcx = bytes, rdx = len, r8 = optional output bytes, r9 = output byte cap.
 ; rax = bytes required/written, or ASSP_NOT_FOUND.
 assp_trim_ascii_bytes:
@@ -267,6 +628,60 @@ assp_trim_ascii_bytes:
 .invalid:
     mov rax, ASSP_NOT_FOUND
     ret
+
+section .rdata
+
+label_beginner db "Beginner"
+label_beginner_end:
+label_easy db "Easy"
+label_easy_end:
+label_medium db "Medium"
+label_medium_end:
+label_hard db "Hard"
+label_hard_end:
+label_challenge db "Challenge"
+label_challenge_end:
+label_edit db "Edit"
+label_edit_end:
+
+match_beginner db "beginner"
+match_beginner_end:
+match_easy db "easy"
+match_easy_end:
+match_basic db "basic"
+match_basic_end:
+match_light db "light"
+match_light_end:
+match_medium db "medium"
+match_medium_end:
+match_another db "another"
+match_another_end:
+match_trick db "trick"
+match_trick_end:
+match_standard db "standard"
+match_standard_end:
+match_difficult db "difficult"
+match_difficult_end:
+match_hard db "hard"
+match_hard_end:
+match_ssr db "ssr"
+match_ssr_end:
+match_maniac db "maniac"
+match_maniac_end:
+match_heavy db "heavy"
+match_heavy_end:
+match_challenge db "challenge"
+match_challenge_end:
+match_expert db "expert"
+match_expert_end:
+match_oni db "oni"
+match_oni_end:
+match_smaniac db "smaniac"
+match_smaniac_end:
+match_edit db "edit"
+match_edit_end:
+
+section .text
 
 ; rcx = DISPLAYBPM tag bytes, rdx = len, r8 = actual min BPM,
 ; r9 = actual max BPM, [rsp+40] = out min BPM, [rsp+48] = out max BPM.

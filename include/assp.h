@@ -185,6 +185,17 @@ int32_t assp_chart_name_tag_allowed(
     size_t version_len,
     int32_t is_sm
 );
+size_t assp_resolve_difficulty_label(
+    const uint8_t *difficulty,
+    size_t difficulty_len,
+    const uint8_t *description,
+    size_t description_len,
+    const uint8_t *meter,
+    size_t meter_len,
+    int32_t is_sm,
+    uint8_t *out,
+    size_t out_cap
+);
 int32_t assp_resolve_display_bpm(
     const uint8_t *tag,
     size_t tag_len,

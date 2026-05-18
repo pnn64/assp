@@ -39,6 +39,7 @@ The first implemented pieces are:
 - `assp_resolve_display_bpm`
 - `assp_steps_timing_allowed`
 - `assp_chart_name_tag_allowed`
+- `assp_resolve_difficulty_label`
 - `assp_parse_tech_notation`
 - `assp_parse_bpm_map`
 - `assp_parse_offset_ms`
@@ -141,6 +142,8 @@ for SSC chart-local timing data.
 `assp_chart_name_tag_allowed` applies RSSP's `#VERSION` gate for whether SSC
 `#CHARTNAME` is treated as the chart name or the legacy description field is
 used instead.
+`assp_resolve_difficulty_label` resolves old SM aliases, canonical SSC labels,
+description fallback, and meter fallback to RSSP's chart difficulty label.
 `assp_find_global_tag` and `assp_find_chart_tag_by_index` provide generic
 tag extraction for `#TAG:` sections. Implemented simfile tag names are matched
 case-insensitively, following RSSP's parser behavior. The timing-tag collectors
@@ -187,6 +190,8 @@ timing scope.
 The chart name/description report path also follows RSSP's legacy SSC rule:
 for parsed SSC versions below `0.74`, `description` is reported as empty and
 the raw description field is reported as `chart_name`.
+Chart difficulty output is resolved with RSSP's alias and fallback rules, with
+the original raw difficulty still reported separately.
 `assp_stream_counts_from_densities` classifies 16th/20th/24th/32nd stream
 measures, SN breaks, and total break measures from those densities.
 `assp_stream_percentages_centi` computes RSSP-style stream, adjusted stream,
@@ -299,7 +304,8 @@ metadata fields before chart rows are passed to the stat counter. The standalone
 report path currently supports `dance-single` and `dance-double` charts. Chart
 reports include simfile title/artist/translit metadata, genre, media/artwork
 tags, sample timing tags, SSC version, split-timing allowance, chart-name tag
-allowance, chart name, credit/step-artist metadata, parsed tech notation, chart-local
+allowance, resolved and raw difficulty, chart name, credit/step-artist metadata,
+parsed tech notation, chart-local
 music/attacks/timing metadata tags, chart-local raw timing tags, global
 attacks/display-BPM tags, resolved display BPM ranges, global raw timing tags,
 RSSP-style chart hashes, normalized global BPM data, normalized global timing
