@@ -167,6 +167,9 @@ unsafe extern "C" {
         out: *mut u8,
         out_cap: usize,
     ) -> usize;
+    fn assp_trim_ascii_bytes(data: *const u8, len: usize, out: *mut u8, out_cap: usize) -> usize;
+    fn assp_normalize_label_tag(data: *const u8, len: usize, out: *mut u8, out_cap: usize)
+    -> usize;
     fn assp_parse_tech_notation(
         credit: *const u8,
         credit_len: usize,
@@ -575,6 +578,46 @@ pub fn normalize_float_digits(data: &[u8]) -> Option<Vec<u8>> {
     if count != 0 {
         let written = unsafe {
             assp_normalize_float_digits(data.as_ptr(), data.len(), out.as_mut_ptr(), out.len())
+        };
+        if written == NOT_FOUND {
+            return None;
+        }
+    }
+    Some(out)
+}
+
+#[must_use]
+pub fn trim_ascii_bytes(data: &[u8]) -> Option<Vec<u8>> {
+    let count =
+        unsafe { assp_trim_ascii_bytes(data.as_ptr(), data.len(), std::ptr::null_mut(), 0) };
+    if count == NOT_FOUND {
+        return None;
+    }
+
+    let mut out = vec![0; count];
+    if count != 0 {
+        let written = unsafe {
+            assp_trim_ascii_bytes(data.as_ptr(), data.len(), out.as_mut_ptr(), out.len())
+        };
+        if written == NOT_FOUND {
+            return None;
+        }
+    }
+    Some(out)
+}
+
+#[must_use]
+pub fn normalize_label_tag(data: &[u8]) -> Option<Vec<u8>> {
+    let count =
+        unsafe { assp_normalize_label_tag(data.as_ptr(), data.len(), std::ptr::null_mut(), 0) };
+    if count == NOT_FOUND {
+        return None;
+    }
+
+    let mut out = vec![0; count];
+    if count != 0 {
+        let written = unsafe {
+            assp_normalize_label_tag(data.as_ptr(), data.len(), out.as_mut_ptr(), out.len())
         };
         if written == NOT_FOUND {
             return None;

@@ -34,6 +34,8 @@ The first implemented pieces are:
 - `assp_find_chart_timing_tags_by_index`
 - `assp_chart_owns_timing_by_index`
 - `assp_normalize_float_digits`
+- `assp_trim_ascii_bytes`
+- `assp_normalize_label_tag`
 - `assp_parse_tech_notation`
 - `assp_parse_bpm_map`
 - `assp_parse_offset_ms`
@@ -124,6 +126,11 @@ for minimized chart data.
 `assp_find_global_bpms` and `assp_find_chart_bpms_by_index` select the raw BPM
 tag used for chart hashing, and `assp_normalize_float_digits` converts timing
 maps to RSSP's three-decimal hash input format.
+`assp_trim_ascii_bytes` trims ASCII timing metadata values for RSSP-style
+normalized `#TIMESIGNATURES`, `#TICKCOUNTS`, and `#COMBOS` report fields.
+`assp_normalize_label_tag` keeps the first MSD parameter from `#LABELS`,
+removes ASCII backslash escapes, and drops ASCII control bytes for the
+standalone report's normalized global label field.
 `assp_find_global_tag` and `assp_find_chart_tag_by_index` provide generic
 tag extraction for `#TAG:` sections. Implemented simfile tag names are matched
 case-insensitively, following RSSP's parser behavior. The timing-tag collectors

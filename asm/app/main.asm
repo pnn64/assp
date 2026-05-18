@@ -56,6 +56,8 @@ extern assp_normalize_float_digits
 extern assp_parse_bpm_map
 extern assp_parse_offset_ms
 extern assp_parse_tech_notation
+extern assp_normalize_label_tag
+extern assp_trim_ascii_bytes
 extern assp_stream_counts_from_densities
 extern assp_stream_percentages_centi
 extern assp_stream_segments_from_densities
@@ -73,6 +75,7 @@ global start
 %define MINIMIZED_BUFFER_CAP 2097152
 %define ROW_SCRATCH_CAP 262144
 %define TECH_BUFFER_CAP 16384
+%define METADATA_BUFFER_CAP 65536
 
 section .text
 
@@ -112,6 +115,9 @@ start:
     mov [chart_lanes], rax
 
     call prepare_global_metadata
+    call prepare_global_normalized_metadata
+    test eax, eax
+    jz fail_metadata
     call prepare_global_bpm_data
     test eax, eax
     jz fail_hash
@@ -285,6 +291,12 @@ fail_density:
 
 fail_hash:
     lea rcx, [msg_hash_fail]
+    call print_z
+    mov ecx, 1
+    call ExitProcess
+
+fail_metadata:
+    lea rcx, [msg_metadata_fail]
     call print_z
     mov ecx, 1
     call ExitProcess
@@ -1513,6 +1525,60 @@ prepare_global_metadata:
     add rsp, 40
     ret
 
+prepare_global_normalized_metadata:
+    sub rsp, 40
+
+    mov qword [normalized_time_signatures_len], 0
+    mov qword [normalized_labels_len], 0
+    mov qword [normalized_tickcounts_len], 0
+    mov qword [normalized_combos_len], 0
+
+    mov rcx, [global_time_signatures_slice + ASSP_BYTE_SLICE_PTR]
+    mov rdx, [global_time_signatures_slice + ASSP_BYTE_SLICE_LEN]
+    lea r8, [normalized_time_signatures_buffer]
+    mov r9d, METADATA_BUFFER_CAP
+    call assp_trim_ascii_bytes
+    cmp rax, ASSP_NOT_FOUND
+    je .fail
+    mov [normalized_time_signatures_len], rax
+
+    mov rcx, [global_labels_slice + ASSP_BYTE_SLICE_PTR]
+    mov rdx, [global_labels_slice + ASSP_BYTE_SLICE_LEN]
+    lea r8, [normalized_labels_buffer]
+    mov r9d, METADATA_BUFFER_CAP
+    call assp_normalize_label_tag
+    cmp rax, ASSP_NOT_FOUND
+    je .fail
+    mov [normalized_labels_len], rax
+
+    mov rcx, [global_tickcounts_slice + ASSP_BYTE_SLICE_PTR]
+    mov rdx, [global_tickcounts_slice + ASSP_BYTE_SLICE_LEN]
+    lea r8, [normalized_tickcounts_buffer]
+    mov r9d, METADATA_BUFFER_CAP
+    call assp_trim_ascii_bytes
+    cmp rax, ASSP_NOT_FOUND
+    je .fail
+    mov [normalized_tickcounts_len], rax
+
+    mov rcx, [global_combos_slice + ASSP_BYTE_SLICE_PTR]
+    mov rdx, [global_combos_slice + ASSP_BYTE_SLICE_LEN]
+    lea r8, [normalized_combos_buffer]
+    mov r9d, METADATA_BUFFER_CAP
+    call assp_trim_ascii_bytes
+    cmp rax, ASSP_NOT_FOUND
+    je .fail
+    mov [normalized_combos_len], rax
+
+    mov eax, ASSP_TRUE
+    jmp .done
+
+.fail:
+    xor eax, eax
+
+.done:
+    add rsp, 40
+    ret
+
 prepare_chart_metadata:
     sub rsp, 56
 
@@ -1925,6 +1991,22 @@ print_report:
     lea rdx, [chart_combos_slice]
     lea r8, [global_combos_slice]
     call print_selected_metadata_tag
+    lea rcx, [label_normalized_time_signatures]
+    lea rdx, [normalized_time_signatures_buffer]
+    mov r8, [normalized_time_signatures_len]
+    call print_slice_field
+    lea rcx, [label_normalized_labels]
+    lea rdx, [normalized_labels_buffer]
+    mov r8, [normalized_labels_len]
+    call print_slice_field
+    lea rcx, [label_normalized_tickcounts]
+    lea rdx, [normalized_tickcounts_buffer]
+    mov r8, [normalized_tickcounts_len]
+    call print_slice_field
+    lea rcx, [label_normalized_combos]
+    lea rdx, [normalized_combos_buffer]
+    mov r8, [normalized_combos_len]
+    call print_slice_field
     lea rcx, [label_global_bpms]
     mov rdx, [global_timing_tags + ASSP_TIMING_TAGS_BPMS + ASSP_BYTE_SLICE_PTR]
     mov r8, [global_timing_tags + ASSP_TIMING_TAGS_BPMS + ASSP_BYTE_SLICE_LEN]
@@ -2834,6 +2916,7 @@ msg_lanes_fail db "unsupported step type; standalone currently supports dance-si
 msg_stats_fail db "assembly note stat counter failed", 13, 10, 0
 msg_density_fail db "chart has too many measures for the density buffer", 13, 10, 0
 msg_hash_fail db "assembly hash pipeline failed", 13, 10, 0
+msg_metadata_fail db "assembly metadata normalization failed", 13, 10, 0
 msg_nps_fail db "assembly nps pipeline failed", 13, 10, 0
 msg_duration_fail db "assembly duration pipeline failed", 13, 10, 0
 msg_tech_fail db "assembly tech notation parser failed", 13, 10, 0
@@ -2878,6 +2961,10 @@ label_selected_time_signatures db "selected_time_signatures: ", 0
 label_selected_labels db "selected_labels: ", 0
 label_selected_tickcounts db "selected_tickcounts: ", 0
 label_selected_combos db "selected_combos: ", 0
+label_normalized_time_signatures db "normalized_time_signatures: ", 0
+label_normalized_labels db "normalized_labels: ", 0
+label_normalized_tickcounts db "normalized_tickcounts: ", 0
+label_normalized_combos db "normalized_combos: ", 0
 label_global_bpms db "global_bpms: ", 0
 label_global_stops db "global_stops: ", 0
 label_global_delays db "global_delays: ", 0
@@ -3063,6 +3150,10 @@ stream_counts resb ASSP_STREAM_COUNTS_SIZE
 num_buffer resb 32
 normalized_bpms_len resq 1
 global_bpms_len resq 1
+normalized_time_signatures_len resq 1
+normalized_labels_len resq 1
+normalized_tickcounts_len resq 1
+normalized_combos_len resq 1
 normalized_stops_len resq 1
 normalized_delays_len resq 1
 normalized_warps_len resq 1
@@ -3102,6 +3193,10 @@ chart_has_own_timing resq 1
 duration_ms resq 1
 hash_pair resb 32
 tech_notation_buffer resb TECH_BUFFER_CAP
+normalized_time_signatures_buffer resb METADATA_BUFFER_CAP
+normalized_labels_buffer resb METADATA_BUFFER_CAP
+normalized_tickcounts_buffer resb METADATA_BUFFER_CAP
+normalized_combos_buffer resb METADATA_BUFFER_CAP
 bpm_buffer resb BPM_BUFFER_CAP
 global_bpm_buffer resb BPM_BUFFER_CAP
 normalized_stops_buffer resb BPM_BUFFER_CAP
