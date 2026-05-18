@@ -1717,6 +1717,38 @@ print_report:
     mov rdx, [chart_combos_slice + ASSP_BYTE_SLICE_PTR]
     mov r8, [chart_combos_slice + ASSP_BYTE_SLICE_LEN]
     call print_slice_field
+    lea rcx, [label_chart_bpms]
+    mov rdx, [chart_timing_tags + ASSP_TIMING_TAGS_BPMS + ASSP_BYTE_SLICE_PTR]
+    mov r8, [chart_timing_tags + ASSP_TIMING_TAGS_BPMS + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+    lea rcx, [label_chart_stops]
+    mov rdx, [chart_timing_tags + ASSP_TIMING_TAGS_STOPS + ASSP_BYTE_SLICE_PTR]
+    mov r8, [chart_timing_tags + ASSP_TIMING_TAGS_STOPS + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+    lea rcx, [label_chart_delays]
+    mov rdx, [chart_timing_tags + ASSP_TIMING_TAGS_DELAYS + ASSP_BYTE_SLICE_PTR]
+    mov r8, [chart_timing_tags + ASSP_TIMING_TAGS_DELAYS + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+    lea rcx, [label_chart_warps]
+    mov rdx, [chart_timing_tags + ASSP_TIMING_TAGS_WARPS + ASSP_BYTE_SLICE_PTR]
+    mov r8, [chart_timing_tags + ASSP_TIMING_TAGS_WARPS + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+    lea rcx, [label_chart_speeds]
+    mov rdx, [chart_timing_tags + ASSP_TIMING_TAGS_SPEEDS + ASSP_BYTE_SLICE_PTR]
+    mov r8, [chart_timing_tags + ASSP_TIMING_TAGS_SPEEDS + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+    lea rcx, [label_chart_scrolls]
+    mov rdx, [chart_timing_tags + ASSP_TIMING_TAGS_SCROLLS + ASSP_BYTE_SLICE_PTR]
+    mov r8, [chart_timing_tags + ASSP_TIMING_TAGS_SCROLLS + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+    lea rcx, [label_chart_fakes]
+    mov rdx, [chart_timing_tags + ASSP_TIMING_TAGS_FAKES + ASSP_BYTE_SLICE_PTR]
+    mov r8, [chart_timing_tags + ASSP_TIMING_TAGS_FAKES + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+    lea rcx, [label_chart_display_bpm]
+    mov rdx, [display_bpm_slice + ASSP_BYTE_SLICE_PTR]
+    mov r8, [display_bpm_slice + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
     lea rcx, [label_hash]
     lea rdx, [hash_pair]
     mov r8d, 16
@@ -2513,6 +2545,14 @@ label_chart_time_signatures db "chart_time_signatures: ", 0
 label_chart_labels db "chart_labels: ", 0
 label_chart_tickcounts db "chart_tickcounts: ", 0
 label_chart_combos db "chart_combos: ", 0
+label_chart_bpms db "chart_bpms: ", 0
+label_chart_stops db "chart_stops: ", 0
+label_chart_delays db "chart_delays: ", 0
+label_chart_warps db "chart_warps: ", 0
+label_chart_speeds db "chart_speeds: ", 0
+label_chart_scrolls db "chart_scrolls: ", 0
+label_chart_fakes db "chart_fakes: ", 0
+label_chart_display_bpm db "chart_display_bpm: ", 0
 label_hash db "hash: ", 0
 label_sha1 db "sha1: ", 0
 label_sha1_hash db "sha1_hash: ", 0
