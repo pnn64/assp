@@ -324,6 +324,12 @@ int64_t assp_tier_bpm_centi(
     const assp_bpm_segment *bpms,
     size_t bpm_len
 );
+int64_t assp_matrix_rating_centi(
+    const uint32_t *densities,
+    size_t density_len,
+    const assp_bpm_segment *bpms,
+    size_t bpm_len
+);
 int64_t assp_elapsed_ms_bpm_only(
     const assp_bpm_segment *segments,
     size_t len,

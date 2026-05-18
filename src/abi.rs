@@ -235,6 +235,12 @@ unsafe extern "C" {
         bpms: *const BpmSegment,
         bpm_len: usize,
     ) -> i64;
+    fn assp_matrix_rating_centi(
+        densities: *const u32,
+        density_len: usize,
+        bpms: *const BpmSegment,
+        bpm_len: usize,
+    ) -> i64;
     fn assp_elapsed_ms_bpm_only(
         segments: *const BpmSegment,
         len: usize,
@@ -857,6 +863,18 @@ pub fn bpm_at_beat_milli(segments: &[BpmSegment], beat_milli: i64) -> i64 {
 pub fn tier_bpm_centi(densities: &[u32], bpms: &[BpmSegment]) -> i64 {
     unsafe {
         assp_tier_bpm_centi(
+            densities.as_ptr(),
+            densities.len(),
+            bpms.as_ptr(),
+            bpms.len(),
+        )
+    }
+}
+
+#[must_use]
+pub fn matrix_rating_centi(densities: &[u32], bpms: &[BpmSegment]) -> i64 {
+    unsafe {
+        assp_matrix_rating_centi(
             densities.as_ptr(),
             densities.len(),
             bpms.as_ptr(),

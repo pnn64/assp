@@ -55,6 +55,7 @@ extern assp_measure_nps_milli_from_bpms
 extern assp_measure_nps_milli_with_events
 extern assp_nps_median_centi
 extern assp_tier_bpm_centi
+extern assp_matrix_rating_centi
 extern assp_minimize_chart_4
 extern assp_minimize_chart_8
 extern assp_normalize_float_digits
@@ -900,6 +901,13 @@ prepare_tier_bpm:
     mov r9, [bpm_segment_count]
     call assp_tier_bpm_centi
     mov [tier_bpm_centi], rax
+
+    lea rcx, [density_buffer]
+    mov rdx, [measure_count]
+    lea r8, [bpm_segment_buffer]
+    mov r9, [bpm_segment_count]
+    call assp_matrix_rating_centi
+    mov [matrix_rating_centi], rax
 
     add rsp, 40
     ret
@@ -3523,6 +3531,9 @@ print_report:
     lea rcx, [label_tier_bpm]
     mov rdx, [tier_bpm_centi]
     call print_fixed2_field
+    lea rcx, [label_matrix_rating]
+    mov rdx, [matrix_rating_centi]
+    call print_fixed2_field
     lea rcx, [label_last_beat_milli]
     mov rdx, [last_beat_milli]
     call print_field
@@ -4788,6 +4799,7 @@ label_peak_nps db "peak_nps: ", 0
 label_peak_nps_milli db "peak_nps_milli: ", 0
 label_median_nps db "median_nps: ", 0
 label_tier_bpm db "tier_bpm: ", 0
+label_matrix_rating db "matrix_rating: ", 0
 label_last_beat_milli db "last_beat_milli: ", 0
 label_duration_seconds db "duration_seconds: ", 0
 label_duration_ms db "duration_ms: ", 0
@@ -4963,6 +4975,7 @@ peak_nps_milli resq 1
 max_nps_centi resq 1
 median_nps_centi resq 1
 tier_bpm_centi resq 1
+matrix_rating_centi resq 1
 equally_spaced_measures resq 1
 candle_percent_centi resq 1
 mono_percent_centi resq 1
