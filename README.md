@@ -178,9 +178,10 @@ rules, `No Tech` skipping, and measure-data filtering.
 tech-count port. They emit the `tech_counts` ABI and currently match the
 hold-constrained bracket slice for fixture charts where RSSP's other parity
 counters are zero. The 4-panel path also covers the smallest verified
-single-note crossover triples (`LDR`, `LUR`, `RDL`, `RUL`). Full crossover
-sequence handling, footswitches, sideswitches, jacks, and doublesteps still
-require the full parity DP port.
+single-note crossover triples (`LDR`, `LUR`, `RDL`, `RUL`) and exact dense
+two-row jack smoke cases. Full crossover sequence handling, timing-aware jack
+coverage, footswitches, sideswitches, and doublesteps still require the full
+parity DP port.
 `assp_chart_owns_timing_by_index` checks the RSSP chart-local timing ownership
 predicate for SSC `#NOTEDATA` blocks.
 `assp_parse_bpm_map` parses BPM timing maps into sorted fixed-point

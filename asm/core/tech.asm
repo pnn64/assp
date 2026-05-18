@@ -69,7 +69,7 @@ section .text
     push r13
     push r14
     push r15
-    sub rsp, 48
+    sub rsp, 80
 
     test r8, r8
     jz %%fail
@@ -95,6 +95,10 @@ section .text
     mov qword [rsp + 16], 0
     mov qword [rsp + 24], 0
     mov qword [rsp + 32], 0
+    mov qword [rsp + 40], 0
+    mov qword [rsp + 48], 0
+    mov qword [rsp + 56], 0
+    mov qword [rsp + 64], 0
 
 %%line_loop:
     cmp rsi, rdi
@@ -107,7 +111,7 @@ section .text
     cmp al, ';'
     je %%success
     cmp al, ','
-    je %%skip_one
+    je %%skip_comma_one
     cmp al, 10
     je %%skip_one
     cmp al, 13
@@ -122,10 +126,16 @@ section .text
     inc rsi
     jmp %%skip_separators
 
+%%skip_comma_one:
+    mov dword [rsp + 64], ASSP_TRUE
+    inc rsi
+    jmp %%skip_separators
+
 %%row_start:
     lea rax, [rsi + %2]
     cmp rax, rdi
     ja %%success
+    inc dword [rsp + 40]
 
     xor r13d, r13d
     xor r14d, r14d
@@ -156,10 +166,14 @@ section .text
 
 %%simple_store_first:
     mov [rsp + 16], r13d
+    mov eax, [rsp + 40]
+    mov [rsp + 48], eax
     jmp %%simple_check_row
 
 %%simple_store_second:
     mov [rsp + 24], r13d
+    mov eax, [rsp + 40]
+    mov [rsp + 56], eax
     jmp %%simple_check_row
 
 %%simple_store_third:
@@ -218,20 +232,42 @@ section .text
     cmp al, 10
     je %%line_loop
     cmp al, ','
-    je %%line_loop
+    je %%line_comma
     jmp %%skip_to_next_line
+
+%%line_comma:
+    mov dword [rsp + 64], ASSP_TRUE
+    jmp %%line_loop
 
 %%success:
 %if %2 == 4
     cmp dword [rsp], 3
-    jne %%return_true
+    jne %%check_simple_jack
     cmp dword [rsp + 8], 0
-    jne %%return_true
+    jne %%check_simple_jack
     mov ecx, [rsp + 16]
     mov edx, [rsp + 24]
     mov r8d, [rsp + 32]
     call count_simple_crossovers_4
     add [rbx + ASSP_TECH_COUNTS_CROSSOVERS], eax
+
+%%check_simple_jack:
+    cmp dword [rsp], 2
+    jne %%return_true
+    cmp dword [rsp + 8], 0
+    jne %%return_true
+    cmp dword [rsp + 64], 0
+    jne %%return_true
+    cmp dword [rsp + 40], 16
+    jb %%return_true
+    mov eax, [rsp + 56]
+    sub eax, [rsp + 48]
+    cmp eax, 1
+    jne %%return_true
+    mov eax, [rsp + 16]
+    cmp eax, [rsp + 24]
+    jne %%return_true
+    inc dword [rbx + ASSP_TECH_COUNTS_JACKS]
 %endif
 
 %%return_true:
@@ -242,7 +278,7 @@ section .text
     xor eax, eax
 
 %%done:
-    add rsp, 48
+    add rsp, 80
     pop r15
     pop r14
     pop r13
