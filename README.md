@@ -265,8 +265,8 @@ report path currently supports `dance-single` and `dance-double` charts. Chart
 reports include simfile title/artist/translit metadata, genre, media/artwork
 tags, sample timing tags, chart name, credit/step-artist metadata, chart-local
 music/attacks/timing metadata tags, RSSP-style chart hashes, normalized hash
-BPMs, chart display-BPM tags, chart offset seconds, timing ownership,
-RSSP-style display BPM,
+BPMs, RSSP-compatible hash and step-artist aliases, chart display-BPM tags,
+chart offset seconds, timing ownership, RSSP-style display BPM,
 min/max/average/median display BPMs, tier BPM, max/peak/median NPS,
 equally-spaced measure counts,
 density-derived stream counts, total stream counts, stream percentages,
@@ -274,7 +274,8 @@ duration seconds, fixed-point duration metrics with stops/stops-freezes aliases,
 delays, warps, token breakdowns,
 segment breakdowns,
 stop/delay/warp/speed/scroll timing segment counts, offset adjustment, and note
-stats with rating, total step/arrow aliases, nonfake mine, and timing-fake counts.
+stats with rating, total step/arrow and lane-arrow aliases, nonfake mine, and
+timing-fake counts.
 
 Run the optional Rust parity tests:
 

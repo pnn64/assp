@@ -1885,13 +1885,25 @@ print_report:
     lea rcx, [label_left]
     mov rdx, [note_stats + ASSP_NOTE_STATS_LEFT]
     call print_field
+    lea rcx, [label_left_arrows]
+    mov rdx, [note_stats + ASSP_NOTE_STATS_LEFT]
+    call print_field
     lea rcx, [label_down]
+    mov rdx, [note_stats + ASSP_NOTE_STATS_DOWN]
+    call print_field
+    lea rcx, [label_down_arrows]
     mov rdx, [note_stats + ASSP_NOTE_STATS_DOWN]
     call print_field
     lea rcx, [label_up]
     mov rdx, [note_stats + ASSP_NOTE_STATS_UP]
     call print_field
+    lea rcx, [label_up_arrows]
+    mov rdx, [note_stats + ASSP_NOTE_STATS_UP]
+    call print_field
     lea rcx, [label_right]
+    mov rdx, [note_stats + ASSP_NOTE_STATS_RIGHT]
+    call print_field
+    lea rcx, [label_right_arrows]
     mov rdx, [note_stats + ASSP_NOTE_STATS_RIGHT]
     call print_field
     lea rcx, [label_bad_rows]
@@ -2333,9 +2345,13 @@ label_lifts db "lifts: ", 0
 label_fakes db "fakes: ", 0
 label_timing_fakes db "timing_fakes: ", 0
 label_left db "left: ", 0
+label_left_arrows db "left_arrows: ", 0
 label_down db "down: ", 0
+label_down_arrows db "down_arrows: ", 0
 label_up db "up: ", 0
+label_up_arrows db "up_arrows: ", 0
 label_right db "right: ", 0
+label_right_arrows db "right_arrows: ", 0
 label_bad_rows db "malformed_rows: ", 0
 space db " ", 0
 minus db "-", 0
