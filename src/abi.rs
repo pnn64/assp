@@ -6,6 +6,7 @@ pub const STREAM_TOKEN_RUN16: u32 = 16;
 pub const STREAM_TOKEN_RUN20: u32 = 20;
 pub const STREAM_TOKEN_RUN24: u32 = 24;
 pub const STREAM_TOKEN_RUN32: u32 = 32;
+pub const PATTERN_COUNT: usize = 62;
 pub const BREAKDOWN_DETAILED: u32 = 0;
 pub const BREAKDOWN_PARTIAL: u32 = 1;
 pub const BREAKDOWN_SIMPLIFIED: u32 = 2;
@@ -310,6 +311,11 @@ unsafe extern "C" {
         data: *const u8,
         len: usize,
         out: *mut BasicPatterns,
+    ) -> c_int;
+    fn assp_count_default_patterns_minimized_4(
+        data: *const u8,
+        len: usize,
+        out62: *mut u32,
     ) -> c_int;
     fn assp_minimize_measure_4(
         rows: *const u8,
@@ -1081,6 +1087,15 @@ pub fn count_basic_patterns_minimized_4(data: &[u8]) -> Option<BasicPatterns> {
 }
 
 #[must_use]
+pub fn count_default_patterns_minimized_4(data: &[u8]) -> Option<[u32; PATTERN_COUNT]> {
+    let mut out = [0; PATTERN_COUNT];
+    let ok = unsafe {
+        assp_count_default_patterns_minimized_4(data.as_ptr(), data.len(), out.as_mut_ptr())
+    };
+    (ok != 0).then_some(out)
+}
+
+#[must_use]
 pub fn minimize_measure_4(rows: &[[u8; 4]]) -> Vec<[u8; 4]> {
     let count = unsafe {
         assp_minimize_measure_4(
@@ -1218,6 +1233,12 @@ pub fn count_facing_steps_4(data: &[u8], mono_threshold: usize) -> Option<[u32; 
 pub fn count_basic_patterns_4(data: &[u8]) -> Option<BasicPatterns> {
     let minimized = minimize_chart_4(data)?;
     count_basic_patterns_minimized_4(&minimized)
+}
+
+#[must_use]
+pub fn count_default_patterns_4(data: &[u8]) -> Option<[u32; PATTERN_COUNT]> {
+    let minimized = minimize_chart_4(data)?;
+    count_default_patterns_minimized_4(&minimized)
 }
 
 #[must_use]

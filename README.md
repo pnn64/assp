@@ -62,6 +62,7 @@ The first implemented pieces are:
 - `assp_count_anchors_minimized_4`
 - `assp_count_facing_steps_minimized_4`
 - `assp_count_basic_patterns_minimized_4`
+- `assp_count_default_patterns_minimized_4`
 - `assp_minimize_measure_4`
 - `assp_minimize_measure_8`
 - `assp_minimize_chart_4`
@@ -127,6 +128,8 @@ from minimized 4-panel note rows.
 right-facing mono sequences from minimized 4-panel note rows.
 `assp_count_basic_patterns_minimized_4` counts RSSP's default candle and
 box-family patterns from minimized 4-panel note rows.
+`assp_count_default_patterns_minimized_4` counts RSSP's full 62-entry default
+pattern set from minimized 4-panel note rows.
 `assp_minimize_measure_4` and `assp_minimize_measure_8` apply RSSP's
 per-measure row reduction for 4-panel and 8-panel charts, which is the first
 piece of the minimized-note/hash pipeline.

@@ -4,6 +4,7 @@ default rel
 global assp_count_anchors_minimized_4
 global assp_count_facing_steps_minimized_4
 global assp_count_basic_patterns_minimized_4
+global assp_count_default_patterns_minimized_4
 
 section .text
 
@@ -821,3 +822,296 @@ assp_count_basic_patterns_minimized_4:
     pop rsi
     pop rbx
     ret
+
+; rcx = minimized 4-panel note-data bytes, rdx = len, r8 = u32[62] output.
+; Counts RSSP's full default PatternVariant set. eax = 1 on success.
+assp_count_default_patterns_minimized_4:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 40
+
+    test r8, r8
+    jz .default_fail
+    mov rbx, r8
+
+    xor eax, eax
+.default_zero_loop:
+    cmp eax, ASSP_PATTERN_COUNT
+    jae .default_zero_done
+    mov dword [rbx + rax * 4], 0
+    inc eax
+    jmp .default_zero_loop
+
+.default_zero_done:
+    test rdx, rdx
+    jz .default_success
+    test rcx, rcx
+    jz .default_fail
+
+    mov rsi, rcx
+    lea rdi, [rcx + rdx]
+    xor r12d, r12d
+
+.default_line_loop:
+    cmp rsi, rdi
+    jae .default_success
+
+    mov r10, rsi
+.default_find_line_end:
+    cmp r10, rdi
+    jae .default_line_end_found
+    cmp byte [r10], 10
+    je .default_line_end_found
+    inc r10
+    jmp .default_find_line_end
+
+.default_line_end_found:
+    mov r11, r10
+    cmp r11, rsi
+    jbe .default_trim_cr_done
+    cmp byte [r11 - 1], 13
+    jne .default_trim_cr_done
+    dec r11
+.default_trim_cr_done:
+    cmp r10, rdi
+    jae .default_next_is_end
+    inc r10
+.default_next_is_end:
+    mov [rsp + 16], r10
+
+    cmp rsi, r11
+    jae .default_line_done
+    mov al, [rsi]
+    cmp al, ','
+    je .default_line_done
+    cmp al, ';'
+    je .default_success
+
+    lea rax, [rsi + 4]
+    cmp rax, r11
+    ja .default_line_done
+
+    xor ecx, ecx
+    mov al, [rsi + 0]
+    cmp al, '1'
+    je .default_set_0
+    cmp al, '2'
+    je .default_set_0
+    cmp al, '4'
+    jne .default_col_1
+.default_set_0:
+    or ecx, 1
+.default_col_1:
+    mov al, [rsi + 1]
+    cmp al, '1'
+    je .default_set_1
+    cmp al, '2'
+    je .default_set_1
+    cmp al, '4'
+    jne .default_col_2
+.default_set_1:
+    or ecx, 2
+.default_col_2:
+    mov al, [rsi + 2]
+    cmp al, '1'
+    je .default_set_2
+    cmp al, '2'
+    je .default_set_2
+    cmp al, '4'
+    jne .default_col_3
+.default_set_2:
+    or ecx, 4
+.default_col_3:
+    mov al, [rsi + 3]
+    cmp al, '1'
+    je .default_set_3
+    cmp al, '2'
+    je .default_set_3
+    cmp al, '4'
+    jne .default_mask_done
+.default_set_3:
+    or ecx, 8
+
+.default_mask_done:
+    mov r10d, 9
+.default_shift_loop:
+    test r10d, r10d
+    jz .default_shift_done
+    mov al, [rsp + r10 - 1]
+    mov [rsp + r10], al
+    dec r10d
+    jmp .default_shift_loop
+
+.default_shift_done:
+    mov [rsp], cl
+    inc r12
+
+    lea r13, [default_pattern_table]
+    lea r10, [default_pattern_table_end]
+.default_pattern_loop:
+    cmp r13, r10
+    jae .default_line_done
+    movzx r14d, byte [r13 + 1]
+    cmp r12, r14
+    jb .default_next_pattern
+
+    xor r15d, r15d
+    mov r11, r14
+    dec r11
+.default_match_loop:
+    cmp r15, r14
+    jae .default_match
+    mov al, [r13 + 2 + r15]
+    cmp al, [rsp + r11]
+    jne .default_next_pattern
+    inc r15
+    dec r11
+    jmp .default_match_loop
+
+.default_match:
+    movzx eax, byte [r13]
+    inc dword [rbx + rax * 4]
+
+.default_next_pattern:
+    add r13, 12
+    jmp .default_pattern_loop
+
+.default_line_done:
+    mov rsi, [rsp + 16]
+    jmp .default_line_loop
+
+.default_success:
+    mov eax, ASSP_TRUE
+    jmp .default_done
+
+.default_fail:
+    xor eax, eax
+
+.default_done:
+    add rsp, 40
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
+section .rdata
+
+%macro PAT3 4
+    db %1, 3, %2, %3, %4, 0, 0, 0, 0, 0, 0, 0
+%endmacro
+
+%macro PAT4 5
+    db %1, 4, %2, %3, %4, %5, 0, 0, 0, 0, 0, 0
+%endmacro
+
+%macro PAT5 6
+    db %1, 5, %2, %3, %4, %5, %6, 0, 0, 0, 0, 0
+%endmacro
+
+%macro PAT6 7
+    db %1, 6, %2, %3, %4, %5, %6, %7, 0, 0, 0, 0
+%endmacro
+
+%macro PAT7 8
+    db %1, 7, %2, %3, %4, %5, %6, %7, %8, 0, 0, 0
+%endmacro
+
+%macro PAT8 9
+    db %1, 8, %2, %3, %4, %5, %6, %7, %8, %9, 0, 0
+%endmacro
+
+%macro PAT9 10
+    db %1, 9, %2, %3, %4, %5, %6, %7, %8, %9, %10, 0
+%endmacro
+
+%macro PAT10 11
+    db %1, 10, %2, %3, %4, %5, %6, %7, %8, %9, %10, %11
+%endmacro
+
+default_pattern_table:
+    PAT3 10, 4, 1, 2
+    PAT3 10, 2, 1, 4
+    PAT3 11, 4, 8, 2
+    PAT3 11, 2, 8, 4
+    PAT4 4, 1, 8, 1, 8
+    PAT4 4, 8, 1, 8, 1
+    PAT4 5, 4, 2, 4, 2
+    PAT4 5, 2, 4, 2, 4
+    PAT4 6, 1, 2, 1, 2
+    PAT4 6, 2, 1, 2, 1
+    PAT4 7, 1, 4, 1, 4
+    PAT4 7, 4, 1, 4, 1
+    PAT4 8, 8, 2, 8, 2
+    PAT4 8, 2, 8, 2, 8
+    PAT4 9, 8, 4, 8, 4
+    PAT4 9, 4, 8, 4, 8
+    PAT4 36, 1, 2, 4, 8
+    PAT4 37, 8, 4, 2, 1
+    PAT4 38, 1, 4, 2, 8
+    PAT4 39, 8, 2, 4, 1
+    PAT3 57, 8, 4, 8
+    PAT3 55, 1, 4, 1
+    PAT3 54, 1, 2, 1
+    PAT3 56, 8, 2, 8
+    PAT5 17, 1, 2, 4, 2, 1
+    PAT5 16, 8, 4, 2, 4, 8
+    PAT5 19, 1, 4, 2, 4, 1
+    PAT5 18, 8, 2, 4, 2, 8
+    PAT7 44, 1, 2, 4, 8, 4, 2, 1
+    PAT7 45, 8, 4, 2, 1, 2, 4, 8
+    PAT7 46, 1, 4, 2, 8, 2, 4, 1
+    PAT7 47, 8, 2, 4, 1, 4, 2, 8
+    PAT5 48, 1, 8, 1, 8, 1
+    PAT5 48, 8, 1, 8, 1, 8
+    PAT5 49, 4, 2, 4, 2, 4
+    PAT5 49, 2, 4, 2, 4, 2
+    PAT5 50, 1, 2, 1, 2, 1
+    PAT5 50, 2, 1, 2, 1, 2
+    PAT5 51, 1, 4, 1, 4, 1
+    PAT5 51, 4, 1, 4, 1, 4
+    PAT5 52, 8, 2, 8, 2, 8
+    PAT5 52, 2, 8, 2, 8, 2
+    PAT5 53, 8, 4, 8, 4, 8
+    PAT5 53, 4, 8, 4, 8, 4
+    PAT8 20, 1, 4, 2, 8, 1, 4, 2, 8
+    PAT8 21, 8, 2, 4, 1, 8, 2, 4, 1
+    PAT8 22, 1, 2, 4, 8, 1, 2, 4, 8
+    PAT8 23, 8, 2, 4, 1, 8, 2, 4, 1
+    PAT8 0, 1, 4, 2, 8, 1, 2, 4, 8
+    PAT8 1, 8, 2, 4, 1, 8, 4, 2, 1
+    PAT8 2, 1, 2, 4, 8, 1, 4, 2, 8
+    PAT8 3, 8, 4, 2, 1, 8, 2, 4, 1
+    PAT5 28, 1, 2, 1, 4, 1
+    PAT5 29, 1, 4, 1, 2, 1
+    PAT5 30, 8, 4, 8, 2, 8
+    PAT5 31, 8, 2, 8, 4, 8
+    PAT10 12, 1, 2, 4, 8, 2, 4, 1, 2, 4, 8
+    PAT10 13, 8, 4, 2, 1, 4, 2, 8, 4, 2, 1
+    PAT10 14, 1, 4, 2, 8, 4, 2, 1, 4, 2, 8
+    PAT10 15, 8, 2, 4, 1, 2, 4, 8, 2, 4, 1
+    PAT9 24, 1, 2, 4, 2, 1, 4, 2, 4, 1
+    PAT9 25, 8, 4, 2, 4, 8, 2, 4, 2, 8
+    PAT9 26, 1, 4, 2, 4, 1, 2, 4, 2, 1
+    PAT9 27, 8, 2, 4, 2, 8, 4, 2, 4, 8
+    PAT6 32, 1, 2, 4, 8, 2, 8
+    PAT6 33, 8, 4, 2, 1, 4, 1
+    PAT6 34, 1, 4, 2, 8, 4, 8
+    PAT6 35, 8, 2, 4, 1, 2, 1
+    PAT8 58, 1, 2, 1, 4, 2, 8, 4, 8
+    PAT8 59, 8, 4, 8, 2, 4, 1, 2, 1
+    PAT8 60, 1, 4, 1, 2, 4, 8, 2, 8
+    PAT8 61, 8, 2, 8, 4, 2, 1, 4, 1
+    PAT9 40, 1, 2, 4, 8, 2, 8, 4, 2, 1
+    PAT9 41, 8, 4, 2, 1, 4, 1, 2, 4, 8
+    PAT9 42, 1, 4, 2, 8, 4, 8, 2, 4, 1
+    PAT9 43, 8, 2, 4, 1, 2, 1, 4, 2, 8
+default_pattern_table_end:

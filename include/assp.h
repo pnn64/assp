@@ -16,6 +16,7 @@ extern "C" {
 #define ASSP_STREAM_BREAKDOWN_PARTIAL 1
 #define ASSP_STREAM_BREAKDOWN_SIMPLE 2
 #define ASSP_STREAM_BREAKDOWN_TOTAL 3
+#define ASSP_PATTERN_COUNT 62
 
 typedef struct assp_note_stats {
     uint64_t rows;
@@ -335,6 +336,11 @@ int32_t assp_count_basic_patterns_minimized_4(
     const uint8_t *data,
     size_t len,
     assp_basic_patterns *out
+);
+int32_t assp_count_default_patterns_minimized_4(
+    const uint8_t *data,
+    size_t len,
+    uint32_t *out62
 );
 int64_t assp_nps_median_centi(
     const uint32_t *nps_milli,
