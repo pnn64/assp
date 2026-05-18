@@ -1431,6 +1431,9 @@ print_report:
     lea rcx, [label_last_beat_milli]
     mov rdx, [last_beat_milli]
     call print_field
+    lea rcx, [label_duration_seconds]
+    mov rdx, [duration_ms]
+    call print_fixed3_field
     lea rcx, [label_duration_ms]
     mov rdx, [duration_ms]
     call print_field
@@ -1888,6 +1891,7 @@ label_peak_nps_milli db "peak_nps_milli: ", 0
 label_median_nps db "median_nps: ", 0
 label_tier_bpm db "tier_bpm: ", 0
 label_last_beat_milli db "last_beat_milli: ", 0
+label_duration_seconds db "duration_seconds: ", 0
 label_duration_ms db "duration_ms: ", 0
 label_stops db "stops: ", 0
 label_delays db "delays: ", 0
