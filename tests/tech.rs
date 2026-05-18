@@ -2,8 +2,10 @@ use assp::{
     StepParityState4, TechCounts, calculate_step_tech_counts_from_placements_4,
     count_step_tech_brackets_minimized_4, count_step_tech_brackets_minimized_8,
     parse_tech_notation, step_parity_permutations_4, step_parity_result_state_holds_4,
-    step_parity_result_state_no_holds_4, step_parity_row_transitions_4,
+    step_parity_result_state_no_holds_4, step_parity_row_key_candidates_4,
+    step_parity_row_transitions_4,
 };
+use std::collections::HashSet;
 
 fn parse(credit: &str, description: &str) -> String {
     String::from_utf8(parse_tech_notation(credit.as_bytes(), description.as_bytes()).unwrap())
@@ -305,6 +307,55 @@ fn enumerates_row_transitions_from_parity_states_like_rssp_core() {
             }
         }
     }
+}
+
+#[test]
+fn dedupes_row_candidates_by_state_key_like_rssp_row_map() {
+    let initial_states = [
+        StepParityState4::default(),
+        StepParityState4 {
+            combined_columns: [1, 0, 0, 0],
+            where_feet_are: [-1, 0, -1, -1, -1],
+            occupied_mask: 0b0001,
+            ..StepParityState4::default()
+        },
+        StepParityState4 {
+            combined_columns: [0, 0, 3, 0],
+            where_feet_are: [-1, -1, -1, 2, -1],
+            occupied_mask: 0b0100,
+            ..StepParityState4::default()
+        },
+    ];
+
+    let note_mask = 0b0101;
+    let hold_mask = 0b0000;
+    let mut seen = HashSet::new();
+    let mut expected = Vec::new();
+    for (pred, initial) in initial_states.iter().copied().enumerate() {
+        for placement in expected_permutations_4(note_mask | hold_mask) {
+            let (state, hit, key) = expected_result_state(initial, placement, note_mask, hold_mask);
+            if seen.insert(key) {
+                expected.push((pred as u32, placement, state, hit, key));
+            }
+        }
+    }
+
+    let actual: Vec<_> = step_parity_row_key_candidates_4(&initial_states, note_mask, hold_mask)
+        .unwrap()
+        .into_iter()
+        .map(|c| {
+            (
+                c.predecessor,
+                c.transition.placement,
+                c.transition.state,
+                c.transition.hit,
+                c.transition.key,
+            )
+        })
+        .collect();
+
+    assert!(expected.len() < initial_states.len() * expected_permutations_4(note_mask).len());
+    assert_eq!(actual, expected);
 }
 
 #[test]

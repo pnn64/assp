@@ -66,6 +66,12 @@ pub struct StepParityTransition4 {
     pub key: u32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StepParityRowCandidate4 {
+    pub predecessor: u32,
+    pub transition: StepParityTransition4,
+}
+
 #[repr(C)]
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct ChartRef {
@@ -284,6 +290,18 @@ unsafe extern "C" {
         initial: *const StepParityState4,
         note_mask: u32,
         hold_mask: u32,
+        out_placements: *mut u8,
+        out_states: *mut StepParityState4,
+        out_hits: *mut i8,
+        out_keys: *mut u32,
+        out_cap: usize,
+    ) -> usize;
+    fn assp_step_parity_row_key_candidates_4(
+        initial_states: *const StepParityState4,
+        initial_state_count: usize,
+        note_mask: u32,
+        hold_mask: u32,
+        out_predecessors: *mut u32,
         out_placements: *mut u8,
         out_states: *mut StepParityState4,
         out_hits: *mut i8,
@@ -1055,6 +1073,62 @@ pub fn step_parity_row_transitions_4(
             key: keys[i],
         })
         .collect()
+}
+
+#[must_use]
+pub fn step_parity_row_key_candidates_4(
+    initial_states: &[StepParityState4],
+    note_mask: u8,
+    hold_mask: u8,
+) -> Option<Vec<StepParityRowCandidate4>> {
+    let cap = initial_states.len().saturating_mul(24);
+    let mut predecessors = vec![0u32; cap];
+    let mut placements = vec![0u8; cap.saturating_mul(4)];
+    let mut states = vec![StepParityState4::default(); cap];
+    let mut hits = vec![0i8; cap.saturating_mul(5)];
+    let mut keys = vec![0u32; cap];
+    let count = unsafe {
+        assp_step_parity_row_key_candidates_4(
+            initial_states.as_ptr(),
+            initial_states.len(),
+            u32::from(note_mask),
+            u32::from(hold_mask),
+            predecessors.as_mut_ptr(),
+            placements.as_mut_ptr(),
+            states.as_mut_ptr(),
+            hits.as_mut_ptr(),
+            keys.as_mut_ptr(),
+            cap,
+        )
+    };
+    if count == NOT_FOUND {
+        return None;
+    }
+
+    Some(
+        (0..count)
+            .map(|i| StepParityRowCandidate4 {
+                predecessor: predecessors[i],
+                transition: StepParityTransition4 {
+                    placement: [
+                        placements[i * 4],
+                        placements[i * 4 + 1],
+                        placements[i * 4 + 2],
+                        placements[i * 4 + 3],
+                    ],
+                    state: states[i],
+                    hit: [
+                        hits[i * 5],
+                        hits[i * 5 + 1],
+                        hits[i * 5 + 2],
+                        hits[i * 5 + 3],
+                        hits[i * 5 + 4],
+                    ],
+                    key: keys[i],
+                },
+            })
+            .collect(),
+    )
 }
 
 #[must_use]

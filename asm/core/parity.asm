@@ -5,6 +5,7 @@ global assp_step_parity_permutations_4
 global assp_step_parity_result_state_no_holds_4
 global assp_step_parity_result_state_holds_4
 global assp_step_parity_row_transitions_4
+global assp_step_parity_row_key_candidates_4
 
 section .text
 
@@ -657,6 +658,164 @@ assp_step_parity_row_transitions_4:
 
 .fail:
     xor eax, eax
+
+.done:
+    pop rbp
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
+; rcx = initial states, rdx = initial state count, r8d = row note mask,
+; r9d = row hold mask, stack arg 5 = out predecessor indexes,
+; stack arg 6 = out placements[4 * cap], stack arg 7 = out states[12 * cap],
+; stack arg 8 = out hits[5 * cap], stack arg 9 = out keys[4 * cap],
+; stack arg 10 = output capacity. Capacity must be at least state_count * 24.
+; rax = unique row-state key count, or ASSP_NOT_FOUND on invalid input.
+assp_step_parity_row_key_candidates_4:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+    push rbp
+
+    mov r12, rcx
+    mov r13, rdx
+    mov r14d, r8d
+    mov r15d, r9d
+    mov rbx, [rsp + 104]
+    mov rsi, [rsp + 112]
+    mov rdi, [rsp + 120]
+    mov rbp, [rsp + 128]
+    mov r10, [rsp + 136]
+    mov r11, [rsp + 144]
+
+    test r13, r13
+    jz .zero_success
+    test r12, r12
+    jz .fail
+    test rbx, rbx
+    jz .fail
+    test rsi, rsi
+    jz .fail
+    test rdi, rdi
+    jz .fail
+    test rbp, rbp
+    jz .fail
+    test r10, r10
+    jz .fail
+
+    mov rax, r13
+    mov ecx, 24
+    mul rcx
+    jo .fail
+    cmp r11, rax
+    jb .fail
+
+    sub rsp, 760
+    mov [rsp + 720], r10
+    mov [rsp + 728], r11
+    mov qword [rsp + 688], 0
+    mov qword [rsp + 696], 0
+
+.state_loop:
+    mov rax, [rsp + 696]
+    cmp rax, r13
+    jae .success
+
+    lea rcx, [rax + rax * 2]
+    lea rcx, [r12 + rcx * 4]
+    mov edx, r14d
+    mov r8d, r15d
+    lea r9, [rsp + 64]
+    lea r10, [rsp + 160]
+    mov [rsp + 32], r10
+    lea r10, [rsp + 448]
+    mov [rsp + 40], r10
+    lea r10, [rsp + 568]
+    mov [rsp + 48], r10
+    mov qword [rsp + 56], 24
+    call assp_step_parity_row_transitions_4
+
+    mov [rsp + 672], rax
+    mov qword [rsp + 680], 0
+
+.candidate_loop:
+    mov rax, [rsp + 680]
+    cmp rax, [rsp + 672]
+    jae .next_state
+
+    mov edx, [rsp + 568 + rax * 4]
+    mov [rsp + 704], edx
+    mov r10, [rsp + 720]
+    xor ecx, ecx
+
+.scan_keys:
+    cmp rcx, [rsp + 688]
+    jae .emit_candidate
+    cmp [r10 + rcx * 4], edx
+    je .skip_candidate
+    inc rcx
+    jmp .scan_keys
+
+.emit_candidate:
+    mov rax, [rsp + 688]
+
+    mov edx, [rsp + 696]
+    mov [rbx + rax * 4], edx
+
+    mov rcx, [rsp + 680]
+    mov edx, [rsp + 64 + rcx * 4]
+    mov [rsi + rax * 4], edx
+
+    lea r10, [rcx + rcx * 2]
+    lea r10, [r10 * 4]
+    lea r11, [rax + rax * 2]
+    lea r11, [r11 * 4]
+    mov rdx, [rsp + 160 + r10]
+    mov [rdi + r11], rdx
+    mov edx, [rsp + 168 + r10]
+    mov [rdi + r11 + 8], edx
+
+    lea r10, [rcx + rcx * 4]
+    lea r11, [rax + rax * 4]
+    mov edx, [rsp + 448 + r10]
+    mov [rbp + r11], edx
+    mov dl, [rsp + 452 + r10]
+    mov [rbp + r11 + 4], dl
+
+    mov r10, [rsp + 720]
+    mov edx, [rsp + 704]
+    mov [r10 + rax * 4], edx
+
+    inc qword [rsp + 688]
+
+.skip_candidate:
+    inc qword [rsp + 680]
+    jmp .candidate_loop
+
+.next_state:
+    inc qword [rsp + 696]
+    jmp .state_loop
+
+.success:
+    mov rax, [rsp + 688]
+    add rsp, 760
+    jmp .done
+
+.zero_success:
+    xor eax, eax
+    jmp .done
+
+.fail:
+    mov rax, ASSP_NOT_FOUND
 
 .done:
     pop rbp
