@@ -109,6 +109,7 @@ start:
 .supported_lanes:
     mov [chart_lanes], rax
 
+    call prepare_global_metadata
     call prepare_chart_metadata
 
     call prepare_hash
@@ -1181,6 +1182,73 @@ prepare_timing_stats:
     add rsp, 88
     ret
 
+prepare_global_metadata:
+    sub rsp, 40
+
+    mov qword [title_slice + ASSP_BYTE_SLICE_PTR], 0
+    mov qword [title_slice + ASSP_BYTE_SLICE_LEN], 0
+    mov qword [subtitle_slice + ASSP_BYTE_SLICE_PTR], 0
+    mov qword [subtitle_slice + ASSP_BYTE_SLICE_LEN], 0
+    mov qword [artist_slice + ASSP_BYTE_SLICE_PTR], 0
+    mov qword [artist_slice + ASSP_BYTE_SLICE_LEN], 0
+    mov qword [title_trans_slice + ASSP_BYTE_SLICE_PTR], 0
+    mov qword [title_trans_slice + ASSP_BYTE_SLICE_LEN], 0
+    mov qword [subtitle_trans_slice + ASSP_BYTE_SLICE_PTR], 0
+    mov qword [subtitle_trans_slice + ASSP_BYTE_SLICE_LEN], 0
+    mov qword [artist_trans_slice + ASSP_BYTE_SLICE_PTR], 0
+    mov qword [artist_trans_slice + ASSP_BYTE_SLICE_LEN], 0
+
+    lea rcx, [file_buffer]
+    mov rdx, [file_len]
+    lea r8, [tag_title]
+    mov r9d, tag_title_end - tag_title
+    lea rax, [title_slice]
+    mov [rsp + 32], rax
+    call assp_find_global_tag
+
+    lea rcx, [file_buffer]
+    mov rdx, [file_len]
+    lea r8, [tag_subtitle]
+    mov r9d, tag_subtitle_end - tag_subtitle
+    lea rax, [subtitle_slice]
+    mov [rsp + 32], rax
+    call assp_find_global_tag
+
+    lea rcx, [file_buffer]
+    mov rdx, [file_len]
+    lea r8, [tag_artist]
+    mov r9d, tag_artist_end - tag_artist
+    lea rax, [artist_slice]
+    mov [rsp + 32], rax
+    call assp_find_global_tag
+
+    lea rcx, [file_buffer]
+    mov rdx, [file_len]
+    lea r8, [tag_title_trans]
+    mov r9d, tag_title_trans_end - tag_title_trans
+    lea rax, [title_trans_slice]
+    mov [rsp + 32], rax
+    call assp_find_global_tag
+
+    lea rcx, [file_buffer]
+    mov rdx, [file_len]
+    lea r8, [tag_subtitle_trans]
+    mov r9d, tag_subtitle_trans_end - tag_subtitle_trans
+    lea rax, [subtitle_trans_slice]
+    mov [rsp + 32], rax
+    call assp_find_global_tag
+
+    lea rcx, [file_buffer]
+    mov rdx, [file_len]
+    lea r8, [tag_artist_trans]
+    mov r9d, tag_artist_trans_end - tag_artist_trans
+    lea rax, [artist_trans_slice]
+    mov [rsp + 32], rax
+    call assp_find_global_tag
+
+    add rsp, 40
+    ret
+
 prepare_chart_metadata:
     sub rsp, 56
 
@@ -1347,6 +1415,31 @@ print_report:
     call print_z
     lea rcx, [newline]
     call print_z
+
+    lea rcx, [label_title]
+    mov rdx, [title_slice + ASSP_BYTE_SLICE_PTR]
+    mov r8, [title_slice + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+    lea rcx, [label_subtitle]
+    mov rdx, [subtitle_slice + ASSP_BYTE_SLICE_PTR]
+    mov r8, [subtitle_slice + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+    lea rcx, [label_artist]
+    mov rdx, [artist_slice + ASSP_BYTE_SLICE_PTR]
+    mov r8, [artist_slice + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+    lea rcx, [label_title_trans]
+    mov rdx, [title_trans_slice + ASSP_BYTE_SLICE_PTR]
+    mov r8, [title_trans_slice + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+    lea rcx, [label_subtitle_trans]
+    mov rdx, [subtitle_trans_slice + ASSP_BYTE_SLICE_PTR]
+    mov r8, [subtitle_trans_slice + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
+    lea rcx, [label_artist_trans]
+    mov rdx, [artist_trans_slice + ASSP_BYTE_SLICE_PTR]
+    mov r8, [artist_trans_slice + ASSP_BYTE_SLICE_LEN]
+    call print_slice_field
 
     lea rcx, [label_chart]
     mov rdx, [chart_index]
@@ -1857,6 +1950,18 @@ print_raw:
 section .data
 
 default_fixture db "fixtures\camellia_mix.ssc", 0
+tag_title db "#TITLE:"
+tag_title_end:
+tag_subtitle db "#SUBTITLE:"
+tag_subtitle_end:
+tag_artist db "#ARTIST:"
+tag_artist_end:
+tag_title_trans db "#TITLETRANSLIT:"
+tag_title_trans_end:
+tag_subtitle_trans db "#SUBTITLETRANSLIT:"
+tag_subtitle_trans_end:
+tag_artist_trans db "#ARTISTTRANSLIT:"
+tag_artist_trans_end:
 tag_offset db "#OFFSET:"
 tag_offset_end:
 tag_chart_name db "#CHARTNAME:"
@@ -1876,6 +1981,12 @@ msg_nps_fail db "assembly nps pipeline failed", 13, 10, 0
 msg_duration_fail db "assembly duration pipeline failed", 13, 10, 0
 msg_breakdown_too_long db "breakdown output exceeded text buffer", 13, 10, 0
 label_file db "file: ", 0
+label_title db "title: ", 0
+label_subtitle db "subtitle: ", 0
+label_artist db "artist: ", 0
+label_title_trans db "title_trans: ", 0
+label_subtitle_trans db "subtitle_trans: ", 0
+label_artist_trans db "artist_trans: ", 0
 label_charts db "charts: ", 0
 label_chart db "chart: ", 0
 label_step_type db "step_type: ", 0
@@ -1973,6 +2084,12 @@ file_bytes_read resd 1
 chart_info resb ASSP_CHART_INFO_SIZE
 bpms_slice resb ASSP_BYTE_SLICE_SIZE
 offset_slice resb ASSP_BYTE_SLICE_SIZE
+title_slice resb ASSP_BYTE_SLICE_SIZE
+subtitle_slice resb ASSP_BYTE_SLICE_SIZE
+artist_slice resb ASSP_BYTE_SLICE_SIZE
+title_trans_slice resb ASSP_BYTE_SLICE_SIZE
+subtitle_trans_slice resb ASSP_BYTE_SLICE_SIZE
+artist_trans_slice resb ASSP_BYTE_SLICE_SIZE
 chart_name_slice resb ASSP_BYTE_SLICE_SIZE
 display_bpm_slice resb ASSP_BYTE_SLICE_SIZE
 step_artist_slice resb ASSP_BYTE_SLICE_SIZE
