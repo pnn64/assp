@@ -175,10 +175,10 @@ from chart credit and description text with the same greedy longest-prefix
 rules, `No Tech` skipping, and measure-data filtering.
 `assp_count_step_tech_brackets_minimized_4` and
 `assp_count_step_tech_brackets_minimized_8` start the RSSP step-parity
-tech-count port. They emit the `tech_counts` ABI and currently match bracket
-counts for fixture charts where RSSP reports positive brackets and the other
-parity counters are zero. Full crossovers, footswitches, sideswitches, jacks,
-and doublesteps still require the full parity DP port.
+tech-count port. They emit the `tech_counts` ABI and currently match the
+hold-constrained bracket slice for fixture charts where RSSP's other parity
+counters are zero. Full crossovers, footswitches, sideswitches, jacks, and
+doublesteps still require the full parity DP port.
 `assp_chart_owns_timing_by_index` checks the RSSP chart-local timing ownership
 predicate for SSC `#NOTEDATA` blocks.
 `assp_parse_bpm_map` parses BPM timing maps into sorted fixed-point
@@ -358,7 +358,7 @@ metadata, SHA1 hashes, matrix/tier BPM, NPS summary and per-measure vectors,
 song and chart artist metadata, timing metadata, formatted timing maps,
 breakdown strings, arrow counts, mono/candle stats, default pattern counts,
 gimmick counts, stream metrics, stream sequence ranges, and the current
-positive bracket-only tech-count slice.
+hold-constrained bracket-only tech-count slice.
 
 The standalone executable currently scans SSC files for chart metadata and
 `#NOTES:` / `#NOTES2:` tags. The second argument is a zero-based chart index, or

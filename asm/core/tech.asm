@@ -24,6 +24,26 @@ section .text
 %%done:
 %endmacro
 
+%macro update_hold_lane 2
+    mov al, [rsi + %1]
+    cmp al, '2'
+    je %%start
+    cmp al, '4'
+    je %%start
+    cmp al, '3'
+    je %%end
+    jmp %%done
+
+%%start:
+    or r15d, %2
+    jmp %%done
+
+%%end:
+    and r15d, ~%2
+
+%%done:
+%endmacro
+
 %macro count_bracket_pair 2
     mov r10d, (1 << %1) | (1 << %2)
     mov r11d, ecx
@@ -68,6 +88,7 @@ section .text
     mov rsi, rcx
     lea rdi, [rcx + rdx]
     xor r12d, r12d
+    xor r15d, r15d
 
 %%line_loop:
     cmp rsi, rdi
@@ -114,18 +135,32 @@ section .text
 %endif
 
     test r13d, r13d
-    jz %%row_done
+    jz %%update_holds
     test r12d, r12d
     jnz %%count_row
     mov r12d, ASSP_TRUE
-    jmp %%row_done
+    jmp %%update_holds
 
 %%count_row:
+    test r15d, r15d
+    jz %%update_holds
     cmp r14d, 2
-    jb %%row_done
+    jb %%update_holds
     mov ecx, r13d
     call %3
     add [rbx + ASSP_TECH_COUNTS_BRACKETS], eax
+
+%%update_holds:
+    update_hold_lane 0, 1
+    update_hold_lane 1, 2
+    update_hold_lane 2, 4
+    update_hold_lane 3, 8
+%if %2 == 8
+    update_hold_lane 4, 16
+    update_hold_lane 5, 32
+    update_hold_lane 6, 64
+    update_hold_lane 7, 128
+%endif
 
 %%row_done:
     add rsi, %2

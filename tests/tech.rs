@@ -79,6 +79,20 @@ fn skips_single_panel_first_row_brackets_like_rssp_core() {
 }
 
 #[test]
+fn skips_single_panel_no_hold_bracketable_jump_like_rssp_core() {
+    let data = b"1000\n0011\n";
+    let counts = count_step_tech_brackets_minimized_4(data).unwrap();
+    assert_brackets_match_rssp(data, 4, counts);
+}
+
+#[test]
+fn skips_double_panel_no_hold_bracketable_jump_like_rssp_core() {
+    let data = b"10000000\n00000000\n00000001\n00000000\n,\n00000000\n00110000\n0000000M\n";
+    let counts = count_step_tech_brackets_minimized_8(data).unwrap();
+    assert_brackets_match_rssp(data, 8, counts);
+}
+
+#[test]
 fn counts_double_panel_timing_hold_fixture_bracket_like_rssp_core() {
     let data =
         b"20000000\n00000000\n01000000\n30000000\n,\n00004000\n00000000\n00110000\n00003000\n";

@@ -361,8 +361,7 @@ if ($CompareRssp -or $CompareAllCharts -or $CompareFixtures) {
             ([int64]$techCounts.down_footswitches -eq 0) -and
             ([int64]$techCounts.sideswitches -eq 0) -and
             ([int64]$techCounts.jacks -eq 0) -and
-            ([int64]$techCounts.doublesteps -eq 0) -and
-            ([int64]$techCounts.brackets -gt 0)
+            ([int64]$techCounts.doublesteps -eq 0)
     }
 
     $failures = New-Object System.Collections.Generic.List[string]
