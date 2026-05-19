@@ -441,8 +441,20 @@ against the local RSSP Rust CLI:
 .\assp\build.ps1 -CompareFixtures
 ```
 
-`-CompareRssp`, `-CompareAllCharts`, and `-CompareFixtures` are optional parity
-harness modes. They run Cargo only after the NASM standalone executable is
+Build the standalone executable once and compare every chart in every `.sm` and
+`.ssc` file under a song pack folder:
+
+```powershell
+.\assp\build.ps1 -Pack .\songs\MyPack -Report .\assp\target\my_pack_parity.log -KeepGoing
+```
+
+`-Pack` implies `-CompareAllCharts`, recurses the directory, and exits with a
+nonzero code if any parity differences are found. `-KeepGoing` keeps collecting
+differences after a file fails to parse or compare. `-Report` writes the same
+high-level pass/fail lines and mismatch list to a log file.
+
+`-CompareRssp`, `-CompareAllCharts`, `-CompareFixtures`, and `-Pack` are optional
+parity harness modes. They run Cargo only after the NASM standalone executable is
 built, and only to execute the local RSSP reference CLI. They check chart
 metadata, SHA1 hashes, matrix/tier BPM, NPS summary and per-measure vectors,
 song and chart artist metadata, timing metadata, formatted timing maps,

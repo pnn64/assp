@@ -1,11 +1,14 @@
 param(
     [switch]$RunFixture,
     [string]$Fixture,
+    [string]$Pack,
     [int]$Chart = 0,
     [switch]$ListCharts,
     [switch]$CompareRssp,
     [switch]$CompareAllCharts,
     [switch]$CompareFixtures,
+    [string]$Report,
+    [switch]$KeepGoing,
     [switch]$Clean
 )
 
@@ -15,6 +18,10 @@ $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $target = Join-Path $root "target"
 $exe = Join-Path $target "assp.exe"
 $include = (Join-Path $root "include") + [System.IO.Path]::DirectorySeparatorChar
+
+if ($Pack -and !$CompareRssp -and !$CompareAllCharts -and !$CompareFixtures) {
+    $CompareAllCharts = $true
+}
 
 if (!(Get-Command nasm -ErrorAction SilentlyContinue)) {
     throw "nasm was not found on PATH."
@@ -118,7 +125,13 @@ if ($CompareRssp -or $CompareAllCharts -or $CompareFixtures) {
     if ($CompareFixtures -and $Fixture) {
         throw "CompareFixtures uses every bundled fixture; omit -Fixture."
     }
-    if (!$Fixture -and !$CompareFixtures) {
+    if ($Pack -and ($Fixture -or $CompareFixtures)) {
+        throw "Pack comparison uses every simfile under one folder; omit -Fixture and -CompareFixtures."
+    }
+    if ($Pack -and !$CompareAllCharts) {
+        throw "Pack comparison checks every chart; use -CompareAllCharts -Pack <folder>."
+    }
+    if (!$Fixture -and !$CompareFixtures -and !$Pack) {
         $Fixture = Join-Path $root "fixtures\camellia_mix.ssc"
     }
 
@@ -132,13 +145,48 @@ if ($CompareRssp -or $CompareAllCharts -or $CompareFixtures) {
     $numberStyles = [System.Globalization.NumberStyles]::Float
 
     $fixturePaths = @()
+    $resolvedPack = $null
     if ($CompareFixtures) {
-        $fixturePaths = Get-ChildItem (Join-Path $root "fixtures") -File |
+        $fixturePaths = @(Get-ChildItem (Join-Path $root "fixtures") -File |
             Where-Object { $_.Extension -eq ".sm" -or $_.Extension -eq ".ssc" } |
             Sort-Object Name |
-            ForEach-Object { $_.FullName }
+            ForEach-Object { $_.FullName })
+    } elseif ($Pack) {
+        $resolvedPack = (Resolve-Path $Pack).Path
+        if (!(Test-Path -LiteralPath $resolvedPack -PathType Container)) {
+            throw "Pack path is not a directory: $resolvedPack"
+        }
+        $fixturePaths = @(Get-ChildItem -LiteralPath $resolvedPack -Recurse -File |
+            Where-Object { $_.Extension -eq ".sm" -or $_.Extension -eq ".ssc" } |
+            Sort-Object FullName |
+            ForEach-Object { $_.FullName })
+        if ($fixturePaths.Count -eq 0) {
+            throw "No .sm or .ssc files found under $resolvedPack."
+        }
     } else {
         $fixturePaths = @((Resolve-Path $Fixture).Path)
+    }
+
+    $reportPath = $null
+    if ($Report) {
+        $reportPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Report)
+        $reportDir = Split-Path -Parent $reportPath
+        if ($reportDir) {
+            New-Item -ItemType Directory -Force $reportDir | Out-Null
+        }
+        Set-Content -LiteralPath $reportPath -Value @(
+            "assp RSSP parity report",
+            "generated: $([DateTime]::Now.ToString("s"))",
+            "files: $($fixturePaths.Count)",
+            ""
+        )
+    }
+
+    function Write-ParityLine([string]$line) {
+        Write-Host $line
+        if ($reportPath) {
+            Add-Content -LiteralPath $reportPath -Value $line
+        }
     }
 
     function Get-AsspField([string]$name) {
@@ -368,11 +416,27 @@ if ($CompareRssp -or $CompareAllCharts -or $CompareFixtures) {
     foreach ($fixturePath in $fixturePaths) {
         $resolvedFixture = (Resolve-Path $fixturePath).Path
         $fixtureName = Split-Path -Leaf $resolvedFixture
+        Write-ParityLine "comparing $resolvedFixture"
+        $fixtureFailureStart = $failures.Count
         $jsonText = & cargo run --quiet --manifest-path $rsspManifest --bin rssp -- $resolvedFixture --json
         if ($LASTEXITCODE -ne 0) {
-            exit $LASTEXITCODE
+            $message = "$fixtureName RSSP CLI failed with exit code $LASTEXITCODE"
+            if ($KeepGoing) {
+                $failures.Add($message)
+                continue
+            }
+            throw $message
         }
-        $rssp = $jsonText | ConvertFrom-Json
+        try {
+            $rssp = $jsonText | ConvertFrom-Json
+        } catch {
+            $message = "$fixtureName RSSP JSON output could not be parsed: $($_.Exception.Message)"
+            if ($KeepGoing) {
+                $failures.Add($message)
+                continue
+            }
+            throw $message
+        }
         $chartIndexes = @()
         if ($CompareAllCharts -or $CompareFixtures) {
             for ($i = 0; $i -lt $rssp.charts.Count; $i++) {
@@ -380,7 +444,12 @@ if ($CompareRssp -or $CompareAllCharts -or $CompareFixtures) {
             }
         } else {
             if ($Chart -lt 0 -or $Chart -ge $rssp.charts.Count) {
-                throw "Chart index $Chart is outside RSSP chart range 0..$($rssp.charts.Count - 1)."
+                $message = "$fixtureName chart index $Chart is outside RSSP chart range 0..$($rssp.charts.Count - 1)."
+                if ($KeepGoing) {
+                    $failures.Add($message)
+                    continue
+                }
+                throw $message
             }
             $chartIndexes = @($Chart)
         }
@@ -389,7 +458,12 @@ if ($CompareRssp -or $CompareAllCharts -or $CompareFixtures) {
             $failurePrefix = "$fixtureName chart $chartIndex"
             $asspLines = & $exe $resolvedFixture $chartIndex
             if ($LASTEXITCODE -ne 0) {
-                exit $LASTEXITCODE
+                $message = "$failurePrefix ASSP executable failed with exit code $LASTEXITCODE"
+                if ($KeepGoing) {
+                    $failures.Add($message)
+                    continue
+                }
+                throw $message
             }
 
             $assp = @{}
@@ -582,24 +656,32 @@ if ($CompareRssp -or $CompareAllCharts -or $CompareFixtures) {
             Compare-Text "stream_sequences" (Format-StreamSequences $chartJson.stream_info.stream_sequences)
         }
 
-        if ($failures.Count -eq 0 -and !$CompareFixtures) {
+        if ($failures.Count -eq $fixtureFailureStart -and !$CompareFixtures) {
             $chartList = $chartIndexes -join ", "
-            Write-Host "RSSP parity check passed for $resolvedFixture chart(s) $chartList."
-        } elseif ($failures.Count -eq 0) {
+            Write-ParityLine "RSSP parity check passed for $resolvedFixture chart(s) $chartList."
+        } elseif ($failures.Count -eq $fixtureFailureStart) {
             $chartList = $chartIndexes -join ", "
-            Write-Host "RSSP parity check passed for $fixtureName chart(s) $chartList."
+            Write-ParityLine "RSSP parity check passed for $fixtureName chart(s) $chartList."
         }
     }
 
     if ($failures.Count -ne 0) {
-        Write-Host "RSSP parity check failed:"
+        Write-ParityLine "RSSP parity check failed:"
         foreach ($failure in $failures) {
-            Write-Host "  $failure"
+            Write-ParityLine "  $failure"
+        }
+        if ($reportPath) {
+            Write-Host "wrote parity report $reportPath"
         }
         exit 1
     }
 
     if ($CompareFixtures) {
-        Write-Host "RSSP parity check passed for all bundled fixtures."
+        Write-ParityLine "RSSP parity check passed for all bundled fixtures."
+    } elseif ($Pack) {
+        Write-ParityLine "RSSP parity check passed for $($fixturePaths.Count) pack file(s) under $resolvedPack."
+    }
+    if ($reportPath) {
+        Write-Host "wrote parity report $reportPath"
     }
 }
