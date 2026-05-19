@@ -25,6 +25,15 @@ global assp_md5_hex
 %define SHA_SECOND_LEN 472
 %define SHA_LOCAL_SIZE 512
 
+%define SHA_PAIR_CTX1 32
+%define SHA_PAIR_CTX2 (SHA_PAIR_CTX1 + SHA_LOCAL_SIZE)
+%define SHA_PAIR_CHART_PTR (SHA_PAIR_CTX2 + SHA_LOCAL_SIZE)
+%define SHA_PAIR_CHART_LEN (SHA_PAIR_CHART_PTR + 8)
+%define SHA_PAIR_BPM_PTR (SHA_PAIR_CHART_LEN + 8)
+%define SHA_PAIR_BPM_LEN (SHA_PAIR_BPM_PTR + 8)
+%define SHA_PAIR_OUT_PTR (SHA_PAIR_BPM_LEN + 8)
+%define SHA_PAIR_LOCAL_SIZE 1104
+
 %define MD5_BUF 0
 %define MD5_TOTAL_LEN 64
 %define MD5_BUF_LEN 72
@@ -186,37 +195,58 @@ assp_chart_hash_pair:
     jz .fail
 
 .init:
-    mov r12, rcx
-    mov r13, rdx
-    mov r14, r8
-    mov r15, r9
+    sub rsp, SHA_PAIR_LOCAL_SIZE
+    mov [rsp + SHA_PAIR_CHART_PTR], rcx
+    mov [rsp + SHA_PAIR_CHART_LEN], rdx
+    mov [rsp + SHA_PAIR_BPM_PTR], r8
+    mov [rsp + SHA_PAIR_BPM_LEN], r9
+    mov [rsp + SHA_PAIR_OUT_PTR], rbx
 
-    sub rsp, 48
-    mov [rsp + 32], rbx
-    mov rcx, r12
-    mov rdx, r13
-    mov r8, r14
-    mov r9, r15
-    call assp_sha1_short_hex2
-    test eax, eax
-    jz .call_fail
+    lea rbx, [rsp + SHA_PAIR_CTX1]
+    mov dword [rbx + SHA_H0], 0x67452301
+    mov dword [rbx + SHA_H1], 0xefcdab89
+    mov dword [rbx + SHA_H2], 0x98badcfe
+    mov dword [rbx + SHA_H3], 0x10325476
+    mov dword [rbx + SHA_H4], 0xc3d2e1f0
+    mov qword [rbx + SHA_BUF_LEN], 0
 
-    lea rax, [rbx + 16]
-    mov [rsp + 32], rax
-    mov rcx, r12
-    mov rdx, r13
-    lea r8, [neutral_bpms]
-    mov r9d, 11
-    call assp_sha1_short_hex2
-    test eax, eax
-    jz .call_fail
+    mov rcx, [rsp + SHA_PAIR_CHART_PTR]
+    mov rdx, [rsp + SHA_PAIR_CHART_LEN]
+    call sha1_update
 
-    add rsp, 48
+    lea rsi, [rsp + SHA_PAIR_CTX1]
+    lea rdi, [rsp + SHA_PAIR_CTX2]
+    mov ecx, SHA_LOCAL_SIZE / 8
+    rep movsq
+
+    lea rbx, [rsp + SHA_PAIR_CTX1]
+    mov rax, [rsp + SHA_PAIR_CHART_LEN]
+    add rax, [rsp + SHA_PAIR_BPM_LEN]
+    mov [rbx + SHA_TOTAL_LEN], rax
+    mov rax, [rsp + SHA_PAIR_OUT_PTR]
+    mov [rbx + SHA_OUT_PTR], rax
+    mov rcx, [rsp + SHA_PAIR_BPM_PTR]
+    mov rdx, [rsp + SHA_PAIR_BPM_LEN]
+    call sha1_update
+    call sha1_finish
+    call sha1_write_short_hex
+
+    lea rbx, [rsp + SHA_PAIR_CTX2]
+    mov rax, [rsp + SHA_PAIR_CHART_LEN]
+    add rax, 11
+    mov [rbx + SHA_TOTAL_LEN], rax
+    mov rax, [rsp + SHA_PAIR_OUT_PTR]
+    add rax, 16
+    mov [rbx + SHA_OUT_PTR], rax
+    lea rcx, [neutral_bpms]
+    mov edx, 11
+    call sha1_update
+    call sha1_finish
+    call sha1_write_short_hex
+
+    add rsp, SHA_PAIR_LOCAL_SIZE
     mov eax, ASSP_TRUE
     jmp .done
-
-.call_fail:
-    add rsp, 48
 
 .fail:
     xor eax, eax
