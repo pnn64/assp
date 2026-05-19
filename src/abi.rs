@@ -266,6 +266,8 @@ pub struct ChartInfo {
     pub difficulty_len: usize,
     pub meter: *const u8,
     pub meter_len: usize,
+    pub metadata: *const u8,
+    pub metadata_len: usize,
 }
 
 #[repr(C)]
@@ -3051,7 +3053,7 @@ mod tests {
 
     #[test]
     fn chart_info_layout_is_c_abi() {
-        assert_eq!(std::mem::size_of::<super::ChartInfo>(), 88);
+        assert_eq!(std::mem::size_of::<super::ChartInfo>(), 104);
         assert_eq!(std::mem::align_of::<super::ChartInfo>(), 8);
     }
 

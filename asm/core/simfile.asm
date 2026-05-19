@@ -7,9 +7,12 @@ global assp_find_chart_by_index
 global assp_find_global_bpms
 global assp_find_chart_bpms_by_index
 global assp_find_global_tag
+global assp_find_tag_in_range
 global assp_find_chart_tag_by_index
 global assp_find_global_timing_tags
+global assp_find_timing_tags_in_range
 global assp_find_chart_timing_tags_by_index
+global assp_range_owns_timing
 global assp_chart_owns_timing_by_index
 global assp_supported_step_type_lanes
 
@@ -429,6 +432,54 @@ assp_find_global_tag:
     pop rbx
     ret
 
+; rcx = range bytes, rdx = len, r8 = tag bytes, r9 = tag len,
+; stack arg 5 = out assp_byte_slice.
+; The tag must include the leading '#' and trailing ':'.
+; eax = 1 when found, 0 otherwise.
+assp_find_tag_in_range:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+
+    mov rbx, [rsp + 96]
+    test rcx, rcx
+    jz .fail
+    test r8, r8
+    jz .fail
+    test r9, r9
+    jz .fail
+    test rbx, rbx
+    jz .fail
+    cmp rdx, r9
+    jb .fail
+
+    mov qword [rbx + ASSP_BYTE_SLICE_PTR], 0
+    mov qword [rbx + ASSP_BYTE_SLICE_LEN], 0
+
+    mov r10, rcx
+    lea r11, [rcx + rdx]
+    mov r12, r8
+    mov r13, r9
+    call find_tag_in_range
+    jmp .done
+
+.fail:
+    xor eax, eax
+
+.done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
 ; rcx = simfile bytes, rdx = len, r8 = chart index, r9 = tag bytes,
 ; stack arg 5 = tag len, stack arg 6 = out assp_byte_slice.
 ; Finds a chart-local SSC tag in the selected #NOTEDATA block.
@@ -554,6 +605,42 @@ assp_find_global_timing_tags:
     pop rbx
     ret
 
+; rcx = range bytes, rdx = len, r8 = out assp_timing_tags.
+; eax = 1 on valid input. Missing tags remain empty slices.
+assp_find_timing_tags_in_range:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+
+    test rcx, rcx
+    jz .fail
+    test r8, r8
+    jz .fail
+
+    mov r10, rcx
+    lea r11, [rcx + rdx]
+    mov rbx, r8
+    call find_timing_tags_in_range
+    mov eax, ASSP_TRUE
+    jmp .done
+
+.fail:
+    xor eax, eax
+
+.done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
 ; rcx = simfile bytes, rdx = len, r8 = chart index, r9 = out assp_timing_tags.
 ; Collects chart-local SSC timing tags from the selected #NOTEDATA block.
 ; eax = 1 when the chart is found, 0 otherwise.
@@ -620,6 +707,38 @@ assp_find_chart_timing_tags_by_index:
     mov rbx, r9
     call find_timing_tags_in_range
     mov eax, ASSP_TRUE
+    jmp .done
+
+.fail:
+    xor eax, eax
+
+.done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
+; rcx = range bytes, rdx = len.
+; eax = 1 when the range has chart-owned timing, 0 otherwise.
+assp_range_owns_timing:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+
+    test rcx, rcx
+    jz .fail
+
+    mov r10, rcx
+    lea r11, [rcx + rdx]
+    call range_owns_timing
     jmp .done
 
 .fail:
@@ -837,6 +956,11 @@ assp_find_chart_by_index:
     jmp .scan
 
 .found:
+    mov [rbx + ASSP_CHART_INFO_META_PTR], r15
+    mov rdx, rdi
+    sub rdx, r15
+    mov [rbx + ASSP_CHART_INFO_META_LEN], rdx
+
     lea rsi, [rdi + rax]
     mov rdx, rsi
 

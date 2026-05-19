@@ -39,7 +39,10 @@ extern assp_find_chart_timing_tags_by_index
 extern assp_find_chart_tag_by_index
 extern assp_find_global_bpms
 extern assp_find_global_tag
+extern assp_find_tag_in_range
 extern assp_find_global_timing_tags
+extern assp_find_timing_tags_in_range
+extern assp_range_owns_timing
 extern assp_bpm_average_centi
 extern assp_bpm_display_range
 extern assp_bpm_median_centi
@@ -418,6 +421,7 @@ parse_args:
     mov qword [list_mode], 0
     mov qword [all_mode], 0
     mov qword [globals_prepared], 0
+    mov qword [global_timing_prepared], 0
 
     call GetCommandLineA
     mov rsi, rax
@@ -615,6 +619,90 @@ read_file:
     add rsp, 72
     ret
 
+find_current_chart_tag:
+    sub rsp, 56
+
+    mov r10, r8
+    test r10, r10
+    jz .fail
+    mov qword [r10 + ASSP_BYTE_SLICE_PTR], 0
+    mov qword [r10 + ASSP_BYTE_SLICE_LEN], 0
+
+    cmp qword [timing_format_sm], 0
+    jne .fail
+    cmp qword [chart_info + ASSP_CHART_INFO_META_LEN], 0
+    je .fail
+
+    mov [rsp + 32], r10
+    mov r9, rdx
+    mov r8, rcx
+    mov rcx, [chart_info + ASSP_CHART_INFO_META_PTR]
+    mov rdx, [chart_info + ASSP_CHART_INFO_META_LEN]
+    call assp_find_tag_in_range
+    jmp .done
+
+.fail:
+    xor eax, eax
+
+.done:
+    add rsp, 56
+    ret
+
+zero_chart_timing_tags:
+    lea r10, [chart_timing_tags]
+    xor eax, eax
+    xor ecx, ecx
+.loop:
+    cmp ecx, ASSP_TIMING_TAGS_SIZE
+    jae .done
+    mov [r10 + rcx], rax
+    add ecx, 8
+    jmp .loop
+.done:
+    ret
+
+find_current_chart_timing_tags:
+    sub rsp, 40
+
+    call zero_chart_timing_tags
+    cmp qword [timing_format_sm], 0
+    jne .fail
+    cmp qword [chart_info + ASSP_CHART_INFO_META_LEN], 0
+    je .fail
+
+    mov rcx, [chart_info + ASSP_CHART_INFO_META_PTR]
+    mov rdx, [chart_info + ASSP_CHART_INFO_META_LEN]
+    lea r8, [chart_timing_tags]
+    call assp_find_timing_tags_in_range
+    jmp .done
+
+.fail:
+    xor eax, eax
+
+.done:
+    add rsp, 40
+    ret
+
+current_chart_owns_timing:
+    sub rsp, 40
+
+    cmp qword [timing_format_sm], 0
+    jne .fail
+    cmp qword [chart_info + ASSP_CHART_INFO_META_LEN], 0
+    je .fail
+
+    mov rcx, [chart_info + ASSP_CHART_INFO_META_PTR]
+    mov rdx, [chart_info + ASSP_CHART_INFO_META_LEN]
+    call assp_range_owns_timing
+    jmp .done
+
+.fail:
+    xor eax, eax
+
+.done:
+    add rsp, 40
+    ret
+
 print_all_charts:
     sub rsp, 40
 
@@ -763,25 +851,16 @@ prepare_hash:
 
     mov qword [bpms_slice + ASSP_BYTE_SLICE_PTR], 0
     mov qword [bpms_slice + ASSP_BYTE_SLICE_LEN], 0
-    mov qword [bpm_segment_count], 0
-
-    lea rcx, [file_buffer]
-    mov rdx, [file_len]
-    mov r8, [chart_index]
-    lea r9, [bpms_slice]
-    call assp_find_chart_bpms_by_index
-    test eax, eax
-    jnz .normalize_bpms
-
-    lea rcx, [file_buffer]
-    mov rdx, [file_len]
-    lea r8, [bpms_slice]
-    call assp_find_global_bpms
-    test eax, eax
-    jnz .normalize_bpms
-
+    lea rax, [bpm_buffer]
+    mov [hash_bpms_ptr], rax
     mov qword [normalized_bpms_len], 0
-    jmp .parse_bpms
+
+    lea rcx, [tag_bpms]
+    mov edx, tag_bpms_end - tag_bpms
+    lea r8, [bpms_slice]
+    call find_current_chart_tag
+    test eax, eax
+    jz .use_global_bpms
 
 .normalize_bpms:
     mov rcx, [bpms_slice + ASSP_BYTE_SLICE_PTR]
@@ -794,18 +873,13 @@ prepare_hash:
     cmp rax, BPM_BUFFER_CAP
     ja .fail
     mov [normalized_bpms_len], rax
+    jmp .measure_minimized
 
-.parse_bpms:
-    mov rcx, [bpms_slice + ASSP_BYTE_SLICE_PTR]
-    mov rdx, [bpms_slice + ASSP_BYTE_SLICE_LEN]
-    lea r8, [bpm_segment_buffer]
-    mov r9d, BPM_SEGMENT_CAP
-    call assp_parse_bpm_map
-    cmp rax, ASSP_NOT_FOUND
-    je .fail
-    cmp rax, BPM_SEGMENT_CAP
-    ja .fail
-    mov [bpm_segment_count], rax
+.use_global_bpms:
+    lea rax, [global_bpm_buffer]
+    mov [hash_bpms_ptr], rax
+    mov rax, [global_bpms_len]
+    mov [normalized_bpms_len], rax
 
 .measure_minimized:
     mov rcx, [chart_info + ASSP_CHART_INFO_NOTES_PTR]
@@ -840,7 +914,7 @@ prepare_hash:
 
     lea rcx, [minimized_buffer]
     mov rdx, rax
-    lea r8, [bpm_buffer]
+    mov r8, [hash_bpms_ptr]
     mov r9, [normalized_bpms_len]
     lea rax, [hash_pair]
     mov [rsp + 32], rax
@@ -1169,6 +1243,8 @@ prepare_timing_events:
     mov qword [speed_report_count], 0
     mov qword [scroll_report_count], 0
 
+    cmp qword [global_timing_prepared], 0
+    jne .global_timing_ready
     lea rcx, [file_buffer]
     mov rdx, [file_len]
     lea r8, [global_timing_tags]
@@ -1178,29 +1254,36 @@ prepare_timing_events:
     call prepare_global_normalized_timing_maps
     test eax, eax
     jz .fail
+    mov qword [global_timing_prepared], 1
+.global_timing_ready:
 
-    lea r10, [chart_timing_tags]
-    xor eax, eax
-    mov r11d, ASSP_TIMING_TAGS_SIZE / 8
-.zero_chart_tags:
-    mov [r10], rax
-    add r10, 8
-    dec r11d
-    jnz .zero_chart_tags
+    call find_current_chart_timing_tags
 
-    lea rcx, [file_buffer]
-    mov rdx, [file_len]
-    mov r8, [chart_index]
-    lea r9, [chart_timing_tags]
-    call assp_find_chart_timing_tags_by_index
-
-    lea rcx, [file_buffer]
-    mov rdx, [file_len]
-    mov r8, [chart_index]
-    call assp_chart_owns_timing_by_index
-    test eax, eax
-    jz .select_bpms
     cmp qword [timing_allow_steps], 0
+    je .select_bpms
+    cmp qword [chart_has_own_timing], 0
+    jne .select_bpms
+    cmp qword [chart_timing_tags + ASSP_TIMING_TAGS_BPMS + ASSP_BYTE_SLICE_PTR], 0
+    jne .set_own_timing
+    cmp qword [chart_timing_tags + ASSP_TIMING_TAGS_STOPS + ASSP_BYTE_SLICE_PTR], 0
+    jne .set_own_timing
+    cmp qword [chart_timing_tags + ASSP_TIMING_TAGS_DELAYS + ASSP_BYTE_SLICE_PTR], 0
+    jne .set_own_timing
+    cmp qword [chart_timing_tags + ASSP_TIMING_TAGS_WARPS + ASSP_BYTE_SLICE_PTR], 0
+    jne .set_own_timing
+    cmp qword [chart_timing_tags + ASSP_TIMING_TAGS_SPEEDS + ASSP_BYTE_SLICE_PTR], 0
+    jne .set_own_timing
+    cmp qword [chart_timing_tags + ASSP_TIMING_TAGS_SCROLLS + ASSP_BYTE_SLICE_PTR], 0
+    jne .set_own_timing
+    cmp qword [chart_timing_tags + ASSP_TIMING_TAGS_FAKES + ASSP_BYTE_SLICE_PTR], 0
+    jne .set_own_timing
+    cmp qword [chart_time_signatures_slice + ASSP_BYTE_SLICE_PTR], 0
+    jne .set_own_timing
+    cmp qword [chart_labels_slice + ASSP_BYTE_SLICE_PTR], 0
+    jne .set_own_timing
+    cmp qword [chart_tickcounts_slice + ASSP_BYTE_SLICE_PTR], 0
+    jne .set_own_timing
+    cmp qword [chart_combos_slice + ASSP_BYTE_SLICE_PTR], 0
     je .select_bpms
 
 .set_own_timing:
@@ -2263,6 +2346,8 @@ prepare_global_metadata:
     mov qword [global_tickcounts_slice + ASSP_BYTE_SLICE_LEN], 0
     mov qword [global_combos_slice + ASSP_BYTE_SLICE_PTR], 0
     mov qword [global_combos_slice + ASSP_BYTE_SLICE_LEN], 0
+    mov qword [global_offset_slice + ASSP_BYTE_SLICE_PTR], 0
+    mov qword [global_offset_slice + ASSP_BYTE_SLICE_LEN], 0
 
     lea rcx, [file_buffer]
     mov rdx, [file_len]
@@ -2445,6 +2530,14 @@ prepare_global_metadata:
     mov [rsp + 32], rax
     call assp_find_global_tag
 
+    lea rcx, [file_buffer]
+    mov rdx, [file_len]
+    lea r8, [tag_offset]
+    mov r9d, tag_offset_end - tag_offset
+    lea rax, [global_offset_slice]
+    mov [rsp + 32], rax
+    call assp_find_global_tag
+
     cmp qword [artist_slice + ASSP_BYTE_SLICE_LEN], 0
     jne .done
     cmp qword [artist_trans_slice + ASSP_BYTE_SLICE_LEN], 0
@@ -2617,86 +2710,50 @@ prepare_chart_metadata:
     mov qword [step_artist_slice + ASSP_BYTE_SLICE_PTR], 0
     mov qword [step_artist_slice + ASSP_BYTE_SLICE_LEN], 0
 
-    lea rcx, [file_buffer]
-    mov rdx, [file_len]
-    mov r8, [chart_index]
-    lea r9, [tag_chart_name]
-    mov qword [rsp + 32], tag_chart_name_end - tag_chart_name
-    lea rax, [chart_name_slice]
-    mov [rsp + 40], rax
-    call assp_find_chart_tag_by_index
+    lea rcx, [tag_chart_name]
+    mov edx, tag_chart_name_end - tag_chart_name
+    lea r8, [chart_name_slice]
+    call find_current_chart_tag
 
-    lea rcx, [file_buffer]
-    mov rdx, [file_len]
-    mov r8, [chart_index]
-    lea r9, [tag_music]
-    mov qword [rsp + 32], tag_music_end - tag_music
-    lea rax, [chart_music_slice]
-    mov [rsp + 40], rax
-    call assp_find_chart_tag_by_index
+    lea rcx, [tag_music]
+    mov edx, tag_music_end - tag_music
+    lea r8, [chart_music_slice]
+    call find_current_chart_tag
 
-    lea rcx, [file_buffer]
-    mov rdx, [file_len]
-    mov r8, [chart_index]
-    lea r9, [tag_attacks]
-    mov qword [rsp + 32], tag_attacks_end - tag_attacks
-    lea rax, [chart_attacks_slice]
-    mov [rsp + 40], rax
-    call assp_find_chart_tag_by_index
+    lea rcx, [tag_attacks]
+    mov edx, tag_attacks_end - tag_attacks
+    lea r8, [chart_attacks_slice]
+    call find_current_chart_tag
 
-    lea rcx, [file_buffer]
-    mov rdx, [file_len]
-    mov r8, [chart_index]
-    lea r9, [tag_display_bpm]
-    mov qword [rsp + 32], tag_display_bpm_end - tag_display_bpm
-    lea rax, [display_bpm_slice]
-    mov [rsp + 40], rax
-    call assp_find_chart_tag_by_index
+    lea rcx, [tag_display_bpm]
+    mov edx, tag_display_bpm_end - tag_display_bpm
+    lea r8, [display_bpm_slice]
+    call find_current_chart_tag
 
-    lea rcx, [file_buffer]
-    mov rdx, [file_len]
-    mov r8, [chart_index]
-    lea r9, [tag_time_signatures]
-    mov qword [rsp + 32], tag_time_signatures_end - tag_time_signatures
-    lea rax, [chart_time_signatures_slice]
-    mov [rsp + 40], rax
-    call assp_find_chart_tag_by_index
+    lea rcx, [tag_time_signatures]
+    mov edx, tag_time_signatures_end - tag_time_signatures
+    lea r8, [chart_time_signatures_slice]
+    call find_current_chart_tag
 
-    lea rcx, [file_buffer]
-    mov rdx, [file_len]
-    mov r8, [chart_index]
-    lea r9, [tag_labels]
-    mov qword [rsp + 32], tag_labels_end - tag_labels
-    lea rax, [chart_labels_slice]
-    mov [rsp + 40], rax
-    call assp_find_chart_tag_by_index
+    lea rcx, [tag_labels]
+    mov edx, tag_labels_end - tag_labels
+    lea r8, [chart_labels_slice]
+    call find_current_chart_tag
 
-    lea rcx, [file_buffer]
-    mov rdx, [file_len]
-    mov r8, [chart_index]
-    lea r9, [tag_tickcounts]
-    mov qword [rsp + 32], tag_tickcounts_end - tag_tickcounts
-    lea rax, [chart_tickcounts_slice]
-    mov [rsp + 40], rax
-    call assp_find_chart_tag_by_index
+    lea rcx, [tag_tickcounts]
+    mov edx, tag_tickcounts_end - tag_tickcounts
+    lea r8, [chart_tickcounts_slice]
+    call find_current_chart_tag
 
-    lea rcx, [file_buffer]
-    mov rdx, [file_len]
-    mov r8, [chart_index]
-    lea r9, [tag_combos]
-    mov qword [rsp + 32], tag_combos_end - tag_combos
-    lea rax, [chart_combos_slice]
-    mov [rsp + 40], rax
-    call assp_find_chart_tag_by_index
+    lea rcx, [tag_combos]
+    mov edx, tag_combos_end - tag_combos
+    lea r8, [chart_combos_slice]
+    call find_current_chart_tag
 
-    lea rcx, [file_buffer]
-    mov rdx, [file_len]
-    mov r8, [chart_index]
-    lea r9, [tag_credit]
-    mov qword [rsp + 32], tag_credit_end - tag_credit
-    lea rax, [step_artist_slice]
-    mov [rsp + 40], rax
-    call assp_find_chart_tag_by_index
+    lea rcx, [tag_credit]
+    mov edx, tag_credit_end - tag_credit
+    lea r8, [step_artist_slice]
+    call find_current_chart_tag
 
 .set_sm_step_artist:
     cmp qword [timing_format_sm], 0
@@ -3060,22 +3117,14 @@ prepare_offset:
     mov qword [offset_slice + ASSP_BYTE_SLICE_PTR], 0
     mov qword [offset_slice + ASSP_BYTE_SLICE_LEN], 0
 
-    lea rcx, [file_buffer]
-    mov rdx, [file_len]
-    lea r8, [tag_offset]
-    mov r9d, tag_offset_end - tag_offset
-    lea rax, [offset_slice]
-    mov [rsp + 32], rax
-    call assp_find_global_tag
-    test eax, eax
+    mov rcx, [global_offset_slice + ASSP_BYTE_SLICE_PTR]
+    mov rdx, [global_offset_slice + ASSP_BYTE_SLICE_LEN]
+    test rcx, rcx
     jz .chart_offset
-
-    mov rcx, [offset_slice + ASSP_BYTE_SLICE_PTR]
-    mov rdx, [offset_slice + ASSP_BYTE_SLICE_LEN]
     call assp_parse_offset_ms
     mov [offset_ms], rax
-    mov rcx, [offset_slice + ASSP_BYTE_SLICE_PTR]
-    mov rdx, [offset_slice + ASSP_BYTE_SLICE_LEN]
+    mov rcx, [global_offset_slice + ASSP_BYTE_SLICE_PTR]
+    mov rdx, [global_offset_slice + ASSP_BYTE_SLICE_LEN]
     call assp_parse_offset_us
     mov [offset_us], rax
 
@@ -3086,14 +3135,10 @@ prepare_offset:
     mov qword [offset_slice + ASSP_BYTE_SLICE_PTR], 0
     mov qword [offset_slice + ASSP_BYTE_SLICE_LEN], 0
 
-    lea rcx, [file_buffer]
-    mov rdx, [file_len]
-    mov r8, [chart_index]
-    lea r9, [tag_offset]
-    mov qword [rsp + 32], tag_offset_end - tag_offset
-    lea rax, [offset_slice]
-    mov [rsp + 40], rax
-    call assp_find_chart_tag_by_index
+    lea rcx, [tag_offset]
+    mov edx, tag_offset_end - tag_offset
+    lea r8, [offset_slice]
+    call find_current_chart_tag
     test eax, eax
     jz .success
 
@@ -3797,7 +3842,7 @@ print_report:
     mov r8d, 16
     call print_slice_field
     lea rcx, [label_hash_bpms]
-    lea rdx, [bpm_buffer]
+    mov rdx, [hash_bpms_ptr]
     mov r8, [normalized_bpms_len]
     call print_slice_field
     lea rcx, [label_bpm_data]
@@ -5908,6 +5953,8 @@ tag_tickcounts db "#TICKCOUNTS:"
 tag_tickcounts_end:
 tag_combos db "#COMBOS:"
 tag_combos_end:
+tag_bpms db "#BPMS:"
+tag_bpms_end:
 tag_offset db "#OFFSET:"
 tag_offset_end:
 tag_chart_name db "#CHARTNAME:"
@@ -6340,6 +6387,7 @@ chart_lanes resq 1
 list_mode resq 1
 all_mode resq 1
 globals_prepared resq 1
+global_timing_prepared resq 1
 chart_count resq 1
 measure_count resq 1
 stream_segment_count resq 1
@@ -6352,6 +6400,7 @@ file_bytes_read resd 1
 chart_info resb ASSP_CHART_INFO_SIZE
 bpms_slice resb ASSP_BYTE_SLICE_SIZE
 offset_slice resb ASSP_BYTE_SLICE_SIZE
+global_offset_slice resb ASSP_BYTE_SLICE_SIZE
 title_slice resb ASSP_BYTE_SLICE_SIZE
 subtitle_slice resb ASSP_BYTE_SLICE_SIZE
 artist_slice resb ASSP_BYTE_SLICE_SIZE
@@ -6389,6 +6438,7 @@ tech_counts resb ASSP_TECH_COUNTS_SIZE
 stream_counts resb ASSP_STREAM_COUNTS_SIZE
 num_buffer resb 32
 raw_total_steps resq 1
+hash_bpms_ptr resq 1
 normalized_bpms_len resq 1
 global_bpms_len resq 1
 normalized_time_signatures_len resq 1

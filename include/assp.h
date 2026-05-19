@@ -263,6 +263,8 @@ typedef struct assp_chart_info {
     size_t difficulty_len;
     const uint8_t *meter;
     size_t meter_len;
+    const uint8_t *metadata;
+    size_t metadata_len;
 } assp_chart_info;
 
 typedef struct assp_stream_counts {
