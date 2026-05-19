@@ -1274,8 +1274,8 @@ prepare_timing_events:
     mov rdx, [chart_timing_tags + ASSP_TIMING_TAGS_SPEEDS + ASSP_BYTE_SLICE_LEN]
     jmp .count_speeds
 .global_speeds:
-    mov rcx, [global_timing_tags + ASSP_TIMING_TAGS_SPEEDS + ASSP_BYTE_SLICE_PTR]
-    mov rdx, [global_timing_tags + ASSP_TIMING_TAGS_SPEEDS + ASSP_BYTE_SLICE_LEN]
+    lea rcx, [normalized_speeds_buffer]
+    mov rdx, [normalized_speeds_len]
 .count_speeds:
     call assp_count_gimmick_speed_segments
     cmp rax, ASSP_NOT_FOUND
@@ -2691,15 +2691,15 @@ print_report:
     lea rcx, [label_title]
     mov rdx, [title_slice + ASSP_BYTE_SLICE_PTR]
     mov r8, [title_slice + ASSP_BYTE_SLICE_LEN]
-    call print_slice_field
+    call print_unescaped_slice_field
     lea rcx, [label_subtitle]
     mov rdx, [subtitle_slice + ASSP_BYTE_SLICE_PTR]
     mov r8, [subtitle_slice + ASSP_BYTE_SLICE_LEN]
-    call print_slice_field
+    call print_unescaped_slice_field
     lea rcx, [label_artist]
     mov rdx, [artist_slice + ASSP_BYTE_SLICE_PTR]
     mov r8, [artist_slice + ASSP_BYTE_SLICE_LEN]
-    call print_slice_field
+    call print_unescaped_slice_field
     lea rcx, [label_genre]
     mov rdx, [genre_slice + ASSP_BYTE_SLICE_PTR]
     mov r8, [genre_slice + ASSP_BYTE_SLICE_LEN]
@@ -2707,27 +2707,27 @@ print_report:
     lea rcx, [label_title_trans]
     mov rdx, [title_trans_slice + ASSP_BYTE_SLICE_PTR]
     mov r8, [title_trans_slice + ASSP_BYTE_SLICE_LEN]
-    call print_slice_field
+    call print_unescaped_slice_field
     lea rcx, [label_subtitle_trans]
     mov rdx, [subtitle_trans_slice + ASSP_BYTE_SLICE_PTR]
     mov r8, [subtitle_trans_slice + ASSP_BYTE_SLICE_LEN]
-    call print_slice_field
+    call print_unescaped_slice_field
     lea rcx, [label_artist_trans]
     mov rdx, [artist_trans_slice + ASSP_BYTE_SLICE_PTR]
     mov r8, [artist_trans_slice + ASSP_BYTE_SLICE_LEN]
-    call print_slice_field
+    call print_unescaped_slice_field
     lea rcx, [label_title_translated]
     mov rdx, [title_trans_slice + ASSP_BYTE_SLICE_PTR]
     mov r8, [title_trans_slice + ASSP_BYTE_SLICE_LEN]
-    call print_slice_field
+    call print_unescaped_slice_field
     lea rcx, [label_subtitle_translated]
     mov rdx, [subtitle_trans_slice + ASSP_BYTE_SLICE_PTR]
     mov r8, [subtitle_trans_slice + ASSP_BYTE_SLICE_LEN]
-    call print_slice_field
+    call print_unescaped_slice_field
     lea rcx, [label_artist_translated]
     mov rdx, [artist_trans_slice + ASSP_BYTE_SLICE_PTR]
     mov r8, [artist_trans_slice + ASSP_BYTE_SLICE_LEN]
-    call print_slice_field
+    call print_unescaped_slice_field
     lea rcx, [label_music]
     mov rdx, [music_slice + ASSP_BYTE_SLICE_PTR]
     mov r8, [music_slice + ASSP_BYTE_SLICE_LEN]
@@ -3098,11 +3098,11 @@ print_report:
     lea rcx, [label_warps_formatted]
     lea rdx, [warp_segment_buffer]
     mov r8, [warp_segment_count]
-    call print_bpm_segments_field
+    call print_row_segments_field
     lea rcx, [label_fakes_formatted]
     lea rdx, [fake_segment_buffer]
     mov r8, [fake_segment_count]
-    call print_bpm_segments_field
+    call print_row_segments_field
     lea rcx, [label_selected_bpms]
     mov edx, ASSP_TIMING_TAGS_BPMS
     call print_selected_timing_tag
@@ -4391,6 +4391,43 @@ print_bpm_segments_field:
     add rsp, 88
     ret
 
+print_row_segments_field:
+    sub rsp, 88
+    mov [rsp + 32], rdx
+    mov [rsp + 40], r8
+    mov qword [rsp + 48], 0
+    call print_z
+
+.loop:
+    mov rax, [rsp + 48]
+    cmp rax, [rsp + 40]
+    jae .newline
+    test rax, rax
+    jz .segment
+    lea rcx, [comma]
+    call print_z
+
+.segment:
+    mov rax, [rsp + 48]
+    imul rax, ASSP_BPM_SEGMENT_SIZE
+    add rax, [rsp + 32]
+    mov [rsp + 56], rax
+    mov rcx, [rax + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    call print_milli_as_row48_6_inline
+    lea rcx, [equals]
+    call print_z
+    mov rax, [rsp + 56]
+    mov rcx, [rax + ASSP_BPM_SEGMENT_BPM_MILLI]
+    call print_milli_as_row48_6_inline
+    inc qword [rsp + 48]
+    jmp .loop
+
+.newline:
+    lea rcx, [newline]
+    call print_z
+    add rsp, 88
+    ret
+
 print_u32_array_field:
     sub rsp, 88
     mov [rsp + 32], rdx
@@ -4596,6 +4633,103 @@ print_milli6_inline:
     add rsp, 72
     ret
 
+print_milli_as_row48_6_inline:
+    sub rsp, 72
+    call milli_to_row48
+    mov rcx, rax
+    call print_row48_6_inline
+    add rsp, 72
+    ret
+
+milli_to_row48:
+    mov rax, rcx
+    test rax, rax
+    jge .positive
+    neg rax
+    imul rax, 48
+    add rax, 500
+    xor edx, edx
+    mov r9d, 1000
+    div r9
+    neg rax
+    ret
+
+.positive:
+    imul rax, 48
+    add rax, 500
+    xor edx, edx
+    mov r9d, 1000
+    div r9
+    ret
+
+print_row48_6_inline:
+    sub rsp, 88
+    mov [rsp + 32], rcx
+
+    mov rax, [rsp + 32]
+    test rax, rax
+    jge .positive
+    neg rax
+    mov [rsp + 32], rax
+    lea rcx, [minus]
+    call print_z
+    mov rax, [rsp + 32]
+
+.positive:
+    xor edx, edx
+    mov r9d, 48
+    div r9
+    mov [rsp + 40], rdx
+    mov rcx, rax
+    call print_u64
+    lea rcx, [dot]
+    call print_z
+    mov rax, [rsp + 40]
+    imul rax, 1000000
+    add rax, 24
+    xor edx, edx
+    mov r9d, 48
+    div r9
+    mov rcx, rax
+    call print_fraction6_inline
+    add rsp, 88
+    ret
+
+print_fraction6_inline:
+    sub rsp, 72
+    mov [rsp + 32], rcx
+    mov rax, [rsp + 32]
+    cmp rax, 100000
+    jae .fraction
+    lea rcx, [zero_digit]
+    call print_z
+    mov rax, [rsp + 32]
+    cmp rax, 10000
+    jae .fraction
+    lea rcx, [zero_digit]
+    call print_z
+    mov rax, [rsp + 32]
+    cmp rax, 1000
+    jae .fraction
+    lea rcx, [zero_digit]
+    call print_z
+    mov rax, [rsp + 32]
+    cmp rax, 100
+    jae .fraction
+    lea rcx, [zero_digit]
+    call print_z
+    mov rax, [rsp + 32]
+    cmp rax, 10
+    jae .fraction
+    lea rcx, [zero_digit]
+    call print_z
+
+.fraction:
+    mov rcx, [rsp + 32]
+    call print_u64
+    add rsp, 72
+    ret
+
 print_milli3_inline:
     sub rsp, 72
     mov [rsp + 32], rcx
@@ -4646,6 +4780,42 @@ print_slice_field:
     lea rcx, [newline]
     call print_z
     add rsp, 72
+    ret
+
+print_unescaped_slice_field:
+    sub rsp, 88
+    mov [rsp + 32], rdx
+    mov [rsp + 40], r8
+    mov qword [rsp + 48], 0
+    call print_z
+
+.loop:
+    mov rax, [rsp + 48]
+    cmp rax, [rsp + 40]
+    jae .newline
+    mov r10, [rsp + 32]
+    add r10, rax
+    cmp byte [r10], '\'
+    jne .print_current
+    inc qword [rsp + 48]
+    mov rax, [rsp + 48]
+    cmp rax, [rsp + 40]
+    jae .print_current
+    mov r10, [rsp + 32]
+    add r10, rax
+
+.print_current:
+    mov [rsp + 56], r10
+    mov rcx, r10
+    mov edx, 1
+    call print_raw
+    inc qword [rsp + 48]
+    jmp .loop
+
+.newline:
+    lea rcx, [newline]
+    call print_z
+    add rsp, 88
     ret
 
 print_token_breakdown:

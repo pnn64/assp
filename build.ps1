@@ -17,7 +17,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$root = Split-Path -Parent $MyInvocation.MyCommand.Path
+$root = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
+if ([string]::IsNullOrWhiteSpace($root)) {
+    $root = (Get-Location).Path
+}
 $target = Join-Path $root "target"
 $exe = Join-Path $target "assp.exe"
 $include = (Join-Path $root "include") + [System.IO.Path]::DirectorySeparatorChar
@@ -28,6 +31,27 @@ if ($ExtraArgs.Count -ne 0) {
 
 if ($Pack -and !$CompareRssp -and !$CompareAllCharts -and !$CompareFixtures) {
     $CompareAllCharts = $true
+}
+
+function Resolve-InputPath([string]$path, [string]$label) {
+    if ([string]::IsNullOrWhiteSpace($path)) {
+        throw "$label path is empty."
+    }
+    $resolved = @(Resolve-Path -LiteralPath $path -ErrorAction SilentlyContinue)
+    if ($resolved.Count -eq 0) {
+        throw "$label path was not found: $path"
+    }
+    $resolved[0].ProviderPath
+}
+
+function Resolve-OutputPath([string]$path, [string]$label) {
+    if ([string]::IsNullOrWhiteSpace($path)) {
+        throw "$label path is empty."
+    }
+    if ([System.IO.Path]::IsPathRooted($path)) {
+        return [System.IO.Path]::GetFullPath($path)
+    }
+    [System.IO.Path]::GetFullPath([System.IO.Path]::Combine((Get-Location).Path, $path))
 }
 
 if (!(Get-Command nasm -ErrorAction SilentlyContinue)) {
@@ -103,7 +127,7 @@ if (($RunFixture -or $Fixture) -and !$CompareRssp -and !$CompareAllCharts -and !
         $Fixture = Join-Path $root "fixtures\camellia_mix.ssc"
     }
 
-    $resolvedFixture = (Resolve-Path $Fixture).Path
+    $resolvedFixture = Resolve-InputPath $Fixture "Fixture"
     if ($ListCharts) {
         $runArgs = @($resolvedFixture, "list")
     } else {
@@ -171,7 +195,7 @@ if ($CompareRssp -or $CompareAllCharts -or $CompareFixtures) {
     if ($CompareFixtures) {
         $fixturePaths = @(Get-SimfilePaths (Join-Path $root "fixtures") $false)
     } elseif ($Pack) {
-        $resolvedPack = (Resolve-Path $Pack).Path
+        $resolvedPack = Resolve-InputPath $Pack "Pack"
         if (!(Test-Path -LiteralPath $resolvedPack -PathType Container)) {
             throw "Pack path is not a directory: $resolvedPack"
         }
@@ -182,14 +206,14 @@ if ($CompareRssp -or $CompareAllCharts -or $CompareFixtures) {
             throw "No .sm or .ssc files found under $resolvedPack. Scanned $($allFiles.Count) file(s) in $($allDirs.Count) folder(s). Expected a normal pack layout like Pack\SongFolder\song.sm or Pack\SongFolder\song.ssc."
         }
     } else {
-        $fixturePaths = @((Resolve-Path $Fixture).Path)
+        $fixturePaths = @(Resolve-InputPath $Fixture "Fixture")
     }
 
     $reportPath = $null
     if ($Report) {
-        $reportPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Report)
-        $reportDir = Split-Path -Parent $reportPath
-        if ($reportDir) {
+        $reportPath = Resolve-OutputPath $Report "Report"
+        $reportDir = [System.IO.Path]::GetDirectoryName($reportPath)
+        if (![string]::IsNullOrWhiteSpace($reportDir)) {
             New-Item -ItemType Directory -Force $reportDir | Out-Null
         }
         Set-Content -LiteralPath $reportPath -Value @(
@@ -432,8 +456,8 @@ if ($CompareRssp -or $CompareAllCharts -or $CompareFixtures) {
 
     $failures = New-Object System.Collections.Generic.List[string]
     foreach ($fixturePath in $fixturePaths) {
-        $resolvedFixture = (Resolve-Path $fixturePath).Path
-        $fixtureName = Split-Path -Leaf $resolvedFixture
+        $resolvedFixture = Resolve-InputPath $fixturePath "Fixture"
+        $fixtureName = [System.IO.Path]::GetFileName($resolvedFixture)
         Write-ParityLine "comparing $resolvedFixture"
         $fixtureFailureStart = $failures.Count
         $jsonText = & cargo run --quiet --manifest-path $rsspManifest --bin rssp -- $resolvedFixture --json
