@@ -567,6 +567,17 @@ unsafe extern "C" {
         out_hold_end_beats: *mut f32,
         out_cap: usize,
     ) -> usize;
+    fn assp_step_parity_bpm_row_times_4(
+        data: *const u8,
+        len: usize,
+        bpms: *const BpmSegment,
+        bpm_count: usize,
+        offset_ms: i64,
+        out_row_seconds: *mut f32,
+        out_row_ms: *mut i32,
+        out_row_beats: *mut f32,
+        out_cap: usize,
+    ) -> usize;
     fn assp_step_parity_prepare_hold_rows_4(
         data: *const u8,
         len: usize,
@@ -1744,6 +1755,39 @@ pub fn step_parity_hold_head_ends_4(data: &[u8], input_row_beats: &[f32]) -> Opt
             .map(|chunk| [chunk[0], chunk[1], chunk[2], chunk[3]])
             .collect(),
     )
+}
+
+#[must_use]
+pub fn step_parity_bpm_row_times_4(
+    data: &[u8],
+    bpms: &[BpmSegment],
+    offset_ms: i64,
+) -> Option<(Vec<f32>, Vec<i32>, Vec<f32>)> {
+    let cap = data.len() / 4 + 1;
+    let mut row_seconds = vec![0.0f32; cap];
+    let mut row_ms = vec![0i32; cap];
+    let mut row_beats = vec![0.0f32; cap];
+    let count = unsafe {
+        assp_step_parity_bpm_row_times_4(
+            data.as_ptr(),
+            data.len(),
+            bpms.as_ptr(),
+            bpms.len(),
+            offset_ms,
+            row_seconds.as_mut_ptr(),
+            row_ms.as_mut_ptr(),
+            row_beats.as_mut_ptr(),
+            cap,
+        )
+    };
+    if count == NOT_FOUND {
+        return None;
+    }
+
+    row_seconds.truncate(count);
+    row_ms.truncate(count);
+    row_beats.truncate(count);
+    Some((row_seconds, row_ms, row_beats))
 }
 
 #[must_use]

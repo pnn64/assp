@@ -20,6 +20,7 @@ global assp_step_parity_row_best_candidates_4
 global assp_step_parity_place_rows_4
 global assp_step_parity_count_prepared_rows_4
 global assp_step_parity_hold_head_ends_4
+global assp_step_parity_bpm_row_times_4
 global assp_step_parity_prepare_hold_rows_4
 global assp_step_parity_prepare_tap_rows_4
 
@@ -2808,6 +2809,330 @@ assp_step_parity_hold_head_ends_4:
     pop rbx
     ret
 
+; rcx = minimized 4-panel note-data, rdx = byte length,
+; r8 = BPM segments, r9 = BPM segment count, stack arg 5 = offset milliseconds,
+; stack arg 6 = out row seconds, stack arg 7 = out row milliseconds,
+; stack arg 8 = out row beats, stack arg 9 = output row capacity.
+; Emits one time row for each nonzero source row used by RSSP step parity.
+; rax = emitted row count, or ASSP_NOT_FOUND.
+assp_step_parity_bpm_row_times_4:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+    push rbp
+    mov rbp, rsp
+    sub rsp, 112
+
+    mov rsi, rcx
+    lea rbx, [rcx + rdx]
+    mov r13, r8
+    mov r14, r9
+    mov r15, [rbp + 104]
+    mov rax, [rbp + 112]
+    mov [rbp - 8], rax
+    mov rax, [rbp + 120]
+    mov [rbp - 16], rax
+    mov rax, [rbp + 128]
+    mov [rbp - 24], rax
+    mov rax, [rbp + 136]
+    mov [rbp - 32], rax
+
+    test rdx, rdx
+    jz .empty
+    test rcx, rcx
+    jz .fail
+    test r14, r14
+    jz .check_outputs
+    test r13, r13
+    jz .fail
+
+.check_outputs:
+    cmp qword [rbp - 8], 0
+    je .fail
+    cmp qword [rbp - 16], 0
+    je .fail
+    cmp qword [rbp - 24], 0
+    je .fail
+
+    xor r12d, r12d
+    mov qword [rbp - 40], 0
+    mov dword [rbp - 48], 0
+    mov dword [rbp - 52], 0
+    mov dword [rbp - 56], 1
+
+.measure_loop:
+    cmp rsi, rbx
+    jae .success
+    mov [rbp - 64], rsi
+    mov rdi, rsi
+.find_measure_end:
+    cmp rdi, rbx
+    jae .measure_end_found
+    mov al, [rdi]
+    cmp al, ','
+    je .measure_end_found
+    cmp al, ';'
+    je .measure_end_found
+    inc rdi
+    jmp .find_measure_end
+
+.measure_end_found:
+    mov [rbp - 72], rdi
+    xor r9d, r9d
+    mov r10, [rbp - 64]
+.count_line_loop:
+    cmp r10, rdi
+    jae .count_done
+    mov r11, r10
+.count_trim:
+    cmp r11, rdi
+    jae .count_done
+    mov al, [r11]
+    cmp al, 10
+    je .count_blank_line
+    cmp al, ' '
+    je .count_trim_advance
+    cmp al, 9
+    jb .count_nonempty
+    cmp al, 13
+    jbe .count_trim_advance
+    jmp .count_nonempty
+.count_trim_advance:
+    inc r11
+    jmp .count_trim
+.count_blank_line:
+    lea r10, [r11 + 1]
+    jmp .count_line_loop
+.count_nonempty:
+    inc r9
+.count_skip_line:
+    cmp r11, rdi
+    jae .count_done
+    mov al, [r11]
+    inc r11
+    cmp al, 10
+    jne .count_skip_line
+    mov r10, r11
+    jmp .count_line_loop
+
+.count_done:
+    test r9, r9
+    jz .advance_measure
+    mov [rbp - 80], r9
+    xor r8d, r8d
+    mov r10, [rbp - 64]
+.emit_line_loop:
+    mov rdi, [rbp - 72]
+    cmp r10, rdi
+    jae .advance_measure
+    mov r11, r10
+.emit_trim:
+    cmp r11, rdi
+    jae .advance_measure
+    mov al, [r11]
+    cmp al, 10
+    je .emit_blank_line
+    cmp al, ' '
+    je .emit_trim_advance
+    cmp al, 9
+    jb .emit_nonempty
+    cmp al, 13
+    jbe .emit_trim_advance
+    jmp .emit_nonempty
+.emit_trim_advance:
+    inc r11
+    jmp .emit_trim
+.emit_blank_line:
+    lea r10, [r11 + 1]
+    jmp .emit_line_loop
+
+.emit_nonempty:
+    lea rax, [r11 + 4]
+    cmp rax, rdi
+    ja .fail
+    cmp dword [r11], 30303030h
+    je .emit_counted_zero
+    mov rax, [rbp - 40]
+    cmp rax, [rbp - 32]
+    jae .fail
+
+    cvtsi2ss xmm0, r8
+    movss xmm1, [rel const_four_f32]
+    cvtsi2ss xmm2, qword [rbp - 80]
+    divss xmm1, xmm2
+    mulss xmm0, xmm1
+    cvtsi2ss xmm3, r12
+    mulss xmm3, [rel const_four_f32]
+    addss xmm0, xmm3
+    movss xmm4, xmm0
+    mulss xmm4, [rel rows_per_beat_f32]
+    cvtss2si ecx, xmm4
+    cvtsi2ss xmm0, ecx
+    divss xmm0, [rel rows_per_beat_f32]
+
+    mov rdx, [rbp - 24]
+    movss [rdx + rax * 4], xmm0
+    call bpm_row_time_seconds4
+    mov rax, [rbp - 40]
+    mov rdx, [rbp - 8]
+    movss [rdx + rax * 4], xmm0
+
+    cmp dword [rbp - 56], 0
+    je .elapsed_ms
+    movss xmm1, xmm0
+    mulss xmm1, [rel const_thousand_f32]
+    call floor_ss_to_i32_4
+    mov [rbp - 52], eax
+    mov dword [rbp - 56], 0
+    jmp .store_ms
+
+.elapsed_ms:
+    movss xmm1, xmm0
+    subss xmm1, [rbp - 48]
+    mulss xmm1, [rel const_thousand_f32]
+    call floor_ss_to_i32_4
+    add eax, [rbp - 52]
+    mov [rbp - 52], eax
+
+.store_ms:
+    movss [rbp - 48], xmm0
+    mov rax, [rbp - 40]
+    mov rdx, [rbp - 16]
+    mov ecx, [rbp - 52]
+    mov [rdx + rax * 4], ecx
+    inc qword [rbp - 40]
+
+.emit_counted_zero:
+    inc r8
+.emit_skip_line:
+    cmp r11, [rbp - 72]
+    jae .advance_measure
+    mov al, [r11]
+    inc r11
+    cmp al, 10
+    jne .emit_skip_line
+    mov r10, r11
+    jmp .emit_line_loop
+
+.advance_measure:
+    mov rdi, [rbp - 72]
+    cmp rdi, rbx
+    jae .success
+    mov al, [rdi]
+    lea rsi, [rdi + 1]
+    cmp al, ';'
+    je .success
+    inc r12
+    jmp .measure_loop
+
+.empty:
+    xor eax, eax
+    jmp .done
+
+.success:
+    mov rax, [rbp - 40]
+    jmp .done
+
+.fail:
+    mov rax, ASSP_NOT_FOUND
+
+.done:
+    add rsp, 112
+    pop rbp
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
+; xmm0 = target beat f32, r13/r14 = BPM segment array/count,
+; r15 = offset milliseconds. Returns second f32 in xmm0.
+bpm_row_time_seconds4:
+    cvtss2sd xmm7, xmm0
+    xorpd xmm0, xmm0
+    xorpd xmm1, xmm1
+    movsd xmm2, [rel const_default_bpm_f64]
+    xor ecx, ecx
+    test r14, r14
+    jz .after_changes
+    cvtsi2sd xmm2, qword [r13 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    divsd xmm2, [rel const_thousand_f64]
+
+.init_loop:
+    cmp rcx, r14
+    jae .change_loop
+    mov r10, rcx
+    shl r10, 4
+    cvtsi2sd xmm3, qword [r13 + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    divsd xmm3, [rel const_thousand_f64]
+    xorpd xmm4, xmm4
+    comisd xmm3, xmm4
+    ja .change_loop
+    cvtsi2sd xmm2, qword [r13 + r10 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    divsd xmm2, [rel const_thousand_f64]
+    inc rcx
+    jmp .init_loop
+
+.change_loop:
+    cmp rcx, r14
+    jae .after_changes
+    mov r10, rcx
+    shl r10, 4
+    cvtsi2sd xmm3, qword [r13 + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    divsd xmm3, [rel const_thousand_f64]
+    movapd xmm4, xmm1
+    comisd xmm4, xmm3
+    jae .update_bpm
+    movapd xmm4, xmm3
+    comisd xmm4, xmm7
+    jae .after_changes
+    movapd xmm5, xmm3
+    subsd xmm5, xmm1
+    mulsd xmm5, [rel const_sixty_f64]
+    divsd xmm5, xmm2
+    addsd xmm0, xmm5
+    movapd xmm1, xmm3
+
+.update_bpm:
+    cvtsi2sd xmm2, qword [r13 + r10 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    divsd xmm2, [rel const_thousand_f64]
+    inc rcx
+    jmp .change_loop
+
+.after_changes:
+    movapd xmm4, xmm7
+    comisd xmm4, xmm1
+    jbe .apply_offset
+    movapd xmm5, xmm7
+    subsd xmm5, xmm1
+    mulsd xmm5, [rel const_sixty_f64]
+    divsd xmm5, xmm2
+    addsd xmm0, xmm5
+
+.apply_offset:
+    cvtsi2sd xmm5, r15
+    divsd xmm5, [rel const_thousand_f64]
+    subsd xmm0, xmm5
+    cvtsd2ss xmm0, xmm0
+    ret
+
+; xmm1 = value to floor. eax = floor(value).
+floor_ss_to_i32_4:
+    cvttss2si eax, xmm1
+    cvtsi2ss xmm2, eax
+    ucomiss xmm2, xmm1
+    jbe .done
+    dec eax
+.done:
+    ret
+
 %macro prepare_hold_reset_current4 0
     mov qword [rsp + 16], 1
     mov eax, [rsp + 56]
@@ -3380,6 +3705,11 @@ cost_twisted_foot_weight dd 100000.0
 cost_facing_weight dd 2.0
 cost_spin_weight dd 1000.0
 cost_one dd 1.0
+const_four_f32 dd 4.0
+const_thousand_f32 dd 1000.0
+const_sixty_f64 dq 60.0
+const_thousand_f64 dq 1000.0
+const_default_bpm_f64 dq 60.0
 rows_per_beat_f32 dd 48.0
 hold_end_none dd -1.0
 dance_single_distances4:

@@ -6,14 +6,15 @@ use assp::{
     count_step_tech_brackets_minimized_8, find_bpms_for_chart, find_chart_by_index,
     find_global_tag, minimize_chart_4, parse_offset_ms, parse_tech_notation,
     step_parity_action_cost_4, step_parity_action_flags_4, step_parity_basic_action_costs_4,
-    step_parity_bracket_tap_action_costs_4, step_parity_count_hold_rows_4,
-    step_parity_count_prepared_rows_4, step_parity_distance_action_costs_4,
-    step_parity_elapsed_action_costs_4, step_parity_hold_head_ends_4,
-    step_parity_orientation_action_costs_4, step_parity_permutations_4, step_parity_place_rows_4,
-    step_parity_prepare_hold_rows_4, step_parity_prepare_tap_rows_4,
-    step_parity_result_state_holds_4, step_parity_result_state_no_holds_4,
-    step_parity_row_best_candidates_4, step_parity_row_key_candidates_4,
-    step_parity_row_transitions_4, step_parity_switch_action_costs_4,
+    step_parity_bpm_row_times_4, step_parity_bracket_tap_action_costs_4,
+    step_parity_count_hold_rows_4, step_parity_count_prepared_rows_4,
+    step_parity_distance_action_costs_4, step_parity_elapsed_action_costs_4,
+    step_parity_hold_head_ends_4, step_parity_orientation_action_costs_4,
+    step_parity_permutations_4, step_parity_place_rows_4, step_parity_prepare_hold_rows_4,
+    step_parity_prepare_tap_rows_4, step_parity_result_state_holds_4,
+    step_parity_result_state_no_holds_4, step_parity_row_best_candidates_4,
+    step_parity_row_key_candidates_4, step_parity_row_transitions_4,
+    step_parity_switch_action_costs_4,
 };
 use std::collections::HashSet;
 
@@ -145,18 +146,33 @@ fn assert_bpm_only_fixture_step_parity(data: &[u8], chart_idx: usize) {
     let row_beats = nonzero_row_beats_4(&asm_minimized);
 
     let bpms = find_bpms_for_chart(data, chart_idx).unwrap();
-    let bpms = slice_from(data, bpms.data, bpms.len);
-    let mut bpms = rssp_core::bpm::parse_bpm_map(std::str::from_utf8(bpms).unwrap());
+    let bpms_bytes = slice_from(data, bpms.data, bpms.len);
+    let mut bpms = rssp_core::bpm::parse_bpm_map(std::str::from_utf8(bpms_bytes).unwrap());
     if bpms.is_empty() {
         bpms.push((0.0, 60.0));
     }
-    let offset = find_global_tag(data, b"OFFSET")
-        .map(|slice| parse_offset_ms(slice_from(data, slice.data, slice.len)) as f64 / 1000.0)
-        .unwrap_or(0.0);
+    let offset_ms = find_global_tag(data, b"OFFSET")
+        .map(|slice| parse_offset_ms(slice_from(data, slice.data, slice.len)))
+        .unwrap_or(0);
+    let offset = offset_ms as f64 / 1000.0;
     let (row_seconds, row_ms) = bpm_row_times(&row_beats, &bpms, offset);
+    let asm_bpms = assp::parse_bpm_map(bpms_bytes).unwrap();
+    let (asm_row_seconds, asm_row_ms, asm_row_beats) =
+        step_parity_bpm_row_times_4(&asm_minimized, &asm_bpms, offset_ms as i64).unwrap();
+    assert_eq!(asm_row_beats, row_beats, "row beats for chart {chart_idx}");
+    assert_eq!(asm_row_ms, row_ms, "row milliseconds for chart {chart_idx}");
+    assert_eq!(asm_row_seconds.len(), row_seconds.len());
+    for (actual, expected) in asm_row_seconds.iter().zip(row_seconds.iter()) {
+        assert!((actual - expected).abs() <= 0.00001);
+    }
 
-    let rows =
-        step_parity_prepare_hold_rows_4(&asm_minimized, &row_seconds, &row_ms, &row_beats).unwrap();
+    let rows = step_parity_prepare_hold_rows_4(
+        &asm_minimized,
+        &asm_row_seconds,
+        &asm_row_ms,
+        &asm_row_beats,
+    )
+    .unwrap();
     let actual_placements = step_parity_place_rows_4(
         &rows.note_counts,
         &rows.note_masks,

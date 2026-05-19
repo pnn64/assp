@@ -33,7 +33,7 @@ pub use abi::{
     normalize_float_digits, normalize_label_tag, nps_median_centi, nps_peak_milli_from_bpms,
     parse_bpm_map, parse_offset_ms, parse_tech_notation, pattern_percentages_centi,
     resolve_difficulty_label, resolve_display_bpm, sha1_short_hex2, step_parity_action_cost_4,
-    step_parity_action_flags_4, step_parity_basic_action_costs_4,
+    step_parity_action_flags_4, step_parity_basic_action_costs_4, step_parity_bpm_row_times_4,
     step_parity_bracket_tap_action_costs_4, step_parity_count_hold_rows_4,
     step_parity_count_prepared_rows_4, step_parity_distance_action_costs_4,
     step_parity_elapsed_action_costs_4, step_parity_hold_head_ends_4,

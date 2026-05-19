@@ -588,6 +588,17 @@ size_t assp_step_parity_hold_head_ends_4(
     float *out_hold_end_beats,
     size_t out_cap
 );
+size_t assp_step_parity_bpm_row_times_4(
+    const uint8_t *data,
+    size_t len,
+    const assp_bpm_segment *bpms,
+    size_t bpm_count,
+    int64_t offset_ms,
+    float *out_row_seconds,
+    int32_t *out_row_ms,
+    float *out_row_beats,
+    size_t out_cap
+);
 size_t assp_step_parity_prepare_hold_rows_4(
     const uint8_t *data,
     size_t len,
