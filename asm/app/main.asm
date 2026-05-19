@@ -100,6 +100,7 @@ global start
 %define TECH_BUFFER_CAP 16384
 %define METADATA_BUFFER_CAP 65536
 %define PARITY_ROW_CAP 262144
+%define PARITY_FAST_STATE_CAP 64
 %define PARITY_STATE_CAP 512
 %define PARITY_BACKTRACK_CAP (PARITY_ROW_CAP * PARITY_STATE_CAP)
 %define MONO_THRESHOLD 6
@@ -2999,14 +3000,24 @@ prepare_step_parity_rows_4:
     mov [rdx + ASSP_STEP_PARITY_WORKSPACE4_BACKTRACK_PLACEMENTS], rax
     lea rax, [parity_backtrack_predecessors]
     mov [rdx + ASSP_STEP_PARITY_WORKSPACE4_BACKTRACK_PREDECESSORS], rax
-    mov qword [rdx + ASSP_STEP_PARITY_WORKSPACE4_STATE_CAP], PARITY_STATE_CAP
+    mov qword [rdx + ASSP_STEP_PARITY_WORKSPACE4_STATE_CAP], PARITY_FAST_STATE_CAP
 
     lea rcx, [parity_prepared_rows]
     lea rdx, [parity_workspace]
     lea r8, [tech_counts]
     call assp_step_parity_count_prepared_rows_4
     test eax, eax
+    jnz .success
+
+    mov qword [parity_workspace + ASSP_STEP_PARITY_WORKSPACE4_STATE_CAP], PARITY_STATE_CAP
+    lea rcx, [parity_prepared_rows]
+    lea rdx, [parity_workspace]
+    lea r8, [tech_counts]
+    call assp_step_parity_count_prepared_rows_4
+    test eax, eax
     jz .fail
+
+.success:
     mov eax, ASSP_TRUE
     jmp .done
 
