@@ -968,9 +968,13 @@ find_tag_in_range:
     cmp rax, r11
     ja .fail
 
+    cmp byte [r10], '#'
+    jne .next
     call match_tag_at
     test eax, eax
     jnz .found
+
+.next:
     inc r10
     jmp .scan
 
@@ -1045,9 +1049,13 @@ tag_exists_in_range:
     cmp rax, r11
     ja .no
 
+    cmp byte [r10], '#'
+    jne .next
     call match_tag_at
     test eax, eax
     jnz .yes
+
+.next:
     inc r10
     jmp .scan
 

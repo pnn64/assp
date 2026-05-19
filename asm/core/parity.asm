@@ -1969,26 +1969,68 @@ assp_step_parity_row_best_candidates_4:
     mov qword [rsp + 784], 0
     mov qword [rsp + 792], 0
 
+    mov ecx, [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_NOTE_MASK]
+    or ecx, [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_HOLD_MASK]
+    and ecx, 0fh
+    lea rdx, [rsp + 832]
+    mov r8d, 24
+    call assp_step_parity_permutations_4
+    mov [rsp + 928], rax
+
 .state_loop:
     mov rax, [rsp + 792]
     cmp rax, r14
     jae .success
 
-    lea rcx, [rax + rax * 2]
-    lea rcx, [r12 + rcx * 4]
-    mov edx, [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_NOTE_MASK]
-    mov r8d, [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_HOLD_MASK]
-    lea r9, [rsp + 112]
-    lea r10, [rsp + 208]
-    mov [rsp + 32], r10
-    lea r10, [rsp + 496]
-    mov [rsp + 40], r10
-    lea r10, [rsp + 616]
-    mov [rsp + 48], r10
-    mov qword [rsp + 56], 24
-    call assp_step_parity_row_transitions_4
+    mov qword [rsp + 776], 0
+    mov qword [rsp + 800], 0
 
-    mov [rsp + 776], rax
+.transition_loop:
+    mov rax, [rsp + 800]
+    cmp rax, [rsp + 928]
+    jae .transitions_done
+
+    lea rdx, [rsp + 832 + rax * 4]
+    lea rcx, [rax + rax * 2]
+    lea r9, [rsp + 208 + rcx * 4]
+    mov [rsp + 936], r9
+    lea rcx, [rax + rax * 4]
+    lea r11, [rsp + 496 + rcx]
+    mov rcx, [rsp + 792]
+    lea rcx, [rcx + rcx * 2]
+    lea rcx, [r12 + rcx * 4]
+    mov r8d, [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_NOTE_MASK]
+    or r8d, [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_HOLD_MASK]
+    mov r10d, [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_HOLD_MASK]
+    test r10d, r10d
+    jnz .transition_with_holds
+
+    mov [rsp + 32], r11
+    lea r10, [rsp + 616 + rax * 4]
+    mov [rsp + 40], r10
+    call assp_step_parity_result_state_no_holds_4
+    jmp .transition_maybe_emit
+
+.transition_with_holds:
+    mov r9d, r10d
+    mov r10, [rsp + 936]
+    mov [rsp + 32], r10
+    mov [rsp + 40], r11
+    lea r10, [rsp + 616 + rax * 4]
+    mov [rsp + 48], r10
+    call assp_step_parity_result_state_holds_4
+
+.transition_maybe_emit:
+    test eax, eax
+    jz .fail_with_stack
+    mov rax, [rsp + 800]
+    mov edx, [rsp + 832 + rax * 4]
+    mov [rsp + 112 + rax * 4], edx
+    inc qword [rsp + 776]
+    inc qword [rsp + 800]
+    jmp .transition_loop
+
+.transitions_done:
     mov qword [rsp + 800], 0
 
 .candidate_loop:
@@ -2019,6 +2061,11 @@ assp_step_parity_row_best_candidates_4:
 .found_key:
     mov [rsp + 816], rcx
     mov byte [rsp + 824], 0
+    mov r11, [rsp + 1072]
+    mov rax, [rsp + 792]
+    movss xmm0, [r13 + rax * 4]
+    comiss xmm0, [r11 + rcx * 4]
+    jae .skip_candidate
 
 .score_candidate:
     mov rax, [rsp + 800]

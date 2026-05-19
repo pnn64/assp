@@ -476,19 +476,20 @@ Benchmark every simfile under a normal pack folder:
 
 `bench.ps1` builds the standalone assembly executable and a release RSSP CLI,
 discovers chart counts with RSSP, warms both programs, then writes one CSV row
-per run per simfile. `-Pack` and `-BundledFixtures` benchmark all charts. RSSP's
-current CLI emits every chart in one process, while ASSP's CLI emits one chart
-per process, so this is a process-level CLI throughput benchmark rather than an
-isolated in-process parser microbenchmark. Use `-NoBuild` for repeat runs after
-both executables already exist.
+per run per simfile. `-Pack` and `-BundledFixtures` benchmark all charts by
+calling `assp.exe <file> all`, so both CLIs process each file in one process.
+This is still a process-level CLI throughput benchmark rather than an isolated
+in-process parser microbenchmark. Use `-NoBuild` for repeat runs after both
+executables already exist.
 
 The standalone executable currently scans SSC files for chart metadata and
-`#NOTES:` / `#NOTES2:` tags. The second argument is a zero-based chart index, or
+`#NOTES:` / `#NOTES2:` tags. The second argument is a zero-based chart index,
 `list` to print chart indexes with step type, difficulty, meter, and
-description. SM `#NOTES:` / `#NOTES2:` blocks are also split into their five
-metadata fields before chart rows are passed to the stat counter. The standalone
-report path currently supports `dance-single` and `dance-double` charts. Chart
-reports include simfile title/artist/translit metadata, genre, media/artwork
+description, or `all` to report every chart in one process. SM `#NOTES:` /
+`#NOTES2:` blocks are also split into their five metadata fields before chart
+rows are passed to the stat counter. The standalone report path currently
+supports `dance-single` and `dance-double` charts. Chart reports include
+simfile title/artist/translit metadata, genre, media/artwork
 tags, translated metadata aliases, sample timing tags, SSC version,
 split-timing allowance, chart-name tag allowance, resolved and raw difficulty,
 chart name, step-type aliases, credit/step-artist metadata,

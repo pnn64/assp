@@ -117,14 +117,14 @@ function Measure-Rssp([string]$path) {
     $sw.Elapsed.TotalMilliseconds
 }
 
-function Measure-Assp([string]$path, [int]$chart) {
+function Measure-Assp([string]$path, [object]$chartArg) {
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
-    $output = & $script:asspExe $path $chart 2>&1
+    $output = & $script:asspExe $path $chartArg 2>&1
     $exitCode = $LASTEXITCODE
     $sw.Stop()
     if ($exitCode -ne 0) {
         $head = Get-CommandOutputHead $output
-        throw "ASSP failed for $path chart $chart with exit code $exitCode.`n$head"
+        throw "ASSP failed for $path chart $chartArg with exit code $exitCode.`n$head"
     }
     $sw.Elapsed.TotalMilliseconds
 }
@@ -245,8 +245,12 @@ for ($warmupRun = 1; $warmupRun -le $Warmup; $warmupRun++) {
             Write-Progress -Activity "Benchmark warmup" -Status "$index / $($jobs.Count)" -PercentComplete (($index * 100.0) / $jobs.Count)
         }
         [void](Measure-Rssp $job.File)
-        foreach ($chart in $job.Charts) {
-            [void](Measure-Assp $job.File $chart)
+        if ($AllCharts) {
+            [void](Measure-Assp $job.File "all")
+        } else {
+            foreach ($chart in $job.Charts) {
+                [void](Measure-Assp $job.File $chart)
+            }
         }
     }
 }
@@ -265,8 +269,12 @@ for ($run = 1; $run -le $Runs; $run++) {
 
         $rsspMs = Measure-Rssp $job.File
         $asspMs = 0.0
-        foreach ($chart in $job.Charts) {
-            $asspMs += Measure-Assp $job.File $chart
+        if ($AllCharts) {
+            $asspMs = Measure-Assp $job.File "all"
+        } else {
+            foreach ($chart in $job.Charts) {
+                $asspMs += Measure-Assp $job.File $chart
+            }
         }
         $speedup = 0.0
         if ($asspMs -gt 0.0) {
@@ -299,7 +307,11 @@ $timedCharts = $selectedChartCount * $Runs
 
 Write-Host "benchmarked $($fixturePaths.Count) file(s), $selectedChartCount selected chart(s), $Runs run(s)"
 Write-Host "RSSP total: $(Format-Number $rsspTotal "0.###") ms; avg/file: $(Format-Number ($rsspTotal / $timedFiles) "0.###") ms"
-Write-Host "ASSP total: $(Format-Number $asspTotal "0.###") ms; avg/chart-process: $(Format-Number ($asspTotal / $timedCharts) "0.###") ms; avg/file-sum: $(Format-Number ($asspTotal / $timedFiles) "0.###") ms"
+if ($AllCharts) {
+    Write-Host "ASSP total: $(Format-Number $asspTotal "0.###") ms; avg/selected-chart: $(Format-Number ($asspTotal / $timedCharts) "0.###") ms; avg/file: $(Format-Number ($asspTotal / $timedFiles) "0.###") ms"
+} else {
+    Write-Host "ASSP total: $(Format-Number $asspTotal "0.###") ms; avg/chart-process: $(Format-Number ($asspTotal / $timedCharts) "0.###") ms; avg/file-sum: $(Format-Number ($asspTotal / $timedFiles) "0.###") ms"
+}
 Write-Host "RSSP/ASSP process-level speedup: $(Format-Number $speedupTotal "0.###")x"
 
 if ($Report) {

@@ -117,12 +117,30 @@ start:
     jz fail_hash
 
     cmp qword [list_mode], 0
-    je .run_chart
+    je .check_all
     call print_chart_list
     xor ecx, ecx
     call ExitProcess
 
-.run_chart:
+.check_all:
+    cmp qword [all_mode], 0
+    je .single_chart
+    call print_all_charts
+    test eax, eax
+    jz fail_notes
+    xor ecx, ecx
+    call ExitProcess
+
+.single_chart:
+    call run_selected_chart
+    test eax, eax
+    jz fail_notes
+    xor ecx, ecx
+    call ExitProcess
+
+run_selected_chart:
+    sub rsp, 40
+
     lea rcx, [file_buffer]
     mov rdx, [file_len]
     mov r8, [chart_index]
@@ -141,6 +159,8 @@ start:
 .supported_lanes:
     mov [chart_lanes], rax
 
+    cmp qword [globals_prepared], 0
+    jne .globals_ready
     call prepare_global_metadata
     call prepare_global_normalized_metadata
     test eax, eax
@@ -148,6 +168,8 @@ start:
     call prepare_global_bpm_data
     test eax, eax
     jz fail_hash
+    mov qword [globals_prepared], 1
+.globals_ready:
     call prepare_chart_metadata
     call prepare_difficulty_label
     test eax, eax
@@ -189,21 +211,6 @@ start:
 
     mov rcx, [chart_info + ASSP_CHART_INFO_NOTES_PTR]
     mov rdx, [chart_info + ASSP_CHART_INFO_NOTES_LEN]
-    xor r8d, r8d
-    xor r9d, r9d
-    cmp qword [chart_lanes], 8
-    je .measure_density_count_8
-    call assp_measure_densities_4
-    jmp .measure_density_count_done
-.measure_density_count_8:
-    call assp_measure_densities_8
-.measure_density_count_done:
-    mov [measure_count], rax
-    cmp rax, DENSITY_CAP
-    ja fail_density
-
-    mov rcx, [chart_info + ASSP_CHART_INFO_NOTES_PTR]
-    mov rdx, [chart_info + ASSP_CHART_INFO_NOTES_LEN]
     lea r8, [density_buffer]
     mov r9d, DENSITY_CAP
     cmp qword [chart_lanes], 8
@@ -213,6 +220,9 @@ start:
 .measure_density_fill_8:
     call assp_measure_densities_8
 .measure_density_fill_done:
+    mov [measure_count], rax
+    cmp rax, DENSITY_CAP
+    ja fail_density
 
     call prepare_selected_normalized_metadata
     test eax, eax
@@ -287,25 +297,10 @@ start:
 
     lea rcx, [density_buffer]
     mov rdx, [measure_count]
-    xor r8d, r8d
-    xor r9d, r9d
-    call assp_stream_segments_from_densities
-    mov [stream_segment_count], rax
-    cmp rax, DENSITY_CAP
-    ja fail_density
-
-    lea rcx, [density_buffer]
-    mov rdx, [measure_count]
     lea r8, [stream_segment_buffer]
     mov r9d, DENSITY_CAP
     call assp_stream_segments_from_densities
-
-    lea rcx, [density_buffer]
-    mov rdx, [measure_count]
-    xor r8d, r8d
-    xor r9d, r9d
-    call assp_stream_tokens_from_densities
-    mov [stream_token_count], rax
+    mov [stream_segment_count], rax
     cmp rax, DENSITY_CAP
     ja fail_density
 
@@ -314,10 +309,16 @@ start:
     lea r8, [stream_token_buffer]
     mov r9d, DENSITY_CAP
     call assp_stream_tokens_from_densities
+    mov [stream_token_count], rax
+    cmp rax, DENSITY_CAP
+    ja fail_density
 
     call print_report
-    xor ecx, ecx
-    call ExitProcess
+    mov eax, ASSP_TRUE
+
+.done:
+    add rsp, 40
+    ret
 
 fail_read:
     lea rcx, [msg_read_fail]
@@ -415,6 +416,8 @@ parse_args:
     mov [input_path], rax
     mov qword [chart_index], 0
     mov qword [list_mode], 0
+    mov qword [all_mode], 0
+    mov qword [globals_prepared], 0
 
     call GetCommandLineA
     mov rsi, rax
@@ -495,6 +498,10 @@ parse_args:
     jmp .skip_arg_spaces
 
 .parse_chart:
+    cmp byte [rsi], 'a'
+    je .store_all
+    cmp byte [rsi], 'A'
+    je .store_all
     cmp byte [rsi], 'l'
     je .store_list
     cmp byte [rsi], 'L'
@@ -507,6 +514,10 @@ parse_args:
     je .store_list
     cmp byte [rsi + 2], 'L'
     je .store_list
+    cmp byte [rsi + 2], 'a'
+    je .store_all
+    cmp byte [rsi + 2], 'A'
+    je .store_all
 
 .parse_chart_number:
     xor rax, rax
@@ -528,6 +539,10 @@ parse_args:
 
 .store_list:
     mov qword [list_mode], 1
+    jmp .done
+
+.store_all:
+    mov qword [all_mode], 1
 
 .done:
     add rsp, 32
@@ -598,6 +613,37 @@ read_file:
 
 .done:
     add rsp, 72
+    ret
+
+print_all_charts:
+    sub rsp, 40
+
+    lea rcx, [file_buffer]
+    mov rdx, [file_len]
+    call assp_count_note_charts
+    mov [chart_count], rax
+    mov qword [chart_index], 0
+
+.loop:
+    mov rax, [chart_index]
+    cmp rax, [chart_count]
+    jae .success
+
+    call run_selected_chart
+    test eax, eax
+    jz .fail
+    inc qword [chart_index]
+    jmp .loop
+
+.success:
+    mov eax, ASSP_TRUE
+    jmp .done
+
+.fail:
+    xor eax, eax
+
+.done:
+    add rsp, 40
     ret
 
 input_path_is_sm:
@@ -762,26 +808,6 @@ prepare_hash:
     mov [bpm_segment_count], rax
 
 .measure_minimized:
-    mov rcx, [chart_info + ASSP_CHART_INFO_NOTES_PTR]
-    mov rdx, [chart_info + ASSP_CHART_INFO_NOTES_LEN]
-    xor r8d, r8d
-    xor r9d, r9d
-    lea rax, [row_scratch]
-    mov [rsp + 32], rax
-    mov qword [rsp + 40], ROW_SCRATCH_CAP
-    cmp qword [chart_lanes], 8
-    je .measure_minimized_count_8
-    call assp_minimize_chart_4
-    jmp .measure_minimized_count_done
-.measure_minimized_count_8:
-    call assp_minimize_chart_8
-.measure_minimized_count_done:
-    cmp rax, ASSP_NOT_FOUND
-    je .fail
-    cmp rax, MINIMIZED_BUFFER_CAP
-    ja .fail
-    mov [minimized_chart_len], rax
-
     mov rcx, [chart_info + ASSP_CHART_INFO_NOTES_PTR]
     mov rdx, [chart_info + ASSP_CHART_INFO_NOTES_LEN]
     lea r8, [minimized_buffer]
@@ -970,21 +996,6 @@ prepare_tier_bpm:
 
 prepare_equally_spaced:
     sub rsp, 40
-
-    lea rcx, [minimized_buffer]
-    mov rdx, [minimized_chart_len]
-    xor r8d, r8d
-    xor r9d, r9d
-    cmp qword [chart_lanes], 8
-    je .count_8
-    call assp_measure_equally_spaced_minimized_4
-    jmp .count_done
-.count_8:
-    call assp_measure_equally_spaced_minimized_8
-.count_done:
-    cmp rax, DENSITY_CAP
-    ja .fail
-    mov [equally_spaced_count], rax
 
     lea rcx, [minimized_buffer]
     mov rdx, [minimized_chart_len]
@@ -6327,6 +6338,8 @@ input_path resq 1
 chart_index resq 1
 chart_lanes resq 1
 list_mode resq 1
+all_mode resq 1
+globals_prepared resq 1
 chart_count resq 1
 measure_count resq 1
 stream_segment_count resq 1
