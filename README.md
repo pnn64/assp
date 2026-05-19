@@ -445,7 +445,7 @@ Build the standalone executable once and compare every chart in every `.sm` and
 `.ssc` file under a song pack folder:
 
 ```powershell
-.\assp\build.ps1 -Pack .\songs\MyPack -Report .\assp\target\my_pack_parity.log -KeepGoing
+.\assp\build.ps1 -Pack ".\songs\MyPack" -Report ".\assp\target\my_pack_parity.log" -KeepGoing
 ```
 
 `-Pack` implies `-CompareAllCharts`, recurses the directory, and exits with a

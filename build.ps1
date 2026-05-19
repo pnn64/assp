@@ -1,3 +1,4 @@
+[CmdletBinding(PositionalBinding = $false)]
 param(
     [switch]$RunFixture,
     [string]$Fixture,
@@ -9,7 +10,9 @@ param(
     [switch]$CompareFixtures,
     [string]$Report,
     [switch]$KeepGoing,
-    [switch]$Clean
+    [switch]$Clean,
+    [Parameter(ValueFromRemainingArguments = $true)]
+    [string[]]$ExtraArgs
 )
 
 $ErrorActionPreference = "Stop"
@@ -18,6 +21,10 @@ $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $target = Join-Path $root "target"
 $exe = Join-Path $target "assp.exe"
 $include = (Join-Path $root "include") + [System.IO.Path]::DirectorySeparatorChar
+
+if ($ExtraArgs.Count -ne 0) {
+    throw "Unexpected argument(s): $($ExtraArgs -join ' '). Quote paths that contain spaces, for example: -Pack `".\fixtures\ITL Online 2026`""
+}
 
 if ($Pack -and !$CompareRssp -and !$CompareAllCharts -and !$CompareFixtures) {
     $CompareAllCharts = $true
@@ -144,24 +151,35 @@ if ($CompareRssp -or $CompareAllCharts -or $CompareFixtures) {
     $culture = [System.Globalization.CultureInfo]::InvariantCulture
     $numberStyles = [System.Globalization.NumberStyles]::Float
 
+    function Get-SimfilePaths([string]$directory, [bool]$recursive) {
+        $search = if ($recursive) {
+            [System.IO.SearchOption]::AllDirectories
+        } else {
+            [System.IO.SearchOption]::TopDirectoryOnly
+        }
+        $paths = New-Object System.Collections.Generic.List[string]
+        foreach ($pattern in @("*.sm", "*.ssc")) {
+            foreach ($path in [System.IO.Directory]::EnumerateFiles($directory, $pattern, $search)) {
+                $paths.Add($path)
+            }
+        }
+        @($paths | Sort-Object)
+    }
+
     $fixturePaths = @()
     $resolvedPack = $null
     if ($CompareFixtures) {
-        $fixturePaths = @(Get-ChildItem (Join-Path $root "fixtures") -File |
-            Where-Object { $_.Extension -eq ".sm" -or $_.Extension -eq ".ssc" } |
-            Sort-Object Name |
-            ForEach-Object { $_.FullName })
+        $fixturePaths = @(Get-SimfilePaths (Join-Path $root "fixtures") $false)
     } elseif ($Pack) {
         $resolvedPack = (Resolve-Path $Pack).Path
         if (!(Test-Path -LiteralPath $resolvedPack -PathType Container)) {
             throw "Pack path is not a directory: $resolvedPack"
         }
-        $fixturePaths = @(Get-ChildItem -LiteralPath $resolvedPack -Recurse -File |
-            Where-Object { $_.Extension -eq ".sm" -or $_.Extension -eq ".ssc" } |
-            Sort-Object FullName |
-            ForEach-Object { $_.FullName })
+        $fixturePaths = @(Get-SimfilePaths $resolvedPack $true)
         if ($fixturePaths.Count -eq 0) {
-            throw "No .sm or .ssc files found under $resolvedPack."
+            $allFiles = @([System.IO.Directory]::EnumerateFiles($resolvedPack, "*", [System.IO.SearchOption]::AllDirectories))
+            $allDirs = @([System.IO.Directory]::EnumerateDirectories($resolvedPack, "*", [System.IO.SearchOption]::AllDirectories))
+            throw "No .sm or .ssc files found under $resolvedPack. Scanned $($allFiles.Count) file(s) in $($allDirs.Count) folder(s). Expected a normal pack layout like Pack\SongFolder\song.sm or Pack\SongFolder\song.ssc."
         }
     } else {
         $fixturePaths = @((Resolve-Path $Fixture).Path)
