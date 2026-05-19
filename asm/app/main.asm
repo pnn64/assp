@@ -95,7 +95,7 @@ global start
 %define FILE_BUFFER_CAP 8388608
 %define DENSITY_CAP 131072
 %define TEXT_BUFFER_CAP 1048576
-%define PRINT_BUFFER_CAP 1048576
+%define PRINT_BUFFER_CAP 2097152
 %define BPM_BUFFER_CAP 65536
 %define BPM_SEGMENT_CAP 4096
 %define MINIMIZED_BUFFER_CAP 2097152
@@ -166,6 +166,10 @@ start:
     call print_all_charts
     test eax, eax
     jz fail_notes
+    cmp qword [profile_mode], 0
+    je .finish_all
+    call print_flush
+.finish_all:
     profile_finish_call
     xor ecx, ecx
     call exit_app
@@ -174,6 +178,10 @@ start:
     call run_selected_chart
     test eax, eax
     jz fail_notes
+    cmp qword [profile_mode], 0
+    je .finish_single
+    call print_flush
+.finish_single:
     profile_finish_call
     xor ecx, ecx
     call exit_app
@@ -429,10 +437,12 @@ run_loaded_chart:
     cmp rax, DENSITY_CAP
     ja fail_density
 
+    cmp qword [quiet_mode], 0
+    jne .skip_report
     profile_begin_call
     call print_report
-    call print_flush
     profile_end_call profile_print_ticks
+.skip_report:
     mov eax, ASSP_TRUE
 
 .done:
@@ -728,6 +738,7 @@ parse_args:
     mov qword [chart_index], 0
     mov qword [list_mode], 0
     mov qword [all_mode], 0
+    mov qword [quiet_mode], 0
     mov qword [profile_mode], 0
     mov qword [globals_prepared], 0
     mov qword [global_timing_prepared], 0
@@ -815,6 +826,10 @@ parse_args:
     je .store_all
     cmp byte [rsi], 'A'
     je .store_all
+    cmp byte [rsi], 'b'
+    je .store_quiet_all
+    cmp byte [rsi], 'B'
+    je .store_quiet_all
     cmp byte [rsi], 'l'
     je .store_list
     cmp byte [rsi], 'L'
@@ -823,6 +838,10 @@ parse_args:
     je .store_profile
     cmp byte [rsi], 'P'
     je .store_profile
+    cmp byte [rsi], 'q'
+    je .store_quiet_all
+    cmp byte [rsi], 'Q'
+    je .store_quiet_all
     cmp byte [rsi], '-'
     jne .parse_chart_number
     cmp byte [rsi + 1], '-'
@@ -835,10 +854,18 @@ parse_args:
     je .store_all
     cmp byte [rsi + 2], 'A'
     je .store_all
+    cmp byte [rsi + 2], 'b'
+    je .store_quiet_all
+    cmp byte [rsi + 2], 'B'
+    je .store_quiet_all
     cmp byte [rsi + 2], 'p'
     je .store_profile
     cmp byte [rsi + 2], 'P'
     je .store_profile
+    cmp byte [rsi + 2], 'q'
+    je .store_quiet_all
+    cmp byte [rsi + 2], 'Q'
+    je .store_quiet_all
 
 .parse_chart_number:
     xor rax, rax
@@ -864,6 +891,11 @@ parse_args:
 
 .store_all:
     mov qword [all_mode], 1
+    jmp .done
+
+.store_quiet_all:
+    mov qword [all_mode], 1
+    mov qword [quiet_mode], 1
     jmp .done
 
 .store_profile:
@@ -6846,6 +6878,7 @@ chart_index resq 1
 chart_lanes resq 1
 list_mode resq 1
 all_mode resq 1
+quiet_mode resq 1
 profile_mode resq 1
 globals_prepared resq 1
 global_timing_prepared resq 1

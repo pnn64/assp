@@ -483,6 +483,11 @@ This is still a process-level CLI throughput benchmark rather than an isolated
 in-process parser microbenchmark. Use `-NoBuild` for repeat runs after both
 executables already exist.
 
+To isolate ASSP parser/report computation from text report formatting and
+console/file output, add `-AsspNoReport` to all-chart benchmarks. That runs
+`assp.exe <file> bench`, which processes every chart in one process and exits
+without printing chart reports.
+
 Build with profiling symbols and emit an ETW CPU-sampling trace:
 
 ```powershell
@@ -511,7 +516,8 @@ emitted bytes so report formatting overhead is visible.
 The standalone executable currently scans SSC files for chart metadata and
 `#NOTES:` / `#NOTES2:` tags. The second argument is a zero-based chart index,
 `list` to print chart indexes with step type, difficulty, meter, and
-description, or `all` to report every chart in one process. SM `#NOTES:` /
+description, `all` to report every chart in one process, or `bench` / `quiet`
+to process every chart without printing reports. SM `#NOTES:` /
 `#NOTES2:` blocks are also split into their five metadata fields before chart
 rows are passed to the stat counter. The standalone report path currently
 supports `dance-single` and `dance-double` charts. Chart reports include

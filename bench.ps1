@@ -9,6 +9,7 @@ param(
     [int]$Runs = 5,
     [string]$Report,
     [switch]$NoBuild,
+    [switch]$AsspNoReport,
     [switch]$Quiet,
     [Parameter(ValueFromRemainingArguments = $true)]
     [string[]]$ExtraArgs
@@ -39,6 +40,10 @@ if ($Runs -lt 1) {
 if ($Chart -lt 0) {
     throw "-Chart must be zero or greater."
 }
+if ($AsspNoReport -and !$AllCharts -and !$Pack -and !$BundledFixtures) {
+    throw "-AsspNoReport applies to all-chart benchmarks. Add -AllCharts, -Pack, or -BundledFixtures."
+}
+$script:asspNoReport = [bool]$AsspNoReport
 
 function Resolve-InputPath([string]$path, [string]$label) {
     if ([string]::IsNullOrWhiteSpace($path)) {
@@ -118,13 +123,17 @@ function Measure-Rssp([string]$path) {
 }
 
 function Measure-Assp([string]$path, [object]$chartArg) {
+    $effectiveChartArg = $chartArg
+    if ($script:asspNoReport -and [string]$chartArg -eq "all") {
+        $effectiveChartArg = "bench"
+    }
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
-    $output = & $script:asspExe $path $chartArg 2>&1
+    $output = & $script:asspExe $path $effectiveChartArg 2>&1
     $exitCode = $LASTEXITCODE
     $sw.Stop()
     if ($exitCode -ne 0) {
         $head = Get-CommandOutputHead $output
-        throw "ASSP failed for $path chart $chartArg with exit code $exitCode.`n$head"
+        throw "ASSP failed for $path chart $effectiveChartArg with exit code $exitCode.`n$head"
     }
     $sw.Elapsed.TotalMilliseconds
 }
@@ -141,6 +150,9 @@ if ($inputKinds -eq 0) {
 }
 if ($Pack -or $BundledFixtures) {
     $AllCharts = $true
+}
+if ($AsspNoReport -and !$AllCharts) {
+    throw "-AsspNoReport applies to all-chart benchmarks. Add -AllCharts."
 }
 
 if (!$NoBuild) {
@@ -204,6 +216,9 @@ if ($fixturePaths.Count -eq 0) {
 
 if (!$Quiet) {
     Write-Host "discovering chart counts for $($fixturePaths.Count) file(s)"
+    if ($AsspNoReport) {
+        Write-Host "ASSP no-report mode enabled; this measures compute without report formatting/output"
+    }
 }
 $jobs = New-Object System.Collections.Generic.List[object]
 $selectedChartCount = 0
@@ -302,17 +317,18 @@ $speedupTotal = 0.0
 if ($asspTotal -gt 0.0) {
     $speedupTotal = $rsspTotal / $asspTotal
 }
+$asspLabel = if ($AsspNoReport) { "ASSP no-report" } else { "ASSP" }
 $timedFiles = $fixturePaths.Count * $Runs
 $timedCharts = $selectedChartCount * $Runs
 
 Write-Host "benchmarked $($fixturePaths.Count) file(s), $selectedChartCount selected chart(s), $Runs run(s)"
 Write-Host "RSSP total: $(Format-Number $rsspTotal "0.###") ms; avg/file: $(Format-Number ($rsspTotal / $timedFiles) "0.###") ms"
 if ($AllCharts) {
-    Write-Host "ASSP total: $(Format-Number $asspTotal "0.###") ms; avg/selected-chart: $(Format-Number ($asspTotal / $timedCharts) "0.###") ms; avg/file: $(Format-Number ($asspTotal / $timedFiles) "0.###") ms"
+    Write-Host "$asspLabel total: $(Format-Number $asspTotal "0.###") ms; avg/selected-chart: $(Format-Number ($asspTotal / $timedCharts) "0.###") ms; avg/file: $(Format-Number ($asspTotal / $timedFiles) "0.###") ms"
 } else {
-    Write-Host "ASSP total: $(Format-Number $asspTotal "0.###") ms; avg/chart-process: $(Format-Number ($asspTotal / $timedCharts) "0.###") ms; avg/file-sum: $(Format-Number ($asspTotal / $timedFiles) "0.###") ms"
+    Write-Host "$asspLabel total: $(Format-Number $asspTotal "0.###") ms; avg/chart-process: $(Format-Number ($asspTotal / $timedCharts) "0.###") ms; avg/file-sum: $(Format-Number ($asspTotal / $timedFiles) "0.###") ms"
 }
-Write-Host "RSSP/ASSP process-level speedup: $(Format-Number $speedupTotal "0.###")x"
+Write-Host "RSSP/$asspLabel process-level speedup: $(Format-Number $speedupTotal "0.###")x"
 
 if ($Report) {
     $reportPath = Resolve-OutputPath $Report "Report"
