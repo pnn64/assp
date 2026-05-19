@@ -8,9 +8,11 @@ global assp_minimize_chart_8
 
 section .text
 
-; rcx = contiguous 4-byte note rows, rdx = row count, r8 = optional output rows,
-; r9 = output row cap. rax = minimized row count.
-assp_minimize_measure_4:
+%macro ASSP_MINIMIZE_MEASURE 2
+; rcx = contiguous %2-byte note rows, rdx = row count,
+; r8 = optional output rows, r9 = output row cap.
+; rax = minimized row count.
+%1:
     push rbx
     push rsi
     push rdi
@@ -20,9 +22,9 @@ assp_minimize_measure_4:
     push r15
 
     test rdx, rdx
-    jz .zero
+    jz %%zero
     test rcx, rcx
-    jz .zero
+    jz %%zero
 
     mov rsi, rcx
     mov rdi, rdx
@@ -31,161 +33,79 @@ assp_minimize_measure_4:
     xor r14d, r14d
 
     cmp rdi, 2
-    jb .copy
+    jb %%copy
 
     mov r15d, 2
 
-.reduce_loop:
+%%reduce_loop:
     mov rax, r15
     dec rax
     test rdi, rax
-    jnz .copy
+    jnz %%copy
 
     mov r10, r15
     shr r10, 1
 
-.check_rows:
+%%check_rows:
     cmp r10, rdi
-    jae .can_reduce
+    jae %%can_reduce
+%if %2 = 4
     cmp dword [rsi + r10 * 4], 0x30303030
-    jne .copy
-    add r10, r15
-    jmp .check_rows
-
-.can_reduce:
-    inc r14d
-    shl r15, 1
-    jmp .reduce_loop
-
-.copy:
-    mov r11d, 1
-    mov ecx, r14d
-    shl r11, cl
-
-    mov rax, rdi
-    shr rax, cl
-
-    test rbx, rbx
-    jz .done
-    test r12, r12
-    jz .done
-
-    mov r13, rax
-    cmp r13, r12
-    jbe .copy_init
-    mov r13, r12
-
-.copy_init:
-    xor r10d, r10d
-
-.copy_loop:
-    cmp r10, r13
-    jae .done
-    mov rdx, r10
-    imul rdx, r11
-    mov ecx, [rsi + rdx * 4]
-    mov [rbx + r10 * 4], ecx
-    inc r10
-    jmp .copy_loop
-
-.zero:
-    xor eax, eax
-
-.done:
-    pop r15
-    pop r14
-    pop r13
-    pop r12
-    pop rdi
-    pop rsi
-    pop rbx
-    ret
-
-; rcx = contiguous 8-byte note rows, rdx = row count, r8 = optional output rows,
-; r9 = output row cap. rax = minimized row count.
-assp_minimize_measure_8:
-    push rbx
-    push rsi
-    push rdi
-    push r12
-    push r13
-    push r14
-    push r15
-
-    test rdx, rdx
-    jz .zero
-    test rcx, rcx
-    jz .zero
-
-    mov rsi, rcx
-    mov rdi, rdx
-    mov rbx, r8
-    mov r12, r9
-    xor r14d, r14d
-
-    cmp rdi, 2
-    jb .copy
-
-    mov r15d, 2
-
-.reduce_loop:
-    mov rax, r15
-    dec rax
-    test rdi, rax
-    jnz .copy
-
-    mov r10, r15
-    shr r10, 1
-
-.check_rows:
-    cmp r10, rdi
-    jae .can_reduce
+%elif %2 = 8
     mov rax, 0x3030303030303030
     cmp [rsi + r10 * 8], rax
-    jne .copy
+%endif
+    jne %%copy
     add r10, r15
-    jmp .check_rows
+    jmp %%check_rows
 
-.can_reduce:
+%%can_reduce:
     inc r14d
     shl r15, 1
-    jmp .reduce_loop
+    jmp %%reduce_loop
 
-.copy:
-    mov r11d, 1
+%%copy:
     mov ecx, r14d
-    shl r11, cl
-
     mov rax, rdi
     shr rax, cl
 
     test rbx, rbx
-    jz .done
+    jz %%done
     test r12, r12
-    jz .done
+    jz %%done
 
     mov r13, rax
     cmp r13, r12
-    jbe .copy_init
+    jbe %%copy_init
     mov r13, r12
 
-.copy_init:
+%%copy_init:
+    mov ecx, r14d
+    mov r11d, %2
+    shl r11, cl
+    mov rdx, rsi
+    mov r15, rbx
     xor r10d, r10d
 
-.copy_loop:
+%%copy_loop:
     cmp r10, r13
-    jae .done
-    mov rdx, r10
-    imul rdx, r11
-    mov rcx, [rsi + rdx * 8]
-    mov [rbx + r10 * 8], rcx
+    jae %%done
+%if %2 = 4
+    mov ecx, [rdx]
+    mov [r15], ecx
+%elif %2 = 8
+    mov rcx, [rdx]
+    mov [r15], rcx
+%endif
+    add rdx, r11
+    add r15, %2
     inc r10
-    jmp .copy_loop
+    jmp %%copy_loop
 
-.zero:
+%%zero:
     xor eax, eax
 
-.done:
+%%done:
     pop r15
     pop r14
     pop r13
@@ -194,6 +114,87 @@ assp_minimize_measure_8:
     pop rsi
     pop rbx
     ret
+%endmacro
+
+ASSP_MINIMIZE_MEASURE assp_minimize_measure_4, 4
+ASSP_MINIMIZE_MEASURE assp_minimize_measure_8, 8
+
+%macro ASSP_APPEND_BYTE 0
+    test rbx, rbx
+    jz %%count
+    cmp r13, r12
+    jae %%count
+    mov [rbx + r13], al
+%%count:
+    inc r13
+%endmacro
+
+%macro ASSP_APPEND_ROW 1
+    test rbx, rbx
+    jz %%count_only
+    mov rax, r13
+    add rax, %1 + 1
+    cmp rax, r12
+    ja %%slow
+%if %1 = 4
+    mov eax, [r11 + r10 * 4]
+    mov [rbx + r13], eax
+    mov byte [rbx + r13 + 4], 10
+%elif %1 = 8
+    mov rax, [r11 + r10 * 8]
+    mov [rbx + r13], rax
+    mov byte [rbx + r13 + 8], 10
+%endif
+    add r13, %1 + 1
+    jmp %%done
+
+%%slow:
+%if %1 = 4
+    mov ecx, [r11 + r10 * 4]
+    mov al, cl
+    ASSP_APPEND_BYTE
+    mov al, ch
+    ASSP_APPEND_BYTE
+    shr ecx, 16
+    mov al, cl
+    ASSP_APPEND_BYTE
+    mov al, ch
+    ASSP_APPEND_BYTE
+%elif %1 = 8
+    mov rcx, [r11 + r10 * 8]
+    mov al, cl
+    ASSP_APPEND_BYTE
+    shr rcx, 8
+    mov al, cl
+    ASSP_APPEND_BYTE
+    shr rcx, 8
+    mov al, cl
+    ASSP_APPEND_BYTE
+    shr rcx, 8
+    mov al, cl
+    ASSP_APPEND_BYTE
+    shr rcx, 8
+    mov al, cl
+    ASSP_APPEND_BYTE
+    shr rcx, 8
+    mov al, cl
+    ASSP_APPEND_BYTE
+    shr rcx, 8
+    mov al, cl
+    ASSP_APPEND_BYTE
+    shr rcx, 8
+    mov al, cl
+    ASSP_APPEND_BYTE
+%endif
+    mov al, 10
+    ASSP_APPEND_BYTE
+    jmp %%done
+
+%%count_only:
+    add r13, %1 + 1
+
+%%done:
+%endmacro
 
 ; rcx = note-data bytes, rdx = len, r8 = optional output bytes,
 ; r9 = output byte cap, stack arg 5 = row scratch, stack arg 6 = scratch row cap.
@@ -226,9 +227,6 @@ assp_minimize_chart_4:
     mov rbx, r8
     mov r12, r9
     xor r13d, r13d
-
-    cmp rsi, rdi
-    jae .eof
 
 .line_loop:
     cmp rsi, rdi
@@ -292,9 +290,9 @@ assp_minimize_chart_4:
 .comma:
     call chart_finalize_measure
     mov al, ','
-    call chart_append_byte
+    ASSP_APPEND_BYTE
     mov al, 10
-    call chart_append_byte
+    ASSP_APPEND_BYTE
     jmp .line_done
 
 .semi:
@@ -333,6 +331,7 @@ chart_finalize_measure:
     cmp qword [rsp + 24], 0
     je .done
 
+    ; Safe in place: minimized rows are copied from a nondecreasing source index.
     sub rsp, 32
     mov rcx, [rsp + 40]
     mov rdx, [rsp + 56]
@@ -347,18 +346,7 @@ chart_finalize_measure:
     cmp r10, [rsp + 40]
     jae .clear
     mov r11, [rsp + 8]
-    mov ecx, [r11 + r10 * 4]
-    mov al, cl
-    call chart_append_byte
-    mov al, ch
-    call chart_append_byte
-    shr ecx, 16
-    mov al, cl
-    call chart_append_byte
-    mov al, ch
-    call chart_append_byte
-    mov al, 10
-    call chart_append_byte
+    ASSP_APPEND_ROW 4
     inc r10
     jmp .row_loop
 
@@ -366,16 +354,6 @@ chart_finalize_measure:
     mov qword [rsp + 24], 0
 
 .done:
-    ret
-
-chart_append_byte:
-    test rbx, rbx
-    jz .count
-    cmp r13, r12
-    jae .count
-    mov [rbx + r13], al
-.count:
-    inc r13
     ret
 
 ; rcx = note-data bytes, rdx = len, r8 = optional output bytes,
@@ -409,9 +387,6 @@ assp_minimize_chart_8:
     mov rbx, r8
     mov r12, r9
     xor r13d, r13d
-
-    cmp rsi, rdi
-    jae .eof
 
 .line_loop:
     cmp rsi, rdi
@@ -475,9 +450,9 @@ assp_minimize_chart_8:
 .comma:
     call chart_finalize_measure_8
     mov al, ','
-    call chart_append_byte
+    ASSP_APPEND_BYTE
     mov al, 10
-    call chart_append_byte
+    ASSP_APPEND_BYTE
     jmp .line_done
 
 .semi:
@@ -516,95 +491,22 @@ chart_finalize_measure_8:
     cmp qword [rsp + 24], 0
     je .done
 
-    mov rax, [rsp + 24]
-    xor r8d, r8d
-
-    cmp rax, 2
-    jb .minimized_count
-
-    mov r9d, 2
-
-.reduce_loop:
-    mov rdx, r9
-    dec rdx
-    test rax, rdx
-    jnz .minimized_count
-
-    mov r10, r9
-    shr r10, 1
-
-.check_rows:
-    cmp r10, rax
-    jae .can_reduce
-    mov r11, [rsp + 8]
-    mov rdx, 0x3030303030303030
-    cmp [r11 + r10 * 8], rdx
-    jne .minimized_count
-    add r10, r9
-    jmp .check_rows
-
-.can_reduce:
-    inc r8
-    shl r9, 1
-    jmp .reduce_loop
-
-.minimized_count:
-    mov ecx, r8d
-    mov r10d, 1
-    shl r10, cl
-
-    mov rax, [rsp + 24]
-    shr rax, cl
+    ; Safe in place: minimized rows are copied from a nondecreasing source index.
+    sub rsp, 32
+    mov rcx, [rsp + 40]
+    mov rdx, [rsp + 56]
+    mov r8, rcx
+    mov r9, [rsp + 48]
+    call assp_minimize_measure_8
+    add rsp, 32
     mov [rsp + 40], rax
 
-    test r8, r8
-    jz .output_rows
-
-    mov r9, [rsp + 8]
-    xor r11d, r11d
-
-.copy_loop:
-    cmp r11, [rsp + 40]
-    jae .output_rows
-    mov rdx, r11
-    imul rdx, r10
-    mov rcx, [r9 + rdx * 8]
-    mov [r9 + r11 * 8], rcx
-    inc r11
-    jmp .copy_loop
-
-.output_rows:
     xor r10d, r10d
 .row_loop:
     cmp r10, [rsp + 40]
     jae .clear
     mov r11, [rsp + 8]
-    mov rcx, [r11 + r10 * 8]
-    mov al, cl
-    call chart_append_byte
-    shr rcx, 8
-    mov al, cl
-    call chart_append_byte
-    shr rcx, 8
-    mov al, cl
-    call chart_append_byte
-    shr rcx, 8
-    mov al, cl
-    call chart_append_byte
-    shr rcx, 8
-    mov al, cl
-    call chart_append_byte
-    shr rcx, 8
-    mov al, cl
-    call chart_append_byte
-    shr rcx, 8
-    mov al, cl
-    call chart_append_byte
-    shr rcx, 8
-    mov al, cl
-    call chart_append_byte
-    mov al, 10
-    call chart_append_byte
+    ASSP_APPEND_ROW 8
     inc r10
     jmp .row_loop
 
