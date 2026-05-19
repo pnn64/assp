@@ -346,18 +346,22 @@ md5_finish:
     ret
 
 ; rcx = 64-byte little-endian block. Uses rbx as local base.
+align 16
 md5_compress_block:
+    push r12
+    push r13
+    push r14
+    push r15
     mov rsi, rcx
-    mov eax, [rbx + MD5_H0]
-    mov [rbx + MD5_A], eax
-    mov eax, [rbx + MD5_H1]
-    mov [rbx + MD5_B], eax
-    mov eax, [rbx + MD5_H2]
-    mov [rbx + MD5_C], eax
-    mov eax, [rbx + MD5_H3]
-    mov [rbx + MD5_D], eax
+    lea rdi, [md5_k]
+    lea r11, [md5_s]
+    mov r12d, [rbx + MD5_H0]
+    mov r13d, [rbx + MD5_H1]
+    mov r14d, [rbx + MD5_H2]
+    mov r15d, [rbx + MD5_H3]
     xor r8d, r8d
 
+align 16
 .round_loop:
     cmp r8d, 16
     jb .round_f
@@ -368,74 +372,69 @@ md5_compress_block:
     jmp .round_i
 
 .round_f:
-    mov r9d, [rbx + MD5_B]
+    mov r9d, r13d
     mov r10d, r9d
-    and r9d, [rbx + MD5_C]
+    and r9d, r14d
     not r10d
-    and r10d, [rbx + MD5_D]
+    and r10d, r15d
     or r9d, r10d
     mov r10d, r8d
     jmp .round_apply
 
 .round_g:
-    mov r9d, [rbx + MD5_D]
+    mov r9d, r15d
     mov r10d, r9d
-    and r9d, [rbx + MD5_B]
+    and r9d, r13d
     not r10d
-    and r10d, [rbx + MD5_C]
+    and r10d, r14d
     or r9d, r10d
     lea r10d, [r8 + r8 * 4 + 1]
     and r10d, 15
     jmp .round_apply
 
 .round_h:
-    mov r9d, [rbx + MD5_B]
-    xor r9d, [rbx + MD5_C]
-    xor r9d, [rbx + MD5_D]
+    mov r9d, r13d
+    xor r9d, r14d
+    xor r9d, r15d
     lea r10d, [r8 + r8 * 2 + 5]
     and r10d, 15
     jmp .round_apply
 
 .round_i:
-    mov r9d, [rbx + MD5_D]
+    mov r9d, r15d
     not r9d
-    or r9d, [rbx + MD5_B]
-    xor r9d, [rbx + MD5_C]
+    or r9d, r13d
+    xor r9d, r14d
     lea r10d, [r8 * 8]
     sub r10d, r8d
     and r10d, 15
 
 .round_apply:
-    mov eax, [rbx + MD5_A]
+    mov eax, r12d
     add eax, r9d
-    lea r11, [md5_k]
-    add eax, [r11 + r8 * 4]
+    add eax, [rdi + r8 * 4]
     add eax, [rsi + r10 * 4]
-    lea r11, [md5_s]
     movzx ecx, byte [r11 + r8]
     rol eax, cl
-    add eax, [rbx + MD5_B]
+    add eax, r13d
 
-    mov edx, [rbx + MD5_D]
-    mov [rbx + MD5_A], edx
-    mov edx, [rbx + MD5_C]
-    mov [rbx + MD5_D], edx
-    mov edx, [rbx + MD5_B]
-    mov [rbx + MD5_C], edx
-    mov [rbx + MD5_B], eax
+    mov r12d, r15d
+    mov r15d, r14d
+    mov r14d, r13d
+    mov r13d, eax
 
     inc r8d
     cmp r8d, 64
     jb .round_loop
 
-    mov eax, [rbx + MD5_A]
-    add [rbx + MD5_H0], eax
-    mov eax, [rbx + MD5_B]
-    add [rbx + MD5_H1], eax
-    mov eax, [rbx + MD5_C]
-    add [rbx + MD5_H2], eax
-    mov eax, [rbx + MD5_D]
-    add [rbx + MD5_H3], eax
+    add [rbx + MD5_H0], r12d
+    add [rbx + MD5_H1], r13d
+    add [rbx + MD5_H2], r14d
+    add [rbx + MD5_H3], r15d
+    pop r15
+    pop r14
+    pop r13
+    pop r12
     ret
 
 md5_write_hex:
@@ -537,7 +536,12 @@ sha1_finish:
     ret
 
 ; rcx = 64-byte block. Uses rbx as local base.
+align 16
 sha1_compress_block:
+    push r12
+    push r13
+    push r14
+    push r15
     xor r8d, r8d
 .load_loop:
     cmp r8d, 16
@@ -551,6 +555,20 @@ sha1_compress_block:
 .schedule:
     mov r8d, 16
 .schedule_loop:
+    cmp r8d, 76
+    jae .schedule_tail
+%rep 4
+    mov eax, [rbx + SHA_W + r8 * 4 - 12]
+    xor eax, [rbx + SHA_W + r8 * 4 - 32]
+    xor eax, [rbx + SHA_W + r8 * 4 - 56]
+    xor eax, [rbx + SHA_W + r8 * 4 - 64]
+    rol eax, 1
+    mov [rbx + SHA_W + r8 * 4], eax
+    inc r8d
+%endrep
+    jmp .schedule_loop
+
+.schedule_tail:
     cmp r8d, 80
     jae .round_init
     mov eax, [rbx + SHA_W + r8 * 4 - 12]
@@ -563,18 +581,14 @@ sha1_compress_block:
     jmp .schedule_loop
 
 .round_init:
-    mov eax, [rbx + SHA_H0]
-    mov [rbx + SHA_A], eax
-    mov eax, [rbx + SHA_H1]
-    mov [rbx + SHA_B], eax
-    mov eax, [rbx + SHA_H2]
-    mov [rbx + SHA_C], eax
-    mov eax, [rbx + SHA_H3]
-    mov [rbx + SHA_D], eax
-    mov eax, [rbx + SHA_H4]
-    mov [rbx + SHA_E], eax
+    mov r12d, [rbx + SHA_H0]
+    mov r13d, [rbx + SHA_H1]
+    mov r14d, [rbx + SHA_H2]
+    mov r15d, [rbx + SHA_H3]
+    mov edx, [rbx + SHA_H4]
     xor r8d, r8d
 
+align 16
 .round_loop:
     cmp r8d, 20
     jb .round_ch
@@ -585,146 +599,134 @@ sha1_compress_block:
     jmp .round_parity2
 
 .round_ch:
-    mov r11d, [rbx + SHA_B]
-    mov r10d, r11d
-    and r11d, [rbx + SHA_C]
-    not r10d
-    and r10d, [rbx + SHA_D]
-    or r11d, r10d
+    mov r11d, r13d
+    mov r9d, r13d
+    and r11d, r14d
+    not r9d
+    and r9d, r15d
+    or r11d, r9d
     mov r10d, 0x5a827999
     jmp .round_apply
 
 .round_parity1:
-    mov r11d, [rbx + SHA_B]
-    xor r11d, [rbx + SHA_C]
-    xor r11d, [rbx + SHA_D]
+    mov r11d, r13d
+    xor r11d, r14d
+    xor r11d, r15d
     mov r10d, 0x6ed9eba1
     jmp .round_apply
 
 .round_maj:
-    mov r11d, [rbx + SHA_B]
-    and r11d, [rbx + SHA_C]
-    mov r10d, [rbx + SHA_B]
-    and r10d, [rbx + SHA_D]
-    or r11d, r10d
-    mov r10d, [rbx + SHA_C]
-    and r10d, [rbx + SHA_D]
-    or r11d, r10d
+    mov r11d, r13d
+    and r11d, r14d
+    mov r9d, r13d
+    and r9d, r15d
+    or r11d, r9d
+    mov r9d, r14d
+    and r9d, r15d
+    or r11d, r9d
     mov r10d, 0x8f1bbcdc
     jmp .round_apply
 
 .round_parity2:
-    mov r11d, [rbx + SHA_B]
-    xor r11d, [rbx + SHA_C]
-    xor r11d, [rbx + SHA_D]
+    mov r11d, r13d
+    xor r11d, r14d
+    xor r11d, r15d
     mov r10d, 0xca62c1d6
 
 .round_apply:
-    mov eax, [rbx + SHA_A]
+    mov eax, r12d
     rol eax, 5
     add eax, r11d
-    add eax, [rbx + SHA_E]
+    add eax, edx
     add eax, r10d
     add eax, [rbx + SHA_W + r8 * 4]
 
-    mov r9d, [rbx + SHA_D]
-    mov [rbx + SHA_E], r9d
-    mov r9d, [rbx + SHA_C]
-    mov [rbx + SHA_D], r9d
-    mov r9d, [rbx + SHA_B]
-    rol r9d, 30
-    mov [rbx + SHA_C], r9d
-    mov r9d, [rbx + SHA_A]
-    mov [rbx + SHA_B], r9d
-    mov [rbx + SHA_A], eax
+    mov edx, r15d
+    mov r15d, r14d
+    mov r14d, r13d
+    rol r14d, 30
+    mov r13d, r12d
+    mov r12d, eax
 
     inc r8d
     cmp r8d, 80
     jb .round_loop
 
-    mov eax, [rbx + SHA_A]
-    add [rbx + SHA_H0], eax
-    mov eax, [rbx + SHA_B]
-    add [rbx + SHA_H1], eax
-    mov eax, [rbx + SHA_C]
-    add [rbx + SHA_H2], eax
-    mov eax, [rbx + SHA_D]
-    add [rbx + SHA_H3], eax
-    mov eax, [rbx + SHA_E]
-    add [rbx + SHA_H4], eax
+    add [rbx + SHA_H0], r12d
+    add [rbx + SHA_H1], r13d
+    add [rbx + SHA_H2], r14d
+    add [rbx + SHA_H3], r15d
+    add [rbx + SHA_H4], edx
+    pop r15
+    pop r14
+    pop r13
+    pop r12
     ret
 
 sha1_write_short_hex:
-    mov eax, [rbx + SHA_H0]
-    bswap eax
-    mov [rbx + SHA_DIGEST], eax
-    mov eax, [rbx + SHA_H1]
-    bswap eax
-    mov [rbx + SHA_DIGEST + 4], eax
-
     mov rdi, [rbx + SHA_OUT_PTR]
-    xor r8d, r8d
-.hex_loop:
-    cmp r8d, 8
-    jae .done
-    mov dl, [rbx + SHA_DIGEST + r8]
+    mov r9d, [rbx + SHA_H0]
+    bswap r9d
+    mov r8d, 4
+.hex_h0_loop:
+    mov dl, r9b
     call write_hex_byte
-    inc r8d
-    jmp .hex_loop
+    shr r9d, 8
+    dec r8d
+    jnz .hex_h0_loop
+
+    mov r9d, [rbx + SHA_H1]
+    bswap r9d
+    mov r8d, 4
+.hex_h1_loop:
+    mov dl, r9b
+    call write_hex_byte
+    shr r9d, 8
+    dec r8d
+    jnz .hex_h1_loop
 .done:
     ret
 
 ; dl = byte, rdi = output cursor. Advances rdi by 2.
 write_hex_byte:
-    mov al, dl
-    shr al, 4
-    call write_hex_nibble
-    mov al, dl
-    and al, 0x0f
-    call write_hex_nibble
-    ret
-
-write_hex_nibble:
-    cmp al, 9
-    jbe .digit
-    add al, 'a' - 10
-    jmp .store
-.digit:
-    add al, '0'
-.store:
+    lea r11, [hex_chars]
+    movzx ecx, dl
+    shr ecx, 4
+    mov al, [r11 + rcx]
     mov [rdi], al
-    inc rdi
+    movzx ecx, dl
+    and ecx, 0x0f
+    mov al, [r11 + rcx]
+    mov [rdi + 1], al
+    add rdi, 2
     ret
 
 ; rcx = dest, rdx = src, r8 = len.
 copy_bytes:
-    xor r9d, r9d
-.loop:
-    cmp r9, r8
-    jae .done
-    mov al, [rdx + r9]
-    mov [rcx + r9], al
-    inc r9
-    jmp .loop
-.done:
+    push rdi
+    push rsi
+    mov rdi, rcx
+    mov rsi, rdx
+    mov rcx, r8
+    rep movsb
+    pop rsi
+    pop rdi
     ret
 
 ; rcx = dest, r8 = len.
 zero_bytes:
-    xor r9d, r9d
+    push rdi
+    mov rdi, rcx
+    mov rcx, r8
     xor eax, eax
-.loop:
-    cmp r9, r8
-    jae .done
-    mov [rcx + r9], al
-    inc r9
-    jmp .loop
-.done:
+    rep stosb
+    pop rdi
     ret
 
 section .rdata
 
 neutral_bpms db "0.000=0.000"
+hex_chars db "0123456789abcdef"
 md5_s db 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22
       db 5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20
       db 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23
