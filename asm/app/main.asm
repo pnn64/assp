@@ -95,6 +95,7 @@ global start
 %define FILE_BUFFER_CAP 8388608
 %define DENSITY_CAP 131072
 %define TEXT_BUFFER_CAP 1048576
+%define PRINT_BUFFER_CAP 1048576
 %define BPM_BUFFER_CAP 65536
 %define BPM_SEGMENT_CAP 4096
 %define MINIMIZED_BUFFER_CAP 2097152
@@ -157,7 +158,7 @@ start:
     je .check_all
     call print_chart_list
     xor ecx, ecx
-    call ExitProcess
+    call exit_app
 
 .check_all:
     cmp qword [all_mode], 0
@@ -167,7 +168,7 @@ start:
     jz fail_notes
     profile_finish_call
     xor ecx, ecx
-    call ExitProcess
+    call exit_app
 
 .single_chart:
     call run_selected_chart
@@ -175,6 +176,13 @@ start:
     jz fail_notes
     profile_finish_call
     xor ecx, ecx
+    call exit_app
+
+exit_app:
+    sub rsp, 40
+    mov [exit_code_tmp], ecx
+    call print_flush
+    mov ecx, [exit_code_tmp]
     call ExitProcess
 
 run_selected_chart:
@@ -423,6 +431,7 @@ run_loaded_chart:
 
     profile_begin_call
     call print_report
+    call print_flush
     profile_end_call profile_print_ticks
     mov eax, ASSP_TRUE
 
@@ -434,61 +443,61 @@ fail_read:
     lea rcx, [msg_read_fail]
     call print_z
     mov ecx, 1
-    call ExitProcess
+    call exit_app
 
 fail_notes:
     lea rcx, [msg_notes_fail]
     call print_z
     mov ecx, 1
-    call ExitProcess
+    call exit_app
 
 fail_lanes:
     lea rcx, [msg_lanes_fail]
     call print_z
     mov ecx, 1
-    call ExitProcess
+    call exit_app
 
 fail_stats:
     lea rcx, [msg_stats_fail]
     call print_z
     mov ecx, 1
-    call ExitProcess
+    call exit_app
 
 fail_density:
     lea rcx, [msg_density_fail]
     call print_z
     mov ecx, 1
-    call ExitProcess
+    call exit_app
 
 fail_hash:
     lea rcx, [msg_hash_fail]
     call print_z
     mov ecx, 1
-    call ExitProcess
+    call exit_app
 
 fail_metadata:
     lea rcx, [msg_metadata_fail]
     call print_z
     mov ecx, 1
-    call ExitProcess
+    call exit_app
 
 fail_nps:
     lea rcx, [msg_nps_fail]
     call print_z
     mov ecx, 1
-    call ExitProcess
+    call exit_app
 
 fail_duration:
     lea rcx, [msg_duration_fail]
     call print_z
     mov ecx, 1
-    call ExitProcess
+    call exit_app
 
 fail_tech:
     lea rcx, [msg_tech_fail]
     call print_z
     mov ecx, 1
-    call ExitProcess
+    call exit_app
 
 prepare_file_md5:
     sub rsp, 40
@@ -6249,6 +6258,63 @@ print_z:
     ret
 
 print_raw:
+    test rdx, rdx
+    jz .done
+    cmp rdx, PRINT_BUFFER_CAP
+    ja .large_write
+
+    mov rax, [print_buffer_len]
+    mov r10, rax
+    add r10, rdx
+    cmp r10, PRINT_BUFFER_CAP
+    jbe .copy_to_buffer
+
+    mov [print_raw_ptr], rcx
+    mov [print_raw_len], rdx
+    sub rsp, 40
+    call print_flush
+    add rsp, 40
+    mov rcx, [print_raw_ptr]
+    mov rdx, [print_raw_len]
+    xor eax, eax
+    mov r10, rdx
+
+.copy_to_buffer:
+    push rsi
+    push rdi
+    mov rsi, rcx
+    lea rdi, [print_buffer]
+    add rdi, rax
+    mov rcx, rdx
+    rep movsb
+    pop rdi
+    pop rsi
+    mov [print_buffer_len], r10
+    jmp .done
+
+.large_write:
+    mov [print_raw_ptr], rcx
+    mov [print_raw_len], rdx
+    sub rsp, 40
+    call print_flush
+    add rsp, 40
+    mov rcx, [print_raw_ptr]
+    mov rdx, [print_raw_len]
+    call print_write_direct
+.done:
+    ret
+
+print_flush:
+    mov rdx, [print_buffer_len]
+    test rdx, rdx
+    jz .done
+    lea rcx, [print_buffer]
+    call print_write_direct
+    mov qword [print_buffer_len], 0
+.done:
+    ret
+
+print_write_direct:
 %ifdef ASSP_PHASE_PROFILE
     cmp qword [profile_mode], 0
     je .write
@@ -6256,14 +6322,14 @@ print_raw:
     add [profile_write_bytes], rdx
 .write:
 %endif
-    sub rsp, 56
+    sub rsp, 48
     mov r8, rdx
     mov rdx, rcx
     mov rcx, [stdout_handle]
     lea r9, [stdout_written]
     mov qword [rsp + 32], 0
     call WriteFile
-    add rsp, 56
+    add rsp, 48
     ret
 
 section .data
@@ -6774,6 +6840,7 @@ section .bss
 
 stdout_handle resq 1
 stdout_written resd 1
+exit_code_tmp resd 1
 input_path resq 1
 chart_index resq 1
 chart_lanes resq 1
@@ -6792,6 +6859,9 @@ file_handle resq 1
 file_size resq 1
 file_len resq 1
 file_bytes_read resd 1
+print_buffer_len resq 1
+print_raw_ptr resq 1
+print_raw_len resq 1
 profile_frequency resq 1
 profile_total_start_tick resq 1
 profile_start_tick resq 1
@@ -7016,3 +7086,4 @@ stream_segment_buffer resb DENSITY_CAP * ASSP_STREAM_SEGMENT_SIZE
 stream_token_buffer resb DENSITY_CAP * ASSP_STREAM_TOKEN_SIZE
 text_buffer resb TEXT_BUFFER_CAP
 file_buffer resb FILE_BUFFER_CAP
+print_buffer resb PRINT_BUFFER_CAP
