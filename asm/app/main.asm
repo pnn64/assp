@@ -1354,6 +1354,23 @@ prepare_nps:
     mov [nps_count], rax
 
 .peak:
+    mov rax, [stop_segment_count]
+    or rax, [delay_segment_count]
+    or rax, [warp_segment_count]
+    jnz .peak_scan
+    cmp qword [bpm_segment_count], 1
+    jne .peak_scan
+    lea rcx, [density_buffer]
+    mov rdx, [measure_count]
+    lea r8, [bpm_segment_buffer]
+    mov r9, [bpm_segment_count]
+    call assp_nps_peak_milli_from_bpms
+    cmp rax, ASSP_NOT_FOUND
+    je .peak_scan
+    mov [rsp + 96], rax
+    jmp .store_peak
+
+.peak_scan:
     xor r8d, r8d
     xor r9d, r9d
     lea r10, [nps_buffer]
@@ -1394,17 +1411,20 @@ prepare_nps:
     mov r11d, 10
     div r11
     mov [max_nps_centi], rax
-    lea rcx, [nps_buffer]
-    mov rdx, [nps_count]
-    call assp_nps_median_centi
-    mov [median_nps_centi], rax
     mov rax, [stop_segment_count]
     or rax, [delay_segment_count]
     or rax, [warp_segment_count]
-    jnz .success
+    jnz .median_generic
     cmp qword [bpm_segment_count], 1
-    jne .success
+    jne .median_generic
     call prepare_fixed_median_nps_f32
+    mov [median_nps_centi], rax
+    jmp .success
+
+.median_generic:
+    lea rcx, [nps_buffer]
+    mov rdx, [nps_count]
+    call assp_nps_median_centi
     mov [median_nps_centi], rax
 
 .success:
@@ -3827,42 +3847,61 @@ prepare_fixed_median_nps_f32:
 
 ; rsi = f64 values, rdi = count, r8 = kth index. xmm0 = kth value.
 kth_nps_f64_value:
+    test rdi, rdi
+    jz .zero
     xor r10d, r10d
+    mov r11, rdi
+    dec r11
 
-.candidate_loop:
-    cmp r10, rdi
-    jae .zero
+.select_loop:
+    cmp r10, r11
+    jne .partition
     movsd xmm0, [rsi + r10 * 8]
-    xor edx, edx
-    xor ecx, ecx
-    xor r9d, r9d
-
-.count_loop:
-    cmp r9, rdi
-    jae .check_candidate
-    movsd xmm1, [rsi + r9 * 8]
-    ucomisd xmm1, xmm0
-    jb .less
-    je .less_equal
-    jmp .count_next
-.less:
-    inc rdx
-.less_equal:
-    inc rcx
-.count_next:
-    inc r9
-    jmp .count_loop
-
-.check_candidate:
-    cmp rdx, r8
-    ja .candidate_next
-    cmp rcx, r8
-    jbe .candidate_next
     ret
 
-.candidate_next:
-    inc r10
-    jmp .candidate_loop
+.partition:
+    mov r9, r10
+    add r9, r11
+    shr r9, 1
+    movsd xmm2, [rsi + r9 * 8]
+    mov rcx, r10
+    mov rdx, r11
+
+.partition_loop:
+.scan_left:
+    movsd xmm0, [rsi + rcx * 8]
+    ucomisd xmm0, xmm2
+    jae .scan_right
+    inc rcx
+    jmp .scan_left
+
+.scan_right:
+    movsd xmm1, [rsi + rdx * 8]
+    ucomisd xmm1, xmm2
+    jbe .maybe_swap
+    dec rdx
+    jmp .scan_right
+
+.maybe_swap:
+    cmp rcx, rdx
+    jae .partition_done
+    movsd [rsi + rcx * 8], xmm1
+    movsd [rsi + rdx * 8], xmm0
+    inc rcx
+    test rdx, rdx
+    jz .partition_done
+    dec rdx
+    jmp .partition_loop
+
+.partition_done:
+    cmp r8, rdx
+    jbe .select_left
+    lea r10, [rdx + 1]
+    jmp .select_loop
+
+.select_left:
+    mov r11, rdx
+    jmp .select_loop
 
 .zero:
     xorpd xmm0, xmm0

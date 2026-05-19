@@ -857,6 +857,7 @@ assp_count_default_patterns_minimized_4:
     mov rsi, rcx
     lea rdi, [rcx + rdx]
     xor r12d, r12d
+    xor r13d, r13d
 
 .default_line_loop:
     cmp rsi, rdi
@@ -939,47 +940,31 @@ assp_count_default_patterns_minimized_4:
     or ecx, 8
 
 .default_mask_done:
-    mov r10d, 9
-.default_shift_loop:
-    test r10d, r10d
-    jz .default_shift_done
-    mov al, [rsp + r10 - 1]
-    mov [rsp + r10], al
-    dec r10d
-    jmp .default_shift_loop
-
-.default_shift_done:
-    mov [rsp], cl
+    shl r13, 4
+    movzx ecx, cl
+    or r13, rcx
     inc r12
 
-    lea r13, [default_pattern_table]
-    lea r10, [default_pattern_table_end]
+    lea r14, [default_pattern_table]
+    lea r15, [default_pattern_table_end]
 .default_pattern_loop:
-    cmp r13, r10
+    cmp r14, r15
     jae .default_line_done
-    movzx r14d, byte [r13 + 1]
-    cmp r12, r14
+    movzx eax, byte [r14 + 1]
+    cmp r12, rax
     jb .default_next_pattern
 
-    xor r15d, r15d
-    mov r11, r14
-    dec r11
-.default_match_loop:
-    cmp r15, r14
-    jae .default_match
-    mov al, [r13 + 2 + r15]
-    cmp al, [rsp + r11]
+    mov r11, r13
+    lea r10, [default_pattern_len_masks]
+    and r11, [r10 + rax * 8]
+    cmp r11, [r14 + 4]
     jne .default_next_pattern
-    inc r15
-    dec r11
-    jmp .default_match_loop
 
-.default_match:
-    movzx eax, byte [r13]
+    movzx eax, byte [r14]
     inc dword [rbx + rax * 4]
 
 .default_next_pattern:
-    add r13, 12
+    add r14, 16
     jmp .default_pattern_loop
 
 .default_line_done:
@@ -1074,36 +1059,65 @@ assp_pattern_percentages_centi:
 section .rdata
 
 %macro PAT3 4
-    db %1, 3, %2, %3, %4, 0, 0, 0, 0, 0, 0, 0
+    db %1, 3, 0, 0
+    dq ((%2 << 8) | (%3 << 4) | %4)
+    dd 0
 %endmacro
 
 %macro PAT4 5
-    db %1, 4, %2, %3, %4, %5, 0, 0, 0, 0, 0, 0
+    db %1, 4, 0, 0
+    dq ((%2 << 12) | (%3 << 8) | (%4 << 4) | %5)
+    dd 0
 %endmacro
 
 %macro PAT5 6
-    db %1, 5, %2, %3, %4, %5, %6, 0, 0, 0, 0, 0
+    db %1, 5, 0, 0
+    dq ((%2 << 16) | (%3 << 12) | (%4 << 8) | (%5 << 4) | %6)
+    dd 0
 %endmacro
 
 %macro PAT6 7
-    db %1, 6, %2, %3, %4, %5, %6, %7, 0, 0, 0, 0
+    db %1, 6, 0, 0
+    dq ((%2 << 20) | (%3 << 16) | (%4 << 12) | (%5 << 8) | (%6 << 4) | %7)
+    dd 0
 %endmacro
 
 %macro PAT7 8
-    db %1, 7, %2, %3, %4, %5, %6, %7, %8, 0, 0, 0
+    db %1, 7, 0, 0
+    dq ((%2 << 24) | (%3 << 20) | (%4 << 16) | (%5 << 12) | (%6 << 8) | (%7 << 4) | %8)
+    dd 0
 %endmacro
 
 %macro PAT8 9
-    db %1, 8, %2, %3, %4, %5, %6, %7, %8, %9, 0, 0
+    db %1, 8, 0, 0
+    dq ((%2 << 28) | (%3 << 24) | (%4 << 20) | (%5 << 16) | (%6 << 12) | (%7 << 8) | (%8 << 4) | %9)
+    dd 0
 %endmacro
 
 %macro PAT9 10
-    db %1, 9, %2, %3, %4, %5, %6, %7, %8, %9, %10, 0
+    db %1, 9, 0, 0
+    dq ((%2 << 32) | (%3 << 28) | (%4 << 24) | (%5 << 20) | (%6 << 16) | (%7 << 12) | (%8 << 8) | (%9 << 4) | %10)
+    dd 0
 %endmacro
 
 %macro PAT10 11
-    db %1, 10, %2, %3, %4, %5, %6, %7, %8, %9, %10, %11
+    db %1, 10, 0, 0
+    dq ((%2 << 36) | (%3 << 32) | (%4 << 28) | (%5 << 24) | (%6 << 20) | (%7 << 16) | (%8 << 12) | (%9 << 8) | (%10 << 4) | %11)
+    dd 0
 %endmacro
+
+default_pattern_len_masks:
+    dq 0
+    dq 0
+    dq 0
+    dq 0fffh
+    dq 0ffffh
+    dq 0fffffh
+    dq 0ffffffh
+    dq 0fffffffh
+    dq 0ffffffffh
+    dq 0fffffffffh
+    dq 0ffffffffffh
 
 default_pattern_table:
     PAT3 10, 4, 1, 2
