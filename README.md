@@ -194,18 +194,15 @@ STOPS, DELAYS, WARPS, SPEEDS, SCROLLS, and FAKES.
 from chart credit and description text with the same greedy longest-prefix
 rules, `No Tech` skipping, and measure-data filtering.
 `assp_count_step_tech_brackets_minimized_4` and
-`assp_count_step_tech_brackets_minimized_8` start the RSSP step-parity
-tech-count port. They emit the `tech_counts` ABI and currently match the
-hold-constrained bracket slice for fixture charts where RSSP's other parity
-counters are zero. General crossovers, footswitches, sideswitches, jacks, and
-doublesteps require the full parity DP port; do not add pattern-specific
-counter shortcuts here.
+`assp_count_step_tech_brackets_minimized_8` keep the bracket-only fallback for
+unsupported chart shapes. The standalone 4-panel path now prefers the full
+step-parity DP for BPM-only charts and stop/delay/warp timing charts without
+fake segments.
 `assp_calculate_step_tech_counts_from_placements_4` is the first direct port of
 RSSP's post-parity tech-count stage for 4-panel charts. It consumes parity row
 tech masks, note counts, row times, and resolved foot placements, then applies
 RSSP's tech-count rules for jacks, doublesteps, brackets, footswitches,
-sideswitches, and crossovers. The remaining work is wiring the actual
-step-parity row builder and DP placement generator ahead of this stage.
+sideswitches, and crossovers.
 `assp_step_parity_permutations_4` ports RSSP's 4-panel `permute_row` legality
 rules for parity row masks, including foot uniqueness, toe-without-heel
 rejection, and bracket-distance rejection.
@@ -228,9 +225,7 @@ DP step is carrying those row choices across multiple chart rows and
 backtracking the final placement path.
 `assp_step_parity_place_rows_4` runs that scored row selection across
 caller-prepared 4-panel parity rows and backtracks the cheapest combined-foot
-placement for each row. The remaining integration work is building those
-prepared rows from chart data, including RSSP's hold propagation and timing
-row handling.
+placement for each row.
 `assp_step_parity_count_prepared_rows_4` feeds the backtracked prepared-row
 placements into the post-parity 4-panel tech-count stage, so caller-prepared
 rows can now exercise the same DP-to-count path that chart row construction
@@ -245,6 +240,8 @@ hold masks and previous-row-live-hold flags for the DP action cost path.
 `assp_step_parity_prepare_tap_rows_4` remains the smaller no-hold row builder
 for already-minimized 4-panel tap/lift/mine rows. It emits prepared row masks,
 counts, mine masks, and caller-provided row times for the DP-to-count bridge.
+The standalone executable uses caller-owned static parity buffers rather than a
+heap allocator for this path; overflow falls back to the bracket-only counters.
 `assp_step_parity_action_flags_4` ports the boolean prelude used by RSSP's
 `calc_action_cost`: moved-left/right, prior non-holding foot movement,
 did-jump, and left/right jack detection from resolved parity states and hit
@@ -505,4 +502,4 @@ standalone executable build path.
 2. Bring over RSSP's chart minimization and stat counting.
 3. Add `.sm` / `.ssc` section extraction.
 4. Expand timing extraction beyond BPM tags.
-5. Port the full step-parity DP for remaining tech counts.
+5. Extend full step-parity integration to fake timing rows and 8-panel charts.

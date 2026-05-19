@@ -2324,6 +2324,19 @@ prepare_step_parity_bpm_4:
     cmp rax, PARITY_ROW_CAP
     ja .fail
     mov [parity_source_row_count], rax
+    add rsp, 152
+    call prepare_step_parity_rows_4
+    ret
+
+.fail:
+    xor eax, eax
+
+.done:
+    add rsp, 152
+    ret
+
+prepare_step_parity_rows_4:
+    sub rsp, 152
 
     mov rcx, [chart_info + ASSP_CHART_INFO_NOTES_PTR]
     mov rdx, [chart_info + ASSP_CHART_INFO_NOTES_LEN]
@@ -2434,6 +2447,77 @@ prepare_step_parity_bpm_4:
     add rsp, 152
     ret
 
+prepare_step_parity_events_4:
+    sub rsp, 152
+
+    mov rcx, [chart_info + ASSP_CHART_INFO_NOTES_PTR]
+    mov rdx, [chart_info + ASSP_CHART_INFO_NOTES_LEN]
+    lea r8, [bpm_segment_buffer]
+    mov r9, [bpm_segment_count]
+    mov rax, [offset_ms]
+    mov [rsp + 32], rax
+    lea rax, [parity_row_seconds]
+    mov [rsp + 40], rax
+    lea rax, [parity_row_ms]
+    mov [rsp + 48], rax
+    lea rax, [parity_row_beats]
+    mov [rsp + 56], rax
+    mov qword [rsp + 64], PARITY_ROW_CAP
+    call assp_step_parity_bpm_row_times_4
+    cmp rax, ASSP_NOT_FOUND
+    je .fail
+    cmp rax, PARITY_ROW_CAP
+    ja .fail
+    mov [parity_source_row_count], rax
+
+    mov qword [rsp + 96], 0
+.row_time_loop:
+    mov r10, [rsp + 96]
+    cmp r10, [parity_source_row_count]
+    jae .row_time_done
+
+    lea r11, [parity_row_beats]
+    movss xmm0, [r11 + r10 * 4]
+    mulss xmm0, [rel app_const_thousand_f32]
+    cvtss2si rax, xmm0
+
+    lea rcx, [bpm_segment_buffer]
+    mov rdx, [bpm_segment_count]
+    lea r8, [stop_segment_buffer]
+    mov r9, [stop_segment_count]
+    lea r11, [delay_segment_buffer]
+    mov [rsp + 32], r11
+    mov r11, [delay_segment_count]
+    mov [rsp + 40], r11
+    lea r11, [warp_segment_buffer]
+    mov [rsp + 48], r11
+    mov r11, [warp_segment_count]
+    mov [rsp + 56], r11
+    mov [rsp + 64], rax
+    call assp_elapsed_ms_with_events
+    sub rax, [offset_ms]
+
+    mov r10, [rsp + 96]
+    lea r11, [parity_row_ms]
+    mov [r11 + r10 * 4], eax
+    cvtsi2ss xmm0, rax
+    divss xmm0, [rel app_const_thousand_f32]
+    lea r11, [parity_row_seconds]
+    movss [r11 + r10 * 4], xmm0
+
+    inc qword [rsp + 96]
+    jmp .row_time_loop
+
+.row_time_done:
+    add rsp, 152
+    call prepare_step_parity_rows_4
+    ret
+
+.fail:
+    xor eax, eax
+    add rsp, 152
+    ret
+
 prepare_tech_counts:
     sub rsp, 40
 
@@ -2443,9 +2527,16 @@ prepare_tech_counts:
     mov rax, [stop_segment_count]
     or rax, [delay_segment_count]
     or rax, [warp_segment_count]
-    or rax, [fake_segment_count]
-    jnz .count_4_brackets
+    jz .count_4_bpm
+    cmp qword [fake_segment_count], 0
+    jne .count_4_brackets
 
+    call prepare_step_parity_events_4
+    test eax, eax
+    jnz .done
+    jmp .count_4_brackets
+
+.count_4_bpm:
     call prepare_step_parity_bpm_4
     test eax, eax
     jnz .done
@@ -4679,6 +4770,7 @@ print_raw:
 
 section .data
 
+app_const_thousand_f32 dd 1000.0
 default_fixture db "fixtures\camellia_mix.ssc", 0
 tag_title db "#TITLE:"
 tag_title_end:
