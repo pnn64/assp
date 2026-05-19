@@ -574,48 +574,21 @@ assp_count_basic_patterns_minimized_4:
     cmp rax, r11
     ja .basic_line_done
 
-    xor ecx, ecx
-    mov al, [rsi + 0]
-    cmp al, '1'
-    je .basic_set_0
-    cmp al, '2'
-    je .basic_set_0
-    cmp al, '4'
-    jne .basic_col_1
-.basic_set_0:
-    or ecx, 1
-.basic_col_1:
-    mov al, [rsi + 1]
-    cmp al, '1'
-    je .basic_set_1
-    cmp al, '2'
-    je .basic_set_1
-    cmp al, '4'
-    jne .basic_col_2
-.basic_set_1:
-    or ecx, 2
-.basic_col_2:
-    mov al, [rsi + 2]
-    cmp al, '1'
-    je .basic_set_2
-    cmp al, '2'
-    je .basic_set_2
-    cmp al, '4'
-    jne .basic_col_3
-.basic_set_2:
-    or ecx, 4
-.basic_col_3:
-    mov al, [rsi + 3]
-    cmp al, '1'
-    je .basic_set_3
-    cmp al, '2'
-    je .basic_set_3
-    cmp al, '4'
-    jne .basic_mask_done
-.basic_set_3:
-    or ecx, 8
+    lea r11, [rel note_active_table]
+    movzx eax, byte [rsi + 0]
+    movzx ecx, byte [r11 + rax]
+    movzx eax, byte [rsi + 1]
+    movzx eax, byte [r11 + rax]
+    lea ecx, [ecx + eax * 2]
+    movzx eax, byte [rsi + 2]
+    movzx eax, byte [r11 + rax]
+    shl eax, 2
+    or ecx, eax
+    movzx eax, byte [rsi + 3]
+    movzx eax, byte [r11 + rax]
+    shl eax, 3
+    or ecx, eax
 
-.basic_mask_done:
     cmp r12, 2
     jb .basic_boxes
 
@@ -898,48 +871,21 @@ assp_count_default_patterns_minimized_4:
     cmp rax, r11
     ja .default_line_done
 
-    xor ecx, ecx
-    mov al, [rsi + 0]
-    cmp al, '1'
-    je .default_set_0
-    cmp al, '2'
-    je .default_set_0
-    cmp al, '4'
-    jne .default_col_1
-.default_set_0:
-    or ecx, 1
-.default_col_1:
-    mov al, [rsi + 1]
-    cmp al, '1'
-    je .default_set_1
-    cmp al, '2'
-    je .default_set_1
-    cmp al, '4'
-    jne .default_col_2
-.default_set_1:
-    or ecx, 2
-.default_col_2:
-    mov al, [rsi + 2]
-    cmp al, '1'
-    je .default_set_2
-    cmp al, '2'
-    je .default_set_2
-    cmp al, '4'
-    jne .default_col_3
-.default_set_2:
-    or ecx, 4
-.default_col_3:
-    mov al, [rsi + 3]
-    cmp al, '1'
-    je .default_set_3
-    cmp al, '2'
-    je .default_set_3
-    cmp al, '4'
-    jne .default_mask_done
-.default_set_3:
-    or ecx, 8
+    lea r11, [rel note_active_table]
+    movzx eax, byte [rsi + 0]
+    movzx ecx, byte [r11 + rax]
+    movzx eax, byte [rsi + 1]
+    movzx eax, byte [r11 + rax]
+    lea ecx, [ecx + eax * 2]
+    movzx eax, byte [rsi + 2]
+    movzx eax, byte [r11 + rax]
+    shl eax, 2
+    or ecx, eax
+    movzx eax, byte [rsi + 3]
+    movzx eax, byte [r11 + rax]
+    shl eax, 3
+    or ecx, eax
 
-.default_mask_done:
     shl r13, 4
     movzx ecx, cl
     or r13, rcx
@@ -1057,6 +1003,11 @@ assp_pattern_percentages_centi:
     ret
 
 section .rdata
+
+note_active_table:
+    times 49 db 0
+    db 1, 1, 0, 1
+    times 203 db 0
 
 %macro PAT3 4
     db %1, 3, 0, 0

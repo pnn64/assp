@@ -27,211 +27,38 @@ global assp_step_parity_prepare_tap_rows_4
 
 section .text
 
-%macro check_placement_col 1
-    mov al, [rbp + %1]
-    cmp al, 1
-    je %%left_heel
-    cmp al, 2
-    je %%left_toe
-    cmp al, 3
-    je %%right_heel
-    cmp al, 4
-    je %%right_toe
-    jmp %%done
-
-%%left_heel:
-    mov byte [rbp + 8], %1
-    jmp %%done
-
-%%left_toe:
-    mov byte [rbp + 9], %1
-    jmp %%done
-
-%%right_heel:
-    mov byte [rbp + 10], %1
-    jmp %%done
-
-%%right_toe:
-    mov byte [rbp + 11], %1
-
-%%done:
-%endmacro
-
 ; ecx = 4-panel active column mask, rdx = optional output placements,
 ; r8 = output capacity in placements. Each placement is 4 bytes of Foot ids:
 ; 0 none, 1 left heel, 2 left toe, 3 right heel, 4 right toe.
 ; rax = total valid placement count. Writes up to out_cap placements.
 assp_step_parity_permutations_4:
-    push rbx
-    push rsi
-    push rdi
-    push r12
-    push r13
-    push r14
-    push r15
-    push rbp
-    sub rsp, 40
-    mov rbp, rsp
-
-    mov r12d, ecx
-    and r12d, 0fh
-    mov r13, rdx
-    mov r14, r8
-    xor r15d, r15d
-
-    xor ebx, ebx
-    test r12b, 1
-    jz .f0_loop
-    mov ebx, 1
-
-.f0_loop:
-    mov [rbp], bl
-
-    xor esi, esi
-    test r12b, 2
-    jz .f1_loop
-    mov esi, 1
-
-.f1_loop:
-    mov [rbp + 1], sil
-
-    xor edi, edi
-    test r12b, 4
-    jz .f2_loop
-    mov edi, 1
-
-.f2_loop:
-    mov [rbp + 2], dil
-
-    xor r10d, r10d
-    test r12b, 8
-    jz .f3_loop
-    mov r10d, 1
-
-.f3_loop:
-    mov [rbp + 3], r10b
-    call validate_emit_placement_4
-    movzx r10d, byte [rbp + 3]
-    test r12b, 8
-    jz .f3_done
-    inc r10d
-    cmp r10d, 4
-    jbe .f3_loop
-
-.f3_done:
-    test r12b, 4
-    jz .f2_done
-    inc edi
-    cmp edi, 4
-    jbe .f2_loop
-
-.f2_done:
-    test r12b, 2
-    jz .f1_done
-    inc esi
-    cmp esi, 4
-    jbe .f1_loop
-
-.f1_done:
-    test r12b, 1
+    and ecx, 0fh
+    lea r10, [rel step_parity_perm4_counts]
+    movzx eax, byte [r10 + rcx]
+    test rdx, rdx
     jz .done
-    inc ebx
-    cmp ebx, 4
-    jbe .f0_loop
+    test r8, r8
+    jz .done
+
+    lea r10, [rel step_parity_perm4_offsets]
+    movzx r10d, byte [r10 + rcx]
+    lea r11, [rel step_parity_perm4_values]
+    lea r11, [r11 + r10 * 4]
+    mov r10, rax
+    cmp r8, r10
+    cmovb r10, r8
+
+.copy_loop:
+    test r10, r10
+    jz .done
+    mov r9d, [r11]
+    mov [rdx], r9d
+    add r11, 4
+    add rdx, 4
+    dec r10
+    jmp .copy_loop
 
 .done:
-    mov rax, r15
-    add rsp, 40
-    pop rbp
-    pop r15
-    pop r14
-    pop r13
-    pop r12
-    pop rdi
-    pop rsi
-    pop rbx
-    ret
-
-validate_emit_placement_4:
-    mov al, [rbp]
-    test al, al
-    jz .dup_f1
-    cmp al, [rbp + 1]
-    je .reject
-    cmp al, [rbp + 2]
-    je .reject
-    cmp al, [rbp + 3]
-    je .reject
-
-.dup_f1:
-    mov al, [rbp + 1]
-    test al, al
-    jz .dup_f2
-    cmp al, [rbp + 2]
-    je .reject
-    cmp al, [rbp + 3]
-    je .reject
-
-.dup_f2:
-    mov al, [rbp + 2]
-    test al, al
-    jz .positions
-    cmp al, [rbp + 3]
-    je .reject
-
-.positions:
-    mov dword [rbp + 8], 0ffffffffh
-    check_placement_col 0
-    check_placement_col 1
-    check_placement_col 2
-    check_placement_col 3
-
-    cmp byte [rbp + 8], 0ffh
-    jne .left_has_heel
-    cmp byte [rbp + 9], 0ffh
-    jne .reject
-
-.left_has_heel:
-    cmp byte [rbp + 10], 0ffh
-    jne .right_has_heel
-    cmp byte [rbp + 11], 0ffh
-    jne .reject
-
-.right_has_heel:
-    cmp byte [rbp + 8], 0ffh
-    je .check_right_bracket
-    cmp byte [rbp + 9], 0ffh
-    je .check_right_bracket
-    movzx eax, byte [rbp + 8]
-    add al, [rbp + 9]
-    cmp al, 3
-    je .reject
-
-.check_right_bracket:
-    cmp byte [rbp + 10], 0ffh
-    je .emit
-    cmp byte [rbp + 11], 0ffh
-    je .emit
-    movzx eax, byte [rbp + 10]
-    add al, [rbp + 11]
-    cmp al, 3
-    je .reject
-
-.emit:
-    mov rax, r15
-    inc r15
-    test r13, r13
-    jz .done
-    cmp rax, r14
-    jae .done
-    lea r11, [r13 + rax * 4]
-    mov eax, [rbp]
-    mov [r11], eax
-
-.done:
-    ret
-
-.reject:
     ret
 
 ; rcx = initial assp_step_parity_state4, rdx = placement[4],
@@ -2818,6 +2645,88 @@ assp_step_parity_action_cost_4:
     xor eax, eax
     ret
 
+%macro ASSP_INLINE_SINGLE_COL_RESOLVE 1
+    movzx eax, byte [r9 + ASSP_STEP_PARITY_STATE4_COMBINED + %1]
+    test al, al
+    jnz %%have_foot
+    movzx eax, byte [r10 + ASSP_STEP_PARITY_STATE4_COMBINED + %1]
+    cmp al, 1
+    je %%prev_left_heel
+    cmp al, 3
+    je %%prev_right_heel
+    cmp al, 2
+    je %%prev_left_toe
+    cmp al, 4
+    je %%prev_right_toe
+    jmp %%done
+
+%%prev_left_heel:
+    test dl, 1
+    jnz %%done
+    jmp %%store_foot
+
+%%prev_right_heel:
+    test dl, 4
+    jnz %%done
+    jmp %%store_foot
+
+%%prev_left_toe:
+    test dl, 3
+    jnz %%done
+    mov eax, 2
+    jmp %%store_foot
+
+%%prev_right_toe:
+    test dl, 12
+    jnz %%done
+    mov eax, 4
+
+%%store_foot:
+    mov [r9 + ASSP_STEP_PARITY_STATE4_COMBINED + %1], al
+
+%%have_foot:
+    mov r8d, eax
+%if %1 != 0
+    shl r8d, %1 * 3
+%endif
+    or r11d, r8d
+    mov byte [r9 + ASSP_STEP_PARITY_STATE4_WHERE_FEET + rax], %1
+    or ecx, 1 << %1
+
+%%done:
+%endmacro
+
+%macro ASSP_INLINE_SINGLE_COL_STATE 0
+    movzx eax, byte [rdx + r8]
+    mov dword [r9 + ASSP_STEP_PARITY_STATE4_COMBINED], 0
+    mov dword [r9 + ASSP_STEP_PARITY_STATE4_WHERE_FEET], 0ffffffffh
+    mov byte [r9 + ASSP_STEP_PARITY_STATE4_WHERE_FEET + 4], 0ffh
+
+    lea rdx, [rsp + 496]
+    mov dword [rdx], 0ffffffffh
+    mov byte [rdx + 4], 0ffh
+
+    mov [r9 + ASSP_STEP_PARITY_STATE4_COMBINED + r8], al
+    mov byte [rdx + rax], r8b
+    lea rdx, [rel step_parity_foot_masks]
+    movzx edx, byte [rdx + rax]
+
+    xor r11d, r11d
+    xor ecx, ecx
+    ASSP_INLINE_SINGLE_COL_RESOLVE 0
+    ASSP_INLINE_SINGLE_COL_RESOLVE 1
+    ASSP_INLINE_SINGLE_COL_RESOLVE 2
+    ASSP_INLINE_SINGLE_COL_RESOLVE 3
+
+    mov [r9 + ASSP_STEP_PARITY_STATE4_OCCUPIED_MASK], cl
+    mov [r9 + ASSP_STEP_PARITY_STATE4_MOVED_MASK], dl
+    mov byte [r9 + ASSP_STEP_PARITY_STATE4_HOLDING_MASK], 0
+    mov eax, edx
+    shl eax, 24
+    or eax, r11d
+    mov [rsp + 616], eax
+%endmacro
+
 ; rcx = initial states, rdx = initial costs, r8 = initial state count,
 ; r9 = assp_step_parity_row_cost_ctx4,
 ; stack arg 5 = out predecessor indexes,
@@ -2886,29 +2795,25 @@ assp_step_parity_row_best_candidates_4:
     mov ecx, [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_NOTE_MASK]
     or ecx, [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_HOLD_MASK]
     and ecx, 0fh
-    lea rdx, [rsp + 832]
-    mov r8d, 24
-    call assp_step_parity_permutations_4
+    lea r10, [rel step_parity_perm4_counts]
+    movzx eax, byte [r10 + rcx]
     mov [rsp + 928], rax
+    lea r10, [rel step_parity_perm4_offsets]
+    movzx r10d, byte [r10 + rcx]
+    lea r11, [rel step_parity_perm4_values]
+    lea r11, [r11 + r10 * 4]
+    mov [rsp + 952], r11
     cmp qword [rsp + 1336], 64
     ja .state_loop
-    xor eax, eax
-    mov [rsp + 960], rax
-    mov [rsp + 968], rax
-    mov [rsp + 976], rax
-    mov [rsp + 984], rax
-    mov [rsp + 992], rax
-    mov [rsp + 1000], rax
-    mov [rsp + 1008], rax
-    mov [rsp + 1016], rax
-    mov [rsp + 1024], rax
-    mov [rsp + 1032], rax
-    mov [rsp + 1040], rax
-    mov [rsp + 1048], rax
-    mov [rsp + 1056], rax
-    mov [rsp + 1064], rax
-    mov [rsp + 1072], rax
-    mov [rsp + 1080], rax
+    pxor xmm0, xmm0
+    movdqu [rsp + 960], xmm0
+    movdqu [rsp + 976], xmm0
+    movdqu [rsp + 992], xmm0
+    movdqu [rsp + 1008], xmm0
+    movdqu [rsp + 1024], xmm0
+    movdqu [rsp + 1040], xmm0
+    movdqu [rsp + 1056], xmm0
+    movdqu [rsp + 1072], xmm0
     mov dword [rsp + 944], -1
     mov eax, [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_HOLD_MASK]
     test eax, eax
@@ -2935,7 +2840,8 @@ assp_step_parity_row_best_candidates_4:
     cmp rax, [rsp + 928]
     jae .next_state_fast
 
-    lea rdx, [rsp + 832 + rax * 4]
+    mov rdx, [rsp + 952]
+    lea rdx, [rdx + rax * 4]
     mov [rsp + 936], rdx
     mov rcx, [rsp + 792]
     lea rcx, [rcx + rcx * 2]
@@ -2957,13 +2863,11 @@ assp_step_parity_row_best_candidates_4:
     jmp .transition_done_fast
 
 .transition_single_no_hold_fast:
+    mov r10, rcx
+    mov rdx, [rsp + 936]
     mov r8d, [rsp + 944]
     lea r9, [rsp + 208]
-    lea r10, [rsp + 496]
-    mov [rsp + 32], r10
-    lea r10, [rsp + 616]
-    mov [rsp + 40], r10
-    call step_parity_result_single_col_no_holds_fast_4
+    ASSP_INLINE_SINGLE_COL_STATE
     jmp .transition_done_fast
 
 .transition_with_holds_fast:
@@ -3125,7 +3029,8 @@ assp_step_parity_row_best_candidates_4:
     cmp rax, [rsp + 928]
     jae .transitions_done
 
-    lea rdx, [rsp + 832 + rax * 4]
+    mov rdx, [rsp + 952]
+    lea rdx, [rdx + rax * 4]
     lea rcx, [rax + rax * 2]
     lea r9, [rsp + 208 + rcx * 4]
     mov [rsp + 936], r9
@@ -3157,7 +3062,8 @@ assp_step_parity_row_best_candidates_4:
 
 .transition_maybe_emit:
     mov rax, [rsp + 800]
-    mov edx, [rsp + 832 + rax * 4]
+    mov rdx, [rsp + 952]
+    mov edx, [rdx + rax * 4]
     mov [rsp + 112 + rax * 4], edx
     inc qword [rsp + 776]
     inc qword [rsp + 800]
@@ -3337,112 +3243,6 @@ assp_step_parity_row_best_candidates_4:
     pop rdi
     pop rsi
     pop rbx
-    ret
-
-%macro ASSP_SINGLE_COL_RESOLVE 1
-    mov r9, [rsp + 8]
-    movzx eax, byte [r9 + ASSP_STEP_PARITY_STATE4_COMBINED + %1]
-    test al, al
-    jnz %%have_foot
-    mov rcx, [rsp]
-    movzx eax, byte [rcx + ASSP_STEP_PARITY_STATE4_COMBINED + %1]
-    cmp al, 1
-    je %%prev_heel
-    cmp al, 3
-    je %%prev_heel
-    cmp al, 2
-    je %%prev_left_toe
-    cmp al, 4
-    je %%prev_right_toe
-    jmp %%done
-
-%%prev_heel:
-    mov ecx, eax
-    dec ecx
-    mov r8d, 1
-    shl r8d, cl
-    test dword [rsp + 32], r8d
-    jnz %%done
-    jmp %%store_foot
-
-%%prev_left_toe:
-    test byte [rsp + 32], 3
-    jnz %%done
-    mov eax, 2
-    jmp %%store_foot
-
-%%prev_right_toe:
-    test byte [rsp + 32], 12
-    jnz %%done
-    mov eax, 4
-
-%%store_foot:
-    mov [r9 + ASSP_STEP_PARITY_STATE4_COMBINED + %1], al
-
-%%have_foot:
-    mov r8d, eax
-%if %1 != 0
-    shl r8d, %1 * 3
-%endif
-    or r11d, r8d
-    mov byte [r9 + ASSP_STEP_PARITY_STATE4_WHERE_FEET + rax], %1
-    or edx, 1 << %1
-
-%%done:
-%endmacro
-
-; Internal row-DP state constructor for single-column rows without holds.
-; rcx = initial state, rdx = placement[4], r8d = active column,
-; r9 = out state, stack arg 5 = out hit[5], stack arg 6 = out key.
-step_parity_result_single_col_no_holds_fast_4:
-    sub rsp, 40
-    mov [rsp], rcx
-    mov [rsp + 8], r9
-    mov [rsp + 16], rdx
-    mov [rsp + 24], r8d
-
-    movzx eax, byte [rdx + r8]
-    mov [rsp + 28], eax
-
-    mov dword [r9 + ASSP_STEP_PARITY_STATE4_COMBINED], 0
-    mov dword [r9 + ASSP_STEP_PARITY_STATE4_WHERE_FEET], 0ffffffffh
-    mov byte [r9 + ASSP_STEP_PARITY_STATE4_WHERE_FEET + 4], 0ffh
-    mov byte [r9 + ASSP_STEP_PARITY_STATE4_OCCUPIED_MASK], 0
-    mov byte [r9 + ASSP_STEP_PARITY_STATE4_MOVED_MASK], 0
-    mov byte [r9 + ASSP_STEP_PARITY_STATE4_HOLDING_MASK], 0
-
-    mov r10, [rsp + 80]
-    mov dword [r10], 0ffffffffh
-    mov byte [r10 + 4], 0ffh
-
-    mov edx, [rsp + 24]
-    mov eax, [rsp + 28]
-    mov [r9 + ASSP_STEP_PARITY_STATE4_COMBINED + rdx], al
-    mov byte [r10 + rax], dl
-
-    mov ecx, eax
-    dec ecx
-    mov eax, 1
-    shl eax, cl
-    mov [rsp + 32], eax
-
-    xor r11d, r11d
-    xor edx, edx
-    ASSP_SINGLE_COL_RESOLVE 0
-    ASSP_SINGLE_COL_RESOLVE 1
-    ASSP_SINGLE_COL_RESOLVE 2
-    ASSP_SINGLE_COL_RESOLVE 3
-
-    mov r9, [rsp + 8]
-    mov [r9 + ASSP_STEP_PARITY_STATE4_OCCUPIED_MASK], dl
-    mov eax, [rsp + 32]
-    mov [r9 + ASSP_STEP_PARITY_STATE4_MOVED_MASK], al
-    mov byte [r9 + ASSP_STEP_PARITY_STATE4_HOLDING_MASK], 0
-    shl eax, 24
-    or eax, r11d
-    mov rcx, [rsp + 88]
-    mov [rcx], eax
-    add rsp, 40
     ret
 
 ; Internal row-DP state constructor for rows without holds.
@@ -5315,6 +5115,7 @@ cost_twisted_foot_weight dd 100000.0
 cost_facing_weight dd 2.0
 cost_spin_weight dd 1000.0
 cost_one dd 1.0
+step_parity_foot_masks db 0, 1, 2, 4, 8
 const_four_f32 dd 4.0
 const_thousand_f32 dd 1000.0
 const_sixty_thousand_f32 dd 60000.0
@@ -5323,6 +5124,28 @@ const_thousand_f64 dq 1000.0
 const_default_bpm_f64 dq 60.0
 rows_per_beat_f32 dd 48.0
 hold_end_none dd -1.0
+step_parity_perm4_counts:
+    db 1, 2, 2, 6, 2, 6, 2, 8, 2, 2, 6, 8, 6, 8, 8, 16
+step_parity_perm4_offsets:
+    db 0, 1, 3, 5, 11, 13, 19, 21, 29, 31, 33, 39, 47, 53, 61, 69
+step_parity_perm4_values:
+    dd 000000000h
+    dd 000000001h, 000000003h
+    dd 000000100h, 000000300h
+    dd 000000201h, 000000301h, 000000102h, 000000103h, 000000403h, 000000304h
+    dd 000010000h, 000030000h
+    dd 000020001h, 000030001h, 000010002h, 000010003h, 000040003h, 000030004h
+    dd 000030100h, 000010300h
+    dd 000030201h, 000020301h, 000030102h, 000010302h, 000040103h, 000010403h, 000030104h, 000010304h
+    dd 001000000h, 003000000h
+    dd 003000001h, 001000003h
+    dd 002000100h, 003000100h, 001000200h, 001000300h, 004000300h, 003000400h
+    dd 003000201h, 004000301h, 003000401h, 003000102h, 002000103h, 001000203h, 001000403h, 001000304h
+    dd 002010000h, 003010000h, 001020000h, 001030000h, 004030000h, 003040000h
+    dd 003020001h, 004030001h, 003040001h, 003010002h, 002010003h, 001020003h, 001040003h, 001030004h
+    dd 002030100h, 004030100h, 003040100h, 001030200h, 002010300h, 004010300h, 001020300h, 003010400h
+    dd 004030201h, 003040201h, 004020301h, 003020401h, 004030102h, 003040102h, 004010302h, 003010402h
+    dd 002040103h, 001040203h, 002010403h, 001020403h, 002030104h, 001030204h, 002010304h, 001020304h
 dance_single_distances4:
     dd 0.0, 1.4142135623730951, 1.4142135623730951, 2.0
     dd 1.4142135623730951, 0.0, 2.0, 1.4142135623730951
