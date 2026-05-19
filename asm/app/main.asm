@@ -21,11 +21,13 @@ extern assp_count_gimmick_scroll_segments
 extern assp_count_gimmick_speed_segments
 extern assp_count_note_stats_4
 extern assp_count_note_stats_8
+extern assp_collect_bitmasks_compact_4
 extern assp_collect_bitmasks_minimized_4
 extern assp_count_anchors_bitmasks_4
 extern assp_count_anchors_minimized_4
 extern assp_count_default_patterns_bitmasks_4
 extern assp_count_default_patterns_minimized_4
+extern assp_count_facing_steps_bitmasks_4
 extern assp_count_facing_steps_minimized_4
 extern assp_pattern_percentages_centi
 extern assp_count_timing_fakes_4
@@ -1568,7 +1570,7 @@ prepare_default_patterns:
     mov rdx, [minimized_chart_len]
     lea r8, [pattern_bitmask_buffer]
     mov r9d, PARITY_ROW_CAP
-    call assp_collect_bitmasks_minimized_4
+    call assp_collect_bitmasks_compact_4
     cmp rax, ASSP_NOT_FOUND
     je .fail
     cmp rax, PARITY_ROW_CAP
@@ -1631,11 +1633,11 @@ prepare_facing_steps:
     cmp qword [chart_lanes], 4
     jne .success
 
-    lea rcx, [minimized_buffer]
-    mov rdx, [minimized_chart_len]
+    lea rcx, [pattern_bitmask_buffer]
+    mov rdx, [pattern_bitmask_count]
     mov r8d, MONO_THRESHOLD
     lea r9, [facing_counts]
-    call assp_count_facing_steps_minimized_4
+    call assp_count_facing_steps_bitmasks_4
     test eax, eax
     jz .fail
 

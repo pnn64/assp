@@ -3,7 +3,9 @@ default rel
 
 global assp_count_anchors_minimized_4
 global assp_collect_bitmasks_minimized_4
+global assp_collect_bitmasks_compact_4
 global assp_count_anchors_bitmasks_4
+global assp_count_facing_steps_bitmasks_4
 global assp_count_facing_steps_minimized_4
 global assp_count_basic_patterns_minimized_4
 global assp_count_default_patterns_minimized_4
@@ -111,6 +113,101 @@ assp_collect_bitmasks_minimized_4:
 
 .collect_done:
     add rsp, 32
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
+; rcx = ASSP-minimized 4-panel note-data bytes, rdx = len, r8 = out bitmasks,
+; r9 = output capacity. Returns count or ASSP_NOT_FOUND on failure.
+; This fast path assumes rows are already normalized as "dddd\n" and measure
+; separators as ",\n", which is what assp_minimize_chart_4 emits.
+assp_collect_bitmasks_compact_4:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+
+    test r8, r8
+    jz .compact_fail
+    test rdx, rdx
+    jz .compact_empty
+    test rcx, rcx
+    jz .compact_fail
+
+    mov rsi, rcx
+    lea rdi, [rcx + rdx]
+    mov rbx, r8
+    mov r12, r9
+    xor r13d, r13d
+    lea r11, [note_active_table]
+
+.compact_loop:
+    cmp rsi, rdi
+    jae .compact_success
+
+    cmp byte [rsi], ','
+    jne .compact_row
+    inc rsi
+    cmp rsi, rdi
+    jae .compact_success
+    cmp byte [rsi], 10
+    jne .compact_loop
+    inc rsi
+    jmp .compact_loop
+
+.compact_row:
+    lea rax, [rsi + 4]
+    cmp rax, rdi
+    ja .compact_fail
+    cmp r13, r12
+    jae .compact_fail
+
+    movzx eax, byte [rsi + 0]
+    movzx ecx, byte [r11 + rax]
+    movzx eax, byte [rsi + 1]
+    movzx eax, byte [r11 + rax]
+    lea ecx, [ecx + eax * 2]
+    movzx eax, byte [rsi + 2]
+    movzx eax, byte [r11 + rax]
+    shl eax, 2
+    or ecx, eax
+    movzx eax, byte [rsi + 3]
+    movzx eax, byte [r11 + rax]
+    shl eax, 3
+    or ecx, eax
+    mov [rbx + r13], cl
+    inc r13
+
+    add rsi, 4
+    cmp rsi, rdi
+    jae .compact_success
+    cmp byte [rsi], 13
+    jne .compact_skip_lf
+    inc rsi
+    cmp rsi, rdi
+    jae .compact_success
+.compact_skip_lf:
+    cmp byte [rsi], 10
+    jne .compact_loop
+    inc rsi
+    jmp .compact_loop
+
+.compact_empty:
+    xor eax, eax
+    jmp .compact_done
+
+.compact_success:
+    mov rax, r13
+    jmp .compact_done
+
+.compact_fail:
+    mov rax, ASSP_NOT_FOUND
+
+.compact_done:
     pop r13
     pop r12
     pop rdi
@@ -665,6 +762,168 @@ assp_count_facing_steps_minimized_4:
     mov eax, 2
     ret
 
+; rcx = bitmask bytes, rdx = count, r8 = mono threshold,
+; r9 = u32[2] output. out[0..2] = left-facing/right-facing mono counts.
+; eax = 1 on success, 0 on failure.
+assp_count_facing_steps_bitmasks_4:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 32
+
+    test r9, r9
+    jz .bits_facing_fail
+    mov rbx, r9
+    mov dword [rbx + 0], 0
+    mov dword [rbx + 4], 0
+    mov [rsp + 0], r8
+
+    test rdx, rdx
+    jz .bits_facing_success
+    test rcx, rcx
+    jz .bits_facing_fail
+
+    mov rsi, rcx
+    lea rdi, [rcx + rdx]
+    xor r12d, r12d
+    xor r13d, r13d
+    xor r14d, r14d
+    xor r15d, r15d
+
+.bits_facing_loop:
+    cmp rsi, rdi
+    jae .bits_facing_eof
+
+    movzx eax, byte [rsi]
+    and eax, 15
+    lea r10, [facing_mask_to_arrow]
+    movzx ecx, byte [r10 + rax]
+    test ecx, ecx
+    jnz .bits_facing_has_arrow
+
+    test r14d, r14d
+    jz .bits_facing_next
+    call .bits_facing_finalize
+    xor r12d, r12d
+    xor r13d, r13d
+    xor r14d, r14d
+    xor r15d, r15d
+    jmp .bits_facing_next
+
+.bits_facing_has_arrow:
+    test r14d, r14d
+    jnz .bits_facing_continue
+    xor r12d, r12d
+    mov r13d, 1
+    lea r10, [facing_forced_foot_table]
+    movzx r15d, byte [r10 + rcx]
+    mov r14d, ecx
+    jmp .bits_facing_next
+
+.bits_facing_continue:
+    mov eax, r14d
+    lea eax, [rax + rax * 4]
+    add eax, ecx
+    lea r10, [facing_dir_table]
+    movzx edx, byte [r10 + rax]
+
+    mov eax, r15d
+    lea eax, [rax + rax * 4]
+    add eax, ecx
+    lea r10, [facing_foot_table]
+    movzx eax, byte [r10 + rax]
+    mov r15d, eax
+    and r15d, 3
+    test al, 4
+    jz .bits_facing_step
+    call .bits_facing_finalize
+    xor r12d, r12d
+    xor r13d, r13d
+
+.bits_facing_step:
+    test r12d, r12d
+    jz .bits_facing_wait
+    cmp r12d, 1
+    je .bits_facing_left
+
+.bits_facing_right:
+    cmp edx, 1
+    jne .bits_facing_inc_count
+    call .bits_facing_finalize
+    mov r12d, 1
+    mov r13d, 1
+    jmp .bits_facing_step_done
+
+.bits_facing_left:
+    cmp edx, 2
+    jne .bits_facing_inc_count
+    call .bits_facing_finalize
+    mov r12d, 2
+    mov r13d, 1
+    jmp .bits_facing_step_done
+
+.bits_facing_wait:
+    cmp edx, 1
+    jne .bits_facing_wait_right
+    mov r12d, 1
+    inc r13
+    jmp .bits_facing_step_done
+.bits_facing_wait_right:
+    cmp edx, 2
+    jne .bits_facing_inc_count
+    mov r12d, 2
+
+.bits_facing_inc_count:
+    inc r13
+
+.bits_facing_step_done:
+    mov r14d, ecx
+
+.bits_facing_next:
+    inc rsi
+    jmp .bits_facing_loop
+
+.bits_facing_eof:
+    test r14d, r14d
+    jz .bits_facing_success
+    call .bits_facing_finalize
+
+.bits_facing_success:
+    mov eax, ASSP_TRUE
+    jmp .bits_facing_done
+
+.bits_facing_fail:
+    xor eax, eax
+
+.bits_facing_done:
+    add rsp, 32
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
+.bits_facing_finalize:
+    cmp r13, [rsp + 8]
+    jb .bits_facing_finalize_done
+    cmp r12d, 1
+    je .bits_facing_finalize_left
+    cmp r12d, 2
+    jne .bits_facing_finalize_done
+    add dword [rbx + 4], r13d
+    ret
+.bits_facing_finalize_left:
+    add dword [rbx + 0], r13d
+.bits_facing_finalize_done:
+    ret
+
 ; rcx = minimized 4-panel note-data bytes, rdx = len, r8 = assp_basic_patterns* out.
 ; Counts RSSP's default candle and box-family patterns. eax = 1 on success.
 assp_count_basic_patterns_minimized_4:
@@ -973,56 +1232,48 @@ assp_count_default_patterns_bitmasks_4:
     test r8, r8
     jz .bits_default_fail
     mov rbx, r8
+    mov rsi, rcx
 
+    mov rdi, r8
     xor eax, eax
-.bits_default_zero_loop:
-    cmp eax, ASSP_PATTERN_COUNT
-    jae .bits_default_zero_done
-    mov dword [rbx + rax * 4], 0
-    inc eax
-    jmp .bits_default_zero_loop
+    mov ecx, ASSP_PATTERN_COUNT
+    rep stosd
 
-.bits_default_zero_done:
     test rdx, rdx
     jz .bits_default_success
-    test rcx, rcx
+    test rsi, rsi
     jz .bits_default_fail
 
-    mov rsi, rcx
-    lea rdi, [rcx + rdx]
+    lea rdi, [rsi + rdx]
     xor r12d, r12d
-    xor r13d, r13d
+    lea r13, [default_pattern_dfa_goto]
+    lea r14, [default_pattern_dfa_output_lens]
+    lea r15, [default_pattern_dfa_output_starts]
 
 .bits_default_loop:
     cmp rsi, rdi
     jae .bits_default_success
 
-    movzx ecx, byte [rsi]
-    shl r13, 4
-    or r13, rcx
-    inc r12
+    movzx eax, byte [rsi]
+    and eax, 15
+    mov r10d, r12d
+    shl r10d, 4
+    add r10d, eax
+    movzx r12d, word [r13 + r10 * 2]
 
-    lea r14, [default_pattern_table]
-    lea r15, [default_pattern_table_end]
-.bits_default_pattern_loop:
-    cmp r14, r15
-    jae .bits_default_next
-    movzx eax, byte [r14 + 1]
-    cmp r12, rax
-    jb .bits_default_next_pattern
+    movzx ecx, byte [r14 + r12]
+    test ecx, ecx
+    jz .bits_default_next
 
-    mov r11, r13
-    lea r10, [default_pattern_len_masks]
-    and r11, [r10 + rax * 8]
-    cmp r11, [r14 + 4]
-    jne .bits_default_next_pattern
-
-    movzx eax, byte [r14]
+    movzx edx, word [r15 + r12 * 2]
+    lea r11, [default_pattern_dfa_outputs]
+    add r11, rdx
+.bits_default_output_loop:
+    movzx eax, byte [r11]
     inc dword [rbx + rax * 4]
-
-.bits_default_next_pattern:
-    add r14, 16
-    jmp .bits_default_pattern_loop
+    inc r11
+    dec ecx
+    jnz .bits_default_output_loop
 
 .bits_default_next:
     inc rsi
@@ -1257,6 +1508,26 @@ note_active_table:
     times 49 db 0
     db 1, 1, 0, 1
     times 203 db 0
+
+%include "default_pattern_dfa.inc"
+
+facing_mask_to_arrow:
+    db 0, 1, 2, 0, 3, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0
+
+facing_forced_foot_table:
+    db 0, 1, 0, 0, 2
+
+facing_dir_table:
+    db 0, 0, 0, 0, 0
+    db 0, 0, 2, 1, 0
+    db 0, 2, 0, 0, 1
+    db 0, 1, 0, 0, 2
+    db 0, 0, 1, 2, 0
+
+facing_foot_table:
+    db 0, 1, 0, 0, 2
+    db 2, 5, 2, 2, 2
+    db 1, 1, 1, 1, 6
 
 %macro PAT3 4
     db %1, 3, 0, 0
