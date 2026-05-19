@@ -25,6 +25,47 @@ global assp_step_parity_bpm_row_times_4
 global assp_step_parity_prepare_hold_rows_4
 global assp_step_parity_prepare_tap_rows_4
 
+%ifdef ASSP_PHASE_PROFILE
+extern profile_step_dp_transition_cycles
+extern profile_step_dp_hash_cycles
+extern profile_step_dp_score_cycles
+extern profile_step_dp_copy_cycles
+extern profile_step_dp_transition_count
+extern profile_step_dp_hash_probe_count
+extern profile_step_dp_score_clean_count
+extern profile_step_dp_score_full_count
+extern profile_step_dp_write_count
+extern profile_step_dp_skip_count
+
+%macro ASSP_PROFILE_TSC_BEGIN 0
+    rdtsc
+    shl rdx, 32
+    or rax, rdx
+    mov [rsp + 888], rax
+%endmacro
+
+%macro ASSP_PROFILE_TSC_END 1
+    rdtsc
+    shl rdx, 32
+    or rax, rdx
+    sub rax, [rsp + 888]
+    add qword [rel %1], rax
+%endmacro
+
+%macro ASSP_PROFILE_INC 1
+    inc qword [rel %1]
+%endmacro
+%else
+%macro ASSP_PROFILE_TSC_BEGIN 0
+%endmacro
+
+%macro ASSP_PROFILE_TSC_END 1
+%endmacro
+
+%macro ASSP_PROFILE_INC 1
+%endmacro
+%endif
+
 section .text
 
 ; ecx = 4-panel active column mask, rdx = optional output placements,
@@ -2837,6 +2878,21 @@ assp_step_parity_row_best_candidates_4:
     movdqu [rsp + 1040], xmm0
     movdqu [rsp + 1056], xmm0
     movdqu [rsp + 1072], xmm0
+%ifdef ASSP_STANDALONE_EXE
+    inc dword [rel step_parity_fast_key_generation]
+    cmp dword [rel step_parity_fast_key_generation], 65536
+    jb .fast_key_generation_ready
+    mov dword [rel step_parity_fast_key_generation], 1
+    lea r10, [rel step_parity_fast_key_entries]
+    xor eax, eax
+    mov ecx, 65536
+.clear_fast_key_entries:
+    mov [r10], eax
+    add r10, 4
+    dec ecx
+    jnz .clear_fast_key_entries
+.fast_key_generation_ready:
+%endif
     mov dword [rsp + 944], -1
     mov byte [rsp + 900], 0
     mov eax, [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_HOLD_MASK]
@@ -2900,6 +2956,15 @@ assp_step_parity_row_best_candidates_4:
     jae .success
 
     mov qword [rsp + 800], 0
+    mov rax, [rsp + 792]
+    lea rcx, [rax + rax * 2]
+    lea rcx, [r12 + rcx * 4]
+    mov [rsp + 880], rcx
+    movss xmm0, [r13 + rax * 4]
+    movss [rsp + 896], xmm0
+    mov eax, [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_NOTE_MASK]
+    or eax, [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_HOLD_MASK]
+    mov [rsp + 904], eax
 
 .perm_loop_fast:
     mov rax, [rsp + 800]
@@ -2909,12 +2974,10 @@ assp_step_parity_row_best_candidates_4:
     mov rdx, [rsp + 952]
     lea rdx, [rdx + rax * 4]
     mov [rsp + 936], rdx
-    mov rcx, [rsp + 792]
-    lea rcx, [rcx + rcx * 2]
-    lea rcx, [r12 + rcx * 4]
-    mov r8d, [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_NOTE_MASK]
-    or r8d, [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_HOLD_MASK]
+    mov rcx, [rsp + 880]
+    mov r8d, [rsp + 904]
     mov r10d, [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_HOLD_MASK]
+    ASSP_PROFILE_TSC_BEGIN
     test r10d, r10d
     jnz .transition_with_holds_fast
     cmp dword [rsp + 944], -1
@@ -2925,6 +2988,7 @@ assp_step_parity_row_best_candidates_4:
     mov [rsp + 32], r10
     lea r10, [rsp + 616]
     mov [rsp + 40], r10
+    mov rdx, [rsp + 936]
     call step_parity_result_state_no_holds_fast_4
     jmp .transition_done_fast
 
@@ -2944,12 +3008,20 @@ assp_step_parity_row_best_candidates_4:
     mov [rsp + 40], r10
     lea r10, [rsp + 616]
     mov [rsp + 48], r10
+    mov rdx, [rsp + 936]
     call step_parity_result_state_holds_fast_4
 
 .transition_done_fast:
+    ASSP_PROFILE_TSC_END profile_step_dp_transition_cycles
+    ASSP_PROFILE_INC profile_step_dp_transition_count
+    ASSP_PROFILE_TSC_BEGIN
     mov edx, [rsp + 616]
     mov [rsp + 808], edx
     mov r10, [rsp + 1320]
+%ifdef ASSP_STANDALONE_EXE
+    cmp dword [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_HOLD_MASK], 0
+    je .scan_key_direct_no_hold_fast
+%endif
     mov r9d, edx
     imul r9d, r9d, 09e3779b9h
     and r9d, 127
@@ -2964,7 +3036,44 @@ assp_step_parity_row_best_candidates_4:
     and r9d, 127
     jmp .scan_key_hash_fast
 
+%ifdef ASSP_STANDALONE_EXE
+.scan_key_direct_no_hold_fast:
+    mov r9d, edx
+    and r9d, 0fffh
+    mov ecx, edx
+    shr ecx, 12
+    and ecx, 0f000h
+    or r9d, ecx
+    lea r11, [rel step_parity_fast_key_entries]
+    mov eax, [rel step_parity_fast_key_generation]
+    mov ecx, [r11 + r9 * 4]
+    cmp cx, ax
+    jne .new_key_direct_no_hold_fast
+    shr ecx, 16
+    ASSP_PROFILE_TSC_END profile_step_dp_hash_cycles
+    ASSP_PROFILE_INC profile_step_dp_hash_probe_count
+    jmp .found_key_fast_after_profile
+
+.new_key_direct_no_hold_fast:
+    ASSP_PROFILE_TSC_END profile_step_dp_hash_cycles
+    ASSP_PROFILE_INC profile_step_dp_hash_probe_count
+    mov rcx, [rsp + 784]
+    cmp rcx, [rsp + 1336]
+    jae .fail_with_stack
+    mov [rsp + 816], rcx
+    lea r11, [rel step_parity_fast_key_entries]
+    mov eax, [rel step_parity_fast_key_generation]
+    mov edx, ecx
+    shl edx, 16
+    or edx, eax
+    mov [r11 + r9 * 4], edx
+    mov byte [rsp + 824], 2
+    jmp .score_candidate_fast
+%endif
+
 .new_key_hash_fast:
+    ASSP_PROFILE_TSC_END profile_step_dp_hash_cycles
+    ASSP_PROFILE_INC profile_step_dp_hash_probe_count
     mov rcx, [rsp + 784]
     cmp rcx, [rsp + 1336]
     jae .fail_with_stack
@@ -2974,17 +3083,21 @@ assp_step_parity_row_best_candidates_4:
     jmp .score_candidate_fast
 
 .found_key_fast:
+    ASSP_PROFILE_TSC_END profile_step_dp_hash_cycles
+    ASSP_PROFILE_INC profile_step_dp_hash_probe_count
+.found_key_fast_after_profile:
     mov [rsp + 816], rcx
     mov byte [rsp + 824], 0
     mov r11, [rsp + 1328]
-    mov rax, [rsp + 792]
-    movss xmm0, [r13 + rax * 4]
+    movss xmm0, [rsp + 896]
     comiss xmm0, [r11 + rcx * 4]
-    jae .skip_candidate_fast
+    jae .skip_candidate_fast_counted
 
 .score_candidate_fast:
     cmp byte [rsp + 900], 0
     je .score_candidate_full_fast
+    ASSP_PROFILE_INC profile_step_dp_score_clean_count
+    ASSP_PROFILE_TSC_BEGIN
     lea rdx, [rsp + 208]
     mov r8, [rsp + 936]
     mov r9d, [rsp + 944]
@@ -2994,20 +3107,19 @@ assp_step_parity_row_best_candidates_4:
     mov [rsp + 40], rax
     lea rax, [rsp + 908]
     mov [rsp + 48], rax
-    mov rax, [rsp + 792]
-    lea rax, [rax + rax * 2]
-    lea rcx, [r12 + rax * 4]
+    mov rcx, [rsp + 880]
     call step_parity_action_cost_single_tap_clean_4
     jmp .score_candidate_done_fast
 
 .score_candidate_full_fast:
+    ASSP_PROFILE_INC profile_step_dp_score_full_count
+    ASSP_PROFILE_TSC_BEGIN
     lea rdx, [rsp + 208]
     mov r8, [rsp + 936]
     lea r9, [rsp + 496]
     mov eax, [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_NOTE_COUNT]
     mov [rsp + 32], eax
-    mov eax, [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_NOTE_MASK]
-    or eax, [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_HOLD_MASK]
+    mov eax, [rsp + 904]
     mov [rsp + 40], eax
     mov eax, [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_HOLD_MASK]
     mov [rsp + 48], eax
@@ -3019,30 +3131,40 @@ assp_step_parity_row_best_candidates_4:
     mov [rsp + 72], eax
     mov rax, [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_ELAPSED_SECONDS]
     mov [rsp + 80], rax
-    mov rax, [rsp + 792]
-    lea rax, [rax + rax * 2]
-    lea rcx, [r12 + rax * 4]
+    mov rcx, [rsp + 880]
     call step_parity_action_cost_total_4
 
 .score_candidate_done_fast:
-    mov rax, [rsp + 792]
-    addss xmm0, [r13 + rax * 4]
+    ASSP_PROFILE_TSC_END profile_step_dp_score_cycles
+    addss xmm0, [rsp + 896]
 
     cmp byte [rsp + 824], 0
     jne .write_candidate_fast
     mov r11, [rsp + 1328]
     mov rcx, [rsp + 816]
     comiss xmm0, [r11 + rcx * 4]
-    jae .skip_candidate_fast
+    jae .skip_candidate_fast_counted
 
 .write_candidate_fast:
+    ASSP_PROFILE_TSC_BEGIN
+    ASSP_PROFILE_INC profile_step_dp_write_count
     mov rax, [rsp + 816]
     cmp byte [rsp + 824], 0
     je .copy_candidate_fast
+%ifdef ASSP_STANDALONE_EXE
+    cmp byte [rsp + 824], 2
+    je .commit_direct_candidate_fast
+%endif
     mov edx, [rsp + 828]
     mov byte [rsp + rdx + 960], 1
     mov [rsp + rdx + 1088], al
     inc qword [rsp + 784]
+    jmp .copy_candidate_fast
+
+%ifdef ASSP_STANDALONE_EXE
+.commit_direct_candidate_fast:
+    inc qword [rsp + 784]
+%endif
 
 .copy_candidate_fast:
     mov rdx, [rsp + 792]
@@ -3071,6 +3193,13 @@ assp_step_parity_row_best_candidates_4:
 
     mov r10, [rsp + 1328]
     movss [r10 + rax * 4], xmm0
+    ASSP_PROFILE_TSC_END profile_step_dp_copy_cycles
+%ifdef ASSP_PHASE_PROFILE
+    jmp .skip_candidate_fast
+%endif
+
+.skip_candidate_fast_counted:
+    ASSP_PROFILE_INC profile_step_dp_skip_count
 
 .skip_candidate_fast:
     inc qword [rsp + 800]
@@ -5157,6 +5286,14 @@ assp_step_parity_prepare_tap_rows_4:
     pop rsi
     pop rbx
     ret
+
+%ifdef ASSP_STANDALONE_EXE
+section .bss
+alignb 64
+step_parity_fast_key_generation resd 1
+alignb 64
+step_parity_fast_key_entries resd 65536
+%endif
 
 section .rdata
 cost_mine_weight dd 10000.0

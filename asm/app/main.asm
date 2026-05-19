@@ -92,6 +92,19 @@ extern assp_format_stream_tokens
 
 global start
 
+%ifdef ASSP_PHASE_PROFILE
+global profile_step_dp_transition_cycles
+global profile_step_dp_hash_cycles
+global profile_step_dp_score_cycles
+global profile_step_dp_copy_cycles
+global profile_step_dp_transition_count
+global profile_step_dp_hash_probe_count
+global profile_step_dp_score_clean_count
+global profile_step_dp_score_full_count
+global profile_step_dp_write_count
+global profile_step_dp_skip_count
+%endif
+
 %define FILE_BUFFER_CAP 8388608
 %define DENSITY_CAP 131072
 %define TEXT_BUFFER_CAP 1048576
@@ -725,6 +738,36 @@ print_profile_summary:
     call print_field
     lea rcx, [label_profile_step_fallback]
     mov rdx, [profile_step_fallback_ticks]
+    call print_field
+    lea rcx, [label_profile_step_dp_transition_cycles]
+    mov rdx, [profile_step_dp_transition_cycles]
+    call print_field
+    lea rcx, [label_profile_step_dp_hash_cycles]
+    mov rdx, [profile_step_dp_hash_cycles]
+    call print_field
+    lea rcx, [label_profile_step_dp_score_cycles]
+    mov rdx, [profile_step_dp_score_cycles]
+    call print_field
+    lea rcx, [label_profile_step_dp_copy_cycles]
+    mov rdx, [profile_step_dp_copy_cycles]
+    call print_field
+    lea rcx, [label_profile_step_dp_transition_count]
+    mov rdx, [profile_step_dp_transition_count]
+    call print_field
+    lea rcx, [label_profile_step_dp_hash_probe_count]
+    mov rdx, [profile_step_dp_hash_probe_count]
+    call print_field
+    lea rcx, [label_profile_step_dp_score_clean_count]
+    mov rdx, [profile_step_dp_score_clean_count]
+    call print_field
+    lea rcx, [label_profile_step_dp_score_full_count]
+    mov rdx, [profile_step_dp_score_full_count]
+    call print_field
+    lea rcx, [label_profile_step_dp_write_count]
+    mov rdx, [profile_step_dp_write_count]
+    call print_field
+    lea rcx, [label_profile_step_dp_skip_count]
+    mov rdx, [profile_step_dp_skip_count]
     call print_field
     add rsp, 40
     ret
@@ -6887,6 +6930,16 @@ label_profile_step_prepare_rows db "profile_step_prepare_rows_ticks: ", 0
 label_profile_step_dp_fast db "profile_step_dp_fast_ticks: ", 0
 label_profile_step_dp_full db "profile_step_dp_full_ticks: ", 0
 label_profile_step_fallback db "profile_step_fallback_ticks: ", 0
+label_profile_step_dp_transition_cycles db "profile_step_dp_transition_cycles: ", 0
+label_profile_step_dp_hash_cycles db "profile_step_dp_hash_cycles: ", 0
+label_profile_step_dp_score_cycles db "profile_step_dp_score_cycles: ", 0
+label_profile_step_dp_copy_cycles db "profile_step_dp_copy_cycles: ", 0
+label_profile_step_dp_transition_count db "profile_step_dp_transition_count: ", 0
+label_profile_step_dp_hash_probe_count db "profile_step_dp_hash_probe_count: ", 0
+label_profile_step_dp_score_clean_count db "profile_step_dp_score_clean_count: ", 0
+label_profile_step_dp_score_full_count db "profile_step_dp_score_full_count: ", 0
+label_profile_step_dp_write_count db "profile_step_dp_write_count: ", 0
+label_profile_step_dp_skip_count db "profile_step_dp_skip_count: ", 0
 space db " ", 0
 comma db ",", 0
 equals db "=", 0
@@ -6968,6 +7021,16 @@ profile_step_prepare_rows_ticks resq 1
 profile_step_dp_fast_ticks resq 1
 profile_step_dp_full_ticks resq 1
 profile_step_fallback_ticks resq 1
+profile_step_dp_transition_cycles resq 1
+profile_step_dp_hash_cycles resq 1
+profile_step_dp_score_cycles resq 1
+profile_step_dp_copy_cycles resq 1
+profile_step_dp_transition_count resq 1
+profile_step_dp_hash_probe_count resq 1
+profile_step_dp_score_clean_count resq 1
+profile_step_dp_score_full_count resq 1
+profile_step_dp_write_count resq 1
+profile_step_dp_skip_count resq 1
 profile_counters_end:
 chart_info resb ASSP_CHART_INFO_SIZE
 bpms_slice resb ASSP_BYTE_SLICE_SIZE

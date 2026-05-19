@@ -92,8 +92,11 @@ for ($run = 1; $run -le $Runs; $run++) {
 
 $freq = [double]$profiles[0].frequency
 $totalAvg = ($profiles | ForEach-Object { $_.total_ticks } | Measure-Object -Average).Average
-$keys = $profiles[0].PSObject.Properties.Name |
+$allKeys = $profiles[0].PSObject.Properties.Name |
     Where-Object { $_ -notin @("frequency", "total_ticks") -and $_ -notmatch '^write_' }
+$keys = $allKeys | Where-Object { $_ -notmatch '_(cycles|count)$' }
+$cycleKeys = $allKeys | Where-Object { $_ -match '_cycles$' }
+$countKeys = $allKeys | Where-Object { $_ -match '_count$' }
 
 $rows = foreach ($key in $keys) {
     $avg = ($profiles | ForEach-Object { $_.$key } | Measure-Object -Average).Average
@@ -117,3 +120,34 @@ $writeBytes = ($profiles | ForEach-Object { $_.write_bytes } | Measure-Object -A
 Write-Host ("write_calls avg: {0:N0}" -f $writeCalls)
 Write-Host ("write_bytes avg: {0:N0}" -f $writeBytes)
 Write-Host ("total avg ms: {0:N3}" -f ($totalAvg / $freq * 1000.0))
+
+if ($cycleKeys.Count -gt 0) {
+    $cycleRows = foreach ($key in $cycleKeys) {
+        $avg = ($profiles | ForEach-Object { $_.$key } | Measure-Object -Average).Average
+        [pscustomobject]@{
+            Counter = $key
+            Cycles = $avg
+        }
+    }
+    $cycleTotal = ($cycleRows | ForEach-Object { $_.Cycles } | Measure-Object -Sum).Sum
+    Write-Host ""
+    $cycleRows |
+        Sort-Object Cycles -Descending |
+        Format-Table Counter,
+            @{n = "cycles"; e = { "{0:N0}" -f $_.Cycles }},
+            @{n = "pct"; e = { if ($cycleTotal -gt 0) { "{0:N2}" -f ($_.Cycles / $cycleTotal * 100.0) } else { "0.00" } }} -AutoSize
+}
+
+if ($countKeys.Count -gt 0) {
+    Write-Host ""
+    $countRows = foreach ($key in ($countKeys | Sort-Object)) {
+        $avg = ($profiles | ForEach-Object { $_.$key } | Measure-Object -Average).Average
+        [pscustomobject]@{
+            Counter = $key
+            Average = $avg
+        }
+    }
+    $countRows |
+        Format-Table Counter,
+            @{n = "avg"; e = { "{0:N0}" -f $_.Average }} -AutoSize
+}
