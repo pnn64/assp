@@ -21,7 +21,10 @@ extern assp_count_gimmick_scroll_segments
 extern assp_count_gimmick_speed_segments
 extern assp_count_note_stats_4
 extern assp_count_note_stats_8
+extern assp_collect_bitmasks_minimized_4
+extern assp_count_anchors_bitmasks_4
 extern assp_count_anchors_minimized_4
+extern assp_count_default_patterns_bitmasks_4
 extern assp_count_default_patterns_minimized_4
 extern assp_count_facing_steps_minimized_4
 extern assp_pattern_percentages_centi
@@ -1547,6 +1550,7 @@ prepare_equally_spaced:
 prepare_default_patterns:
     sub rsp, 40
 
+    mov qword [pattern_bitmask_count], 0
     xor r8d, r8d
     lea r9, [default_pattern_counts]
 .zero_loop:
@@ -1562,8 +1566,19 @@ prepare_default_patterns:
 
     lea rcx, [minimized_buffer]
     mov rdx, [minimized_chart_len]
+    lea r8, [pattern_bitmask_buffer]
+    mov r9d, PARITY_ROW_CAP
+    call assp_collect_bitmasks_minimized_4
+    cmp rax, ASSP_NOT_FOUND
+    je .fail
+    cmp rax, PARITY_ROW_CAP
+    ja .fail
+    mov [pattern_bitmask_count], rax
+
+    lea rcx, [pattern_bitmask_buffer]
+    mov rdx, [pattern_bitmask_count]
     lea r8, [default_pattern_counts]
-    call assp_count_default_patterns_minimized_4
+    call assp_count_default_patterns_bitmasks_4
     test eax, eax
     jz .fail
 
@@ -1589,10 +1604,10 @@ prepare_anchors:
     cmp qword [chart_lanes], 4
     jne .success
 
-    lea rcx, [minimized_buffer]
-    mov rdx, [minimized_chart_len]
+    lea rcx, [pattern_bitmask_buffer]
+    mov rdx, [pattern_bitmask_count]
     lea r8, [anchor_counts]
-    call assp_count_anchors_minimized_4
+    call assp_count_anchors_bitmasks_4
     test eax, eax
     jz .fail
 
@@ -7112,6 +7127,7 @@ warp_report_count resq 1
 speed_report_count resq 1
 scroll_report_count resq 1
 minimized_chart_len resq 1
+pattern_bitmask_count resq 1
 parity_source_row_count resq 1
 parity_prepared_row_count resq 1
 nps_count resq 1
@@ -7186,6 +7202,7 @@ equally_spaced_buffer resb DENSITY_CAP
 default_pattern_counts resd ASSP_PATTERN_COUNT
 anchor_counts resd 4
 facing_counts resd 2
+pattern_bitmask_buffer resb PARITY_ROW_CAP
 parity_prepared_rows resb ASSP_STEP_PARITY_PREPARED_ROWS4_SIZE
 parity_workspace resb ASSP_STEP_PARITY_WORKSPACE4_SIZE
 alignb 16

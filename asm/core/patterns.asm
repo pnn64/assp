@@ -2,12 +2,171 @@ default rel
 %include "assp.inc"
 
 global assp_count_anchors_minimized_4
+global assp_collect_bitmasks_minimized_4
+global assp_count_anchors_bitmasks_4
 global assp_count_facing_steps_minimized_4
 global assp_count_basic_patterns_minimized_4
 global assp_count_default_patterns_minimized_4
+global assp_count_default_patterns_bitmasks_4
 global assp_pattern_percentages_centi
 
 section .text
+
+; rcx = minimized 4-panel note-data bytes, rdx = len, r8 = out bitmasks,
+; r9 = output capacity. Returns count or ASSP_NOT_FOUND on failure.
+assp_collect_bitmasks_minimized_4:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    sub rsp, 32
+
+    test r8, r8
+    jz .collect_fail
+    test rdx, rdx
+    jz .collect_empty
+    test rcx, rcx
+    jz .collect_fail
+
+    mov rsi, rcx
+    lea rdi, [rcx + rdx]
+    mov rbx, r8
+    mov r12, r9
+    xor r13d, r13d
+
+.collect_line_loop:
+    cmp rsi, rdi
+    jae .collect_success
+
+    mov r10, rsi
+.collect_find_line_end:
+    cmp r10, rdi
+    jae .collect_line_end_found
+    cmp byte [r10], 10
+    je .collect_line_end_found
+    inc r10
+    jmp .collect_find_line_end
+
+.collect_line_end_found:
+    mov r11, r10
+    cmp r11, rsi
+    jbe .collect_trim_cr_done
+    cmp byte [r11 - 1], 13
+    jne .collect_trim_cr_done
+    dec r11
+.collect_trim_cr_done:
+    cmp r10, rdi
+    jae .collect_next_is_end
+    inc r10
+.collect_next_is_end:
+    mov [rsp], r10
+
+    cmp rsi, r11
+    jae .collect_line_done
+    mov al, [rsi]
+    cmp al, ','
+    je .collect_line_done
+    cmp al, ';'
+    je .collect_success
+
+    lea rax, [rsi + 4]
+    cmp rax, r11
+    ja .collect_line_done
+
+    cmp r13, r12
+    jae .collect_fail
+
+    lea r11, [rel note_active_table]
+    movzx eax, byte [rsi + 0]
+    movzx ecx, byte [r11 + rax]
+    movzx eax, byte [rsi + 1]
+    movzx eax, byte [r11 + rax]
+    lea ecx, [ecx + eax * 2]
+    movzx eax, byte [rsi + 2]
+    movzx eax, byte [r11 + rax]
+    shl eax, 2
+    or ecx, eax
+    movzx eax, byte [rsi + 3]
+    movzx eax, byte [r11 + rax]
+    shl eax, 3
+    or ecx, eax
+    mov [rbx + r13], cl
+    inc r13
+
+.collect_line_done:
+    mov rsi, [rsp]
+    jmp .collect_line_loop
+
+.collect_empty:
+    xor eax, eax
+    jmp .collect_done
+
+.collect_success:
+    mov rax, r13
+    jmp .collect_done
+
+.collect_fail:
+    mov rax, ASSP_NOT_FOUND
+
+.collect_done:
+    add rsp, 32
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
+; rcx = bitmask bytes, rdx = count, r8 = u32[4] output.
+; out[0..4] = left/down/up/right anchors. eax = 1 on success.
+assp_count_anchors_bitmasks_4:
+    test r8, r8
+    jz .anchors_bits_fail
+    mov dword [r8 + 0], 0
+    mov dword [r8 + 4], 0
+    mov dword [r8 + 8], 0
+    mov dword [r8 + 12], 0
+    test rdx, rdx
+    jz .anchors_bits_success
+    test rcx, rcx
+    jz .anchors_bits_fail
+    cmp rdx, 5
+    jb .anchors_bits_success
+
+    xor r9d, r9d
+    lea r10, [rdx - 4]
+.anchors_bits_loop:
+    cmp r9, r10
+    jae .anchors_bits_success
+    movzx eax, byte [rcx + r9]
+    and al, [rcx + r9 + 2]
+    and al, [rcx + r9 + 4]
+    test al, 1
+    jz .anchors_bits_down
+    inc dword [r8 + 0]
+.anchors_bits_down:
+    test al, 2
+    jz .anchors_bits_up
+    inc dword [r8 + 4]
+.anchors_bits_up:
+    test al, 4
+    jz .anchors_bits_right
+    inc dword [r8 + 8]
+.anchors_bits_right:
+    test al, 8
+    jz .anchors_bits_next
+    inc dword [r8 + 12]
+.anchors_bits_next:
+    inc r9
+    jmp .anchors_bits_loop
+
+.anchors_bits_success:
+    mov eax, ASSP_TRUE
+    ret
+.anchors_bits_fail:
+    xor eax, eax
+    ret
 
 ; rcx = minimized 4-panel note-data bytes, rdx = len, r8 = u32[4] output.
 ; out[0..4] = left/down/up/right anchors. eax = 1 on success, 0 on failure.
@@ -791,6 +950,96 @@ assp_count_basic_patterns_minimized_4:
 
 .basic_done:
     add rsp, 32
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
+; rcx = minimized 4-panel note-data bytes, rdx = len, r8 = u32[62] output.
+; Counts RSSP's full default PatternVariant set. eax = 1 on success.
+; rcx = bitmask bytes, rdx = count, r8 = u32[62] output.
+; Counts RSSP's full default PatternVariant set. eax = 1 on success.
+assp_count_default_patterns_bitmasks_4:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 32
+
+    test r8, r8
+    jz .bits_default_fail
+    mov rbx, r8
+
+    xor eax, eax
+.bits_default_zero_loop:
+    cmp eax, ASSP_PATTERN_COUNT
+    jae .bits_default_zero_done
+    mov dword [rbx + rax * 4], 0
+    inc eax
+    jmp .bits_default_zero_loop
+
+.bits_default_zero_done:
+    test rdx, rdx
+    jz .bits_default_success
+    test rcx, rcx
+    jz .bits_default_fail
+
+    mov rsi, rcx
+    lea rdi, [rcx + rdx]
+    xor r12d, r12d
+    xor r13d, r13d
+
+.bits_default_loop:
+    cmp rsi, rdi
+    jae .bits_default_success
+
+    movzx ecx, byte [rsi]
+    shl r13, 4
+    or r13, rcx
+    inc r12
+
+    lea r14, [default_pattern_table]
+    lea r15, [default_pattern_table_end]
+.bits_default_pattern_loop:
+    cmp r14, r15
+    jae .bits_default_next
+    movzx eax, byte [r14 + 1]
+    cmp r12, rax
+    jb .bits_default_next_pattern
+
+    mov r11, r13
+    lea r10, [default_pattern_len_masks]
+    and r11, [r10 + rax * 8]
+    cmp r11, [r14 + 4]
+    jne .bits_default_next_pattern
+
+    movzx eax, byte [r14]
+    inc dword [rbx + rax * 4]
+
+.bits_default_next_pattern:
+    add r14, 16
+    jmp .bits_default_pattern_loop
+
+.bits_default_next:
+    inc rsi
+    jmp .bits_default_loop
+
+.bits_default_success:
+    mov eax, ASSP_TRUE
+    jmp .bits_default_done
+
+.bits_default_fail:
+    xor eax, eax
+
+.bits_default_done:
+    add rsp, 32
+    pop r15
+    pop r14
+    pop r13
     pop r12
     pop rdi
     pop rsi
