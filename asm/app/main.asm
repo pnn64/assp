@@ -1464,15 +1464,18 @@ prepare_nps:
     or rax, [warp_segment_count]
     jnz .median_generic
     cmp qword [bpm_segment_count], 1
-    jne .median_generic
+    jne .median_bpm_only
     call prepare_fixed_median_nps_f32
     mov [median_nps_centi], rax
     jmp .success
 
+.median_bpm_only:
+    call prepare_bpm_median_nps_f32
+    mov [median_nps_centi], rax
+    jmp .success
+
 .median_generic:
-    lea rcx, [nps_buffer]
-    mov rdx, [nps_count]
-    call assp_nps_median_centi
+    call prepare_events_median_nps_f32
     mov [median_nps_centi], rax
 
 .success:
@@ -3802,6 +3805,459 @@ add_rows_to_duration_f32:
     divss xmm0, [rel app_const_48_f32]
     divss xmm0, xmm6
     addss xmm7, xmm0
+    ret
+
+prepare_bpm_median_nps_f32:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 32
+
+    mov rdi, [measure_count]
+    test rdi, rdi
+    jz .zero
+    mov r12, [bpm_segment_count]
+    test r12, r12
+    jz .zero
+
+    lea rbx, [bpm_segment_buffer]
+    mov rax, [rbx + ASSP_BPM_SEGMENT_BPM_MILLI]
+    call bpm_milli_to_bps_f32
+    movaps xmm6, xmm0
+
+    cvtsi2ss xmm7, qword [offset_us]
+    divss xmm7, [rel app_const_million_f32]
+    xorps xmm0, xmm0
+    subss xmm0, xmm7
+    movaps xmm7, xmm0
+    cvtss2sd xmm5, xmm7
+
+    lea r14, [density_buffer]
+    xor esi, esi
+    xor r13d, r13d
+    xor r15d, r15d
+
+.fill_loop:
+    cmp r15, rdi
+    jae .median
+
+    mov r11, r15
+    inc r11
+    imul r11, 192
+
+    xor esi, esi
+    xor r13d, r13d
+    mov rax, [bpm_segment_buffer + ASSP_BPM_SEGMENT_BPM_MILLI]
+    call bpm_milli_to_bps_f32
+    movaps xmm6, xmm0
+
+    cvtsi2ss xmm7, qword [offset_us]
+    divss xmm7, [rel app_const_million_f32]
+    xorps xmm0, xmm0
+    subss xmm0, xmm7
+    movaps xmm7, xmm0
+
+.advance_loop:
+    cmp rsi, r12
+    jae .tail
+    mov r10, rsi
+    shl r10, 4
+    mov rcx, [rbx + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    call milli_to_row48_f32_even
+    cmp rax, r11
+    jg .tail
+    cmp rax, r13
+    jle .set_bpm
+    mov rcx, rax
+    sub rcx, r13
+    call add_rows_to_duration_f32
+    mov r13, rax
+
+.set_bpm:
+    mov r10, rsi
+    shl r10, 4
+    mov rax, [rbx + r10 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    call bpm_milli_to_bps_f32
+    movaps xmm6, xmm0
+    inc rsi
+    jmp .advance_loop
+
+.tail:
+    cmp r11, r13
+    jle .have_end
+    mov rcx, r11
+    sub rcx, r13
+    call add_rows_to_duration_f32
+    mov r13, r11
+
+.have_end:
+    cvtss2sd xmm1, xmm7
+    movapd xmm2, xmm1
+    subsd xmm2, xmm5
+    movapd xmm5, xmm1
+
+    xorpd xmm3, xmm3
+    mov eax, [r14 + r15 * 4]
+    test eax, eax
+    jz .store
+    ucomisd xmm2, [rel app_const_0_12_f64]
+    jbe .store
+    cvtsi2sd xmm3, rax
+    divsd xmm3, xmm2
+
+.store:
+    lea rdx, [nps_raw_buffer]
+    movsd [rdx + r15 * 8], xmm3
+    inc r15
+    jmp .fill_loop
+
+.median:
+    mov rax, rdi
+    shr rax, 1
+    lea rsi, [nps_raw_buffer]
+    test rdi, 1
+    jz .even
+
+.odd:
+    mov r8, rax
+    call kth_nps_f64_value
+    jmp .round
+
+.even:
+    mov r8, rax
+    dec r8
+    call kth_nps_f64_value
+    movsd [rsp], xmm0
+    mov rax, rdi
+    shr rax, 1
+    mov r8, rax
+    call kth_nps_f64_value
+    addsd xmm0, [rsp]
+    mulsd xmm0, [rel app_const_half_f64]
+
+.round:
+    mulsd xmm0, [rel app_const_100_f64]
+    cvtsd2si rax, xmm0
+    jmp .done
+
+.zero:
+    xor eax, eax
+
+.done:
+    add rsp, 32
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
+%define RAW_EVT_BPM_IDX 0
+%define RAW_EVT_STOP_IDX 8
+%define RAW_EVT_DELAY_IDX 16
+%define RAW_EVT_WARP_IDX 24
+%define RAW_EVT_IS_WARPING 32
+%define RAW_EVT_WARP_DEST_ROW 40
+%define RAW_EVT_LAST_ROW 48
+%define RAW_EVT_MEASURE_IDX 56
+%define RAW_EVT_BEST_ROW 64
+%define RAW_EVT_BEST_TYPE 72
+%define RAW_EVT_TARGET_ROW 80
+%define RAW_EVT_MEDIAN_TMP 88
+%define RAW_EVT_LOCAL_SIZE 112
+
+prepare_events_median_nps_f32:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, RAW_EVT_LOCAL_SIZE
+
+    mov rdi, [measure_count]
+    test rdi, rdi
+    jz .zero
+
+    lea rbx, [bpm_segment_buffer]
+    lea r12, [stop_segment_buffer]
+    lea r13, [delay_segment_buffer]
+    lea r14, [warp_segment_buffer]
+    lea r15, [density_buffer]
+
+    mov qword [rsp + RAW_EVT_BPM_IDX], 0
+    mov qword [rsp + RAW_EVT_STOP_IDX], 0
+    mov qword [rsp + RAW_EVT_DELAY_IDX], 0
+    mov qword [rsp + RAW_EVT_WARP_IDX], 0
+    mov qword [rsp + RAW_EVT_IS_WARPING], 0
+    mov qword [rsp + RAW_EVT_WARP_DEST_ROW], 0
+    mov qword [rsp + RAW_EVT_LAST_ROW], 0
+    mov qword [rsp + RAW_EVT_MEASURE_IDX], 0
+
+    mov rax, [bpm_segment_buffer + ASSP_BPM_SEGMENT_BPM_MILLI]
+    call bpm_milli_to_bps_f32
+    movaps xmm6, xmm0
+
+    cvtsi2ss xmm7, qword [offset_us]
+    divss xmm7, [rel app_const_million_f32]
+    xorps xmm0, xmm0
+    subss xmm0, xmm7
+    movaps xmm7, xmm0
+    cvtss2sd xmm5, xmm7
+
+.fill_loop:
+    mov rax, [rsp + RAW_EVT_MEASURE_IDX]
+    cmp rax, rdi
+    jae .median
+    inc rax
+    imul rax, 192
+    mov [rsp + RAW_EVT_TARGET_ROW], rax
+
+    mov qword [rsp + RAW_EVT_BPM_IDX], 0
+    mov qword [rsp + RAW_EVT_STOP_IDX], 0
+    mov qword [rsp + RAW_EVT_DELAY_IDX], 0
+    mov qword [rsp + RAW_EVT_WARP_IDX], 0
+    mov qword [rsp + RAW_EVT_IS_WARPING], 0
+    mov qword [rsp + RAW_EVT_WARP_DEST_ROW], 0
+    mov qword [rsp + RAW_EVT_LAST_ROW], 0
+
+    mov rax, [bpm_segment_buffer + ASSP_BPM_SEGMENT_BPM_MILLI]
+    call bpm_milli_to_bps_f32
+    movaps xmm6, xmm0
+
+    cvtsi2ss xmm7, qword [offset_us]
+    divss xmm7, [rel app_const_million_f32]
+    xorps xmm0, xmm0
+    subss xmm0, xmm7
+    movaps xmm7, xmm0
+
+.select_loop:
+    mov rax, 0x7fffffffffffffff
+    mov [rsp + RAW_EVT_BEST_ROW], rax
+    mov qword [rsp + RAW_EVT_BEST_TYPE], 0
+
+    cmp qword [rsp + RAW_EVT_IS_WARPING], 0
+    je .check_bpm
+    mov r8, [rsp + RAW_EVT_WARP_DEST_ROW]
+    mov [rsp + RAW_EVT_BEST_ROW], r8
+    mov qword [rsp + RAW_EVT_BEST_TYPE], 1
+
+.check_bpm:
+    mov rax, [rsp + RAW_EVT_BPM_IDX]
+    cmp rax, [bpm_segment_count]
+    jae .check_delay
+    mov r10, rax
+    shl r10, 4
+    mov rcx, [rbx + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    call milli_to_row48_f32_even
+    cmp rax, [rsp + RAW_EVT_BEST_ROW]
+    jge .check_delay
+    mov [rsp + RAW_EVT_BEST_ROW], rax
+    mov qword [rsp + RAW_EVT_BEST_TYPE], 2
+
+.check_delay:
+    mov rax, [rsp + RAW_EVT_DELAY_IDX]
+    cmp rax, [delay_segment_count]
+    jae .check_marker
+    mov r10, rax
+    shl r10, 4
+    mov rcx, [r13 + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    call milli_to_row48_f32_even
+    cmp rax, [rsp + RAW_EVT_BEST_ROW]
+    jge .check_marker
+    mov [rsp + RAW_EVT_BEST_ROW], rax
+    mov qword [rsp + RAW_EVT_BEST_TYPE], 3
+
+.check_marker:
+    mov rax, [rsp + RAW_EVT_TARGET_ROW]
+    cmp rax, [rsp + RAW_EVT_BEST_ROW]
+    jge .check_stop
+    mov [rsp + RAW_EVT_BEST_ROW], rax
+    mov qword [rsp + RAW_EVT_BEST_TYPE], 4
+
+.check_stop:
+    mov rax, [rsp + RAW_EVT_STOP_IDX]
+    cmp rax, [stop_segment_count]
+    jae .check_warp
+    mov r10, rax
+    shl r10, 4
+    mov rcx, [r12 + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    call milli_to_row48_f32_even
+    cmp rax, [rsp + RAW_EVT_BEST_ROW]
+    jge .check_warp
+    mov [rsp + RAW_EVT_BEST_ROW], rax
+    mov qword [rsp + RAW_EVT_BEST_TYPE], 5
+
+.check_warp:
+    mov rax, [rsp + RAW_EVT_WARP_IDX]
+    cmp rax, [warp_segment_count]
+    jae .apply_selected
+    mov r10, rax
+    shl r10, 4
+    mov rcx, [r14 + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    call milli_to_row48_f32_even
+    cmp rax, [rsp + RAW_EVT_BEST_ROW]
+    jge .apply_selected
+    mov [rsp + RAW_EVT_BEST_ROW], rax
+    mov qword [rsp + RAW_EVT_BEST_TYPE], 6
+
+.apply_selected:
+    cmp qword [rsp + RAW_EVT_BEST_TYPE], 0
+    je .store_measure
+
+    mov r8, [rsp + RAW_EVT_BEST_ROW]
+    cmp qword [rsp + RAW_EVT_IS_WARPING], 0
+    jne .dispatch_event
+    mov r9, [rsp + RAW_EVT_LAST_ROW]
+    cmp r8, r9
+    jle .dispatch_event
+    mov rcx, r8
+    sub rcx, r9
+    call add_rows_to_duration_f32
+
+.dispatch_event:
+    mov rax, [rsp + RAW_EVT_BEST_TYPE]
+    cmp rax, 4
+    je .store_measure
+    cmp rax, 1
+    je .apply_warp_dest
+    cmp rax, 2
+    je .apply_bpm
+    cmp rax, 3
+    je .apply_delay
+    cmp rax, 5
+    je .apply_stop
+    jmp .apply_warp
+
+.apply_warp_dest:
+    mov qword [rsp + RAW_EVT_IS_WARPING], 0
+    jmp .event_done
+
+.apply_bpm:
+    mov rax, [rsp + RAW_EVT_BPM_IDX]
+    mov r10, rax
+    shl r10, 4
+    mov rax, [rbx + r10 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    call bpm_milli_to_bps_f32
+    movaps xmm6, xmm0
+    inc qword [rsp + RAW_EVT_BPM_IDX]
+    jmp .event_done
+
+.apply_delay:
+    mov rax, [rsp + RAW_EVT_DELAY_IDX]
+    mov r10, rax
+    shl r10, 4
+    mov rax, [r13 + r10 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    cvtsi2ss xmm0, rax
+    divss xmm0, [rel app_const_million_f32]
+    addss xmm7, xmm0
+    inc qword [rsp + RAW_EVT_DELAY_IDX]
+    jmp .event_done
+
+.apply_stop:
+    mov rax, [rsp + RAW_EVT_STOP_IDX]
+    mov r10, rax
+    shl r10, 4
+    mov rax, [r12 + r10 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    cvtsi2ss xmm0, rax
+    divss xmm0, [rel app_const_million_f32]
+    addss xmm7, xmm0
+    inc qword [rsp + RAW_EVT_STOP_IDX]
+    jmp .event_done
+
+.apply_warp:
+    mov rax, [rsp + RAW_EVT_WARP_IDX]
+    mov r10, rax
+    shl r10, 4
+    mov rcx, [r14 + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    add rcx, [r14 + r10 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    call milli_to_row48_f32_even
+    cmp rax, [rsp + RAW_EVT_WARP_DEST_ROW]
+    jle .warp_dest_ready
+    mov [rsp + RAW_EVT_WARP_DEST_ROW], rax
+.warp_dest_ready:
+    mov qword [rsp + RAW_EVT_IS_WARPING], 1
+    inc qword [rsp + RAW_EVT_WARP_IDX]
+
+.event_done:
+    mov rax, [rsp + RAW_EVT_BEST_ROW]
+    mov [rsp + RAW_EVT_LAST_ROW], rax
+    jmp .select_loop
+
+.store_measure:
+    mov rax, [rsp + RAW_EVT_BEST_ROW]
+    mov [rsp + RAW_EVT_LAST_ROW], rax
+
+    cvtss2sd xmm1, xmm7
+    movapd xmm2, xmm1
+    subsd xmm2, xmm5
+    movapd xmm5, xmm1
+
+    xorpd xmm3, xmm3
+    mov rax, [rsp + RAW_EVT_MEASURE_IDX]
+    mov r11d, [r15 + rax * 4]
+    test r11d, r11d
+    jz .store_raw
+    ucomisd xmm2, [rel app_const_0_12_f64]
+    jbe .store_raw
+    cvtsi2sd xmm3, r11
+    divsd xmm3, xmm2
+
+.store_raw:
+    lea rdx, [nps_raw_buffer]
+    mov rax, [rsp + RAW_EVT_MEASURE_IDX]
+    movsd [rdx + rax * 8], xmm3
+    inc qword [rsp + RAW_EVT_MEASURE_IDX]
+    jmp .fill_loop
+
+.median:
+    mov rax, rdi
+    shr rax, 1
+    lea rsi, [nps_raw_buffer]
+    test rdi, 1
+    jz .even
+
+.odd:
+    mov r8, rax
+    call kth_nps_f64_value
+    jmp .round
+
+.even:
+    mov r8, rax
+    dec r8
+    call kth_nps_f64_value
+    movsd [rsp + RAW_EVT_MEDIAN_TMP], xmm0
+    mov rax, rdi
+    shr rax, 1
+    mov r8, rax
+    call kth_nps_f64_value
+    addsd xmm0, [rsp + RAW_EVT_MEDIAN_TMP]
+    mulsd xmm0, [rel app_const_half_f64]
+
+.round:
+    mulsd xmm0, [rel app_const_100_f64]
+    cvtsd2si rax, xmm0
+    jmp .done
+
+.zero:
+    xor eax, eax
+
+.done:
+    add rsp, RAW_EVT_LOCAL_SIZE
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
     ret
 
 prepare_fixed_median_nps_f32:
