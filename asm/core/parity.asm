@@ -1543,6 +1543,12 @@ orientation_pair_avg_4:
     add eax, ecx
 %endmacro
 
+%macro ASSP_PAIR_IDX_NORM_EAX 2
+    mov eax, dword %1
+    lea eax, [rax + rax * 4]
+    add eax, dword %2
+%endmacro
+
 ; Internal row-DP hot path. Same inputs as assp_step_parity_action_cost_4
 ; except there is no output breakdown pointer; returns total cost in xmm0.
 step_parity_action_cost_total_4:
@@ -2191,7 +2197,8 @@ step_parity_action_cost_total_4:
 
 ; Internal hot scorer for rows with one tap, no holds, no mines, no sides.
 ; rcx = initial, rdx = result, r8 = placement[4], r9d = active column,
-; stack arg 5 = prev row has live hold, stack arg 6 = elapsed seconds f32 ptr.
+; stack arg 5 = prev row has live hold, stack arg 6 = elapsed seconds f32 ptr,
+; stack arg 7 = row-local big movement cost table.
 step_parity_action_cost_single_tap_clean_4:
     sub rsp, 96
     mov [rsp + 64], rcx
@@ -2293,34 +2300,55 @@ step_parity_action_cost_single_tap_clean_4:
 .single_store_result_rt:
     mov [rsp + 36], ecx
 
+    lea r11, [rel step_parity_col_norm]
+    movzx eax, byte [rsp + 24]
+    movzx eax, byte [r11 + rax]
+    mov [rsp + 24], eax
+    movzx eax, byte [rsp + 28]
+    movzx eax, byte [r11 + rax]
+    mov [rsp + 28], eax
+    movzx eax, byte [rsp + 32]
+    movzx eax, byte [r11 + rax]
+    mov [rsp + 32], eax
+    movzx eax, byte [rsp + 36]
+    movzx eax, byte [r11 + rax]
+    mov [rsp + 36], eax
+
     xorps xmm1, xmm1
-    ASSP_PAIR_IDX_EAX [rsp + 24], [rsp + 32]
+    ASSP_PAIR_IDX_NORM_EAX [rsp + 24], [rsp + 32]
     lea r11, [rel dance_single_facing_x4]
     addss xmm1, [r11 + rax * 4]
-    ASSP_PAIR_IDX_EAX [rsp + 28], [rsp + 36]
+    ASSP_PAIR_IDX_NORM_EAX [rsp + 28], [rsp + 36]
     lea r11, [rel dance_single_facing_x4]
     addss xmm1, [r11 + rax * 4]
-    ASSP_PAIR_IDX_EAX [rsp + 24], [rsp + 28]
+    ASSP_PAIR_IDX_NORM_EAX [rsp + 24], [rsp + 28]
     lea r11, [rel dance_single_facing_y4]
     addss xmm1, [r11 + rax * 4]
-    ASSP_PAIR_IDX_EAX [rsp + 32], [rsp + 36]
+    ASSP_PAIR_IDX_NORM_EAX [rsp + 32], [rsp + 36]
     lea r11, [rel dance_single_facing_y4]
     addss xmm1, [r11 + rax * 4]
     mulss xmm1, [rel cost_facing_weight]
     addss xmm0, xmm1
 
 .single_spin:
-    ASSP_PAIR_IDX_EAX [rsp + 24], [rsp + 28]
+    ASSP_PAIR_IDX_NORM_EAX [rsp + 24], [rsp + 28]
+    mov [rsp + 56], eax
     lea r11, [rel dance_single_pair_avg_x2]
     movzx ecx, byte [r11 + rax]
     mov [rsp + 40], ecx
-    lea r11, [rel dance_single_pair_avg_y2]
-    movzx ecx, byte [r11 + rax]
-    mov [rsp + 44], ecx
-    ASSP_PAIR_IDX_EAX [rsp + 32], [rsp + 36]
+    ASSP_PAIR_IDX_NORM_EAX [rsp + 32], [rsp + 36]
+    mov [rsp + 60], eax
     lea r11, [rel dance_single_pair_avg_x2]
     movzx ecx, byte [r11 + rax]
     mov [rsp + 48], ecx
+    cmp ecx, [rsp + 40]
+    jge .single_footswitch
+
+    mov eax, [rsp + 56]
+    lea r11, [rel dance_single_pair_avg_y2]
+    movzx ecx, byte [r11 + rax]
+    mov [rsp + 44], ecx
+    mov eax, [rsp + 60]
     lea r11, [rel dance_single_pair_avg_y2]
     movzx ecx, byte [r11 + rax]
     mov [rsp + 52], ecx
@@ -2335,27 +2363,42 @@ step_parity_action_cost_single_tap_clean_4:
     movsx eax, byte [rcx + ASSP_STEP_PARITY_STATE4_WHERE_FEET + 4]
     mov [rsp + 36], eax
 
-    ASSP_PAIR_IDX_EAX [rsp + 24], [rsp + 28]
+    lea r11, [rel step_parity_col_norm]
+    movzx eax, byte [rsp + 24]
+    movzx eax, byte [r11 + rax]
+    mov [rsp + 24], eax
+    movzx eax, byte [rsp + 28]
+    movzx eax, byte [r11 + rax]
+    mov [rsp + 28], eax
+    movzx eax, byte [rsp + 32]
+    movzx eax, byte [r11 + rax]
+    mov [rsp + 32], eax
+    movzx eax, byte [rsp + 36]
+    movzx eax, byte [r11 + rax]
+    mov [rsp + 36], eax
+
+    ASSP_PAIR_IDX_NORM_EAX [rsp + 24], [rsp + 28]
+    mov [rsp + 56], eax
     lea r11, [rel dance_single_pair_avg_x2]
     movzx ecx, byte [r11 + rax]
     mov [rsp + 24], ecx
-    lea r11, [rel dance_single_pair_avg_y2]
-    movzx ecx, byte [r11 + rax]
-    mov [rsp + 28], ecx
-    ASSP_PAIR_IDX_EAX [rsp + 32], [rsp + 36]
+    ASSP_PAIR_IDX_NORM_EAX [rsp + 32], [rsp + 36]
+    mov [rsp + 60], eax
     lea r11, [rel dance_single_pair_avg_x2]
     movzx ecx, byte [r11 + rax]
     mov [rsp + 32], ecx
+    cmp ecx, [rsp + 24]
+    jge .single_footswitch
+
+    mov eax, [rsp + 56]
+    lea r11, [rel dance_single_pair_avg_y2]
+    movzx ecx, byte [r11 + rax]
+    mov [rsp + 28], ecx
+    mov eax, [rsp + 60]
     lea r11, [rel dance_single_pair_avg_y2]
     movzx ecx, byte [r11 + rax]
     mov [rsp + 36], ecx
 
-    mov eax, [rsp + 48]
-    cmp eax, [rsp + 40]
-    jge .single_footswitch
-    mov eax, [rsp + 32]
-    cmp eax, [rsp + 24]
-    jge .single_footswitch
     mov eax, [rsp + 52]
     cmp eax, [rsp + 44]
     jl .single_spin_right_lower
@@ -2408,22 +2451,8 @@ step_parity_action_cost_single_tap_clean_4:
     movzx eax, byte [rsp]
     test al, 24
     jz .single_big_movement
-    mov rdx, [rsp + 144]
-    movss xmm1, [rdx]
-    comiss xmm1, [rel cost_jack_threshold]
-    jae .single_big_movement
-    movss xmm2, [rel cost_jack_threshold]
-    subss xmm2, xmm1
-    xorps xmm3, xmm3
-    comiss xmm2, xmm3
-    jbe .single_big_movement
-    movss xmm1, [rel cost_one]
-    divss xmm1, xmm2
-    movss xmm2, [rel cost_one]
-    divss xmm2, [rel cost_jack_threshold]
-    subss xmm1, xmm2
-    mulss xmm1, [rel cost_jack_weight]
-    addss xmm0, xmm1
+    mov rdx, [rsp + 152]
+    addss xmm0, [rdx]
 
 .single_big_movement:
     mov rcx, [rsp + 64]
@@ -2433,14 +2462,8 @@ step_parity_action_cost_single_tap_clean_4:
     js .single_done
     cmp r8d, 4
     jae .single_done
-    mov eax, r8d
-    shl eax, 2
-    add eax, [rsp + 88]
-    lea rdx, [rel dance_single_distances4]
-    movss xmm2, [rdx + rax * 4]
-    mulss xmm2, [rel cost_distance_weight]
-    mov rdx, [rsp + 144]
-    divss xmm2, [rdx]
+    mov rdx, [rsp + 152]
+    movss xmm2, [rdx + r8 * 4 + 4]
     addss xmm0, xmm2
 
 .single_done:
@@ -2815,6 +2838,7 @@ assp_step_parity_row_best_candidates_4:
     movdqu [rsp + 1056], xmm0
     movdqu [rsp + 1072], xmm0
     mov dword [rsp + 944], -1
+    mov byte [rsp + 900], 0
     mov eax, [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_HOLD_MASK]
     test eax, eax
     jnz .state_loop_fast
@@ -2828,6 +2852,48 @@ assp_step_parity_row_best_candidates_4:
     jnz .state_loop_fast
     bsf eax, eax
     mov [rsp + 944], eax
+    cmp dword [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_MINE_MASK], 0
+    jne .single_clean_flag_ready
+    cmp dword [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_SIDE_MASK], 0
+    jne .single_clean_flag_ready
+    mov byte [rsp + 900], 1
+.single_clean_flag_ready:
+    mov rax, [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_ELAPSED_SECONDS]
+    mov dword [rsp + 908], 0
+    movss xmm0, [rax]
+    comiss xmm0, [rel cost_jack_threshold]
+    jae .single_jack_cost_ready
+    movss xmm1, [rel cost_jack_threshold]
+    subss xmm1, xmm0
+    xorps xmm2, xmm2
+    comiss xmm1, xmm2
+    jbe .single_jack_cost_ready
+    movss xmm0, [rel cost_one]
+    divss xmm0, xmm1
+    movss xmm1, [rel cost_one]
+    divss xmm1, [rel cost_jack_threshold]
+    subss xmm0, xmm1
+    mulss xmm0, [rel cost_jack_weight]
+    movss [rsp + 908], xmm0
+.single_jack_cost_ready:
+    mov ecx, [rsp + 944]
+    lea r10, [rel dance_single_distances4]
+    movss xmm0, [r10 + rcx * 4]
+    mulss xmm0, [rel cost_distance_weight]
+    divss xmm0, [rax]
+    movss [rsp + 912], xmm0
+    movss xmm0, [r10 + rcx * 4 + 16]
+    mulss xmm0, [rel cost_distance_weight]
+    divss xmm0, [rax]
+    movss [rsp + 916], xmm0
+    movss xmm0, [r10 + rcx * 4 + 32]
+    mulss xmm0, [rel cost_distance_weight]
+    divss xmm0, [rax]
+    movss [rsp + 920], xmm0
+    movss xmm0, [r10 + rcx * 4 + 48]
+    mulss xmm0, [rel cost_distance_weight]
+    divss xmm0, [rax]
+    movss [rsp + 924], xmm0
 .state_loop_fast:
     mov rax, [rsp + 792]
     cmp rax, r14
@@ -2917,12 +2983,8 @@ assp_step_parity_row_best_candidates_4:
     jae .skip_candidate_fast
 
 .score_candidate_fast:
-    cmp dword [rsp + 944], -1
+    cmp byte [rsp + 900], 0
     je .score_candidate_full_fast
-    cmp dword [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_MINE_MASK], 0
-    jne .score_candidate_full_fast
-    cmp dword [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_SIDE_MASK], 0
-    jne .score_candidate_full_fast
     lea rdx, [rsp + 208]
     mov r8, [rsp + 936]
     mov r9d, [rsp + 944]
@@ -2930,6 +2992,8 @@ assp_step_parity_row_best_candidates_4:
     mov [rsp + 32], eax
     mov rax, [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_ELAPSED_SECONDS]
     mov [rsp + 40], rax
+    lea rax, [rsp + 908]
+    mov [rsp + 48], rax
     mov rax, [rsp + 792]
     lea rax, [rax + rax * 2]
     lea rcx, [r12 + rax * 4]
