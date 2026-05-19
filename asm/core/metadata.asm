@@ -685,7 +685,9 @@ section .text
 
 ; rcx = DISPLAYBPM tag bytes, rdx = len, r8 = actual min BPM,
 ; r9 = actual max BPM, [rsp+40] = out min BPM, [rsp+48] = out max BPM.
-; Outputs are whole BPMs formatted like RSSP's rate=1 display values.
+; Optional text outputs: [rsp+56] = out text min, [rsp+64] = out text max,
+; [rsp+72] = out text range flag. Numeric outputs keep RSSP JSON-cast
+; parity; text outputs mirror RSSP's formatted display string.
 ; eax = 1 on valid output pointers, 0 otherwise.
 assp_resolve_display_bpm:
     push rbx
@@ -698,6 +700,9 @@ assp_resolve_display_bpm:
 
     mov r14, [rsp + 96]
     mov r15, [rsp + 104]
+    mov rdi, [rsp + 112]
+    mov rsi, [rsp + 120]
+    mov rbx, [rsp + 128]
     test r14, r14
     jz .fail
     test r15, r15
@@ -715,8 +720,30 @@ assp_resolve_display_bpm:
     test r8, r8
     jle .success
 
+    mov r13, rdx
     mov r12, r8
-    mov rax, rdx
+
+    test rbx, rbx
+    jz .text_min
+    xor eax, eax
+    cmp r13, r12
+    setne al
+    mov [rbx], rax
+.text_min:
+    test rdi, rdi
+    jz .text_max
+    mov rax, r13
+    call resolve_display_milli_to_text_int
+    mov [rdi], rax
+.text_max:
+    test rsi, rsi
+    jz .numeric
+    mov rax, r12
+    call resolve_display_milli_to_text_int
+    mov [rsi], rax
+
+.numeric:
+    mov rax, r13
     call resolve_display_milli_to_int
     mov r13, rax
     mov rax, r12
@@ -972,6 +999,21 @@ resolve_display_milli_prefix:
 
 ; rax = positive milli. rax = integer BPM rounded like Rust {:.0}.
 resolve_display_milli_to_int:
+    xor edx, edx
+    mov r8d, 1000
+    div r8
+    cmp rdx, 500
+    ja .round_up
+    jb .done
+    test al, 1
+    jz .done
+.round_up:
+    inc rax
+.done:
+    ret
+
+; rax = positive milli. rax = integer BPM rounded like Rust display {:.0}.
+resolve_display_milli_to_text_int:
     xor edx, edx
     mov r8d, 1000
     div r8
