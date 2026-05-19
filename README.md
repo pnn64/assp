@@ -483,6 +483,19 @@ This is still a process-level CLI throughput benchmark rather than an isolated
 in-process parser microbenchmark. Use `-NoBuild` for repeat runs after both
 executables already exist.
 
+Build with profiling symbols and emit an ETW CPU-sampling trace:
+
+```powershell
+.\assp\profile.ps1 -Fixture .\assp\fixtures\camellia_mix.ssc -Chart all -Output .\assp\target\assp_cpu_camellia.etl
+```
+
+`profile.ps1` uses `build.ps1 -ProfileSymbols`, which asks NASM for CodeView
+debug info and emits `target\assp.pdb` plus `target\assp.map`. The ETW capture
+uses `xperf`, so it must be run from an elevated PowerShell prompt. Open the
+`.etl` in Windows Performance Analyzer and filter CPU Usage (Sampled) to
+`assp.exe`; the map file also contains labels for inner assembly blocks such as
+`assp_step_parity_row_best_candidates_4.candidate_loop`.
+
 The standalone executable currently scans SSC files for chart metadata and
 `#NOTES:` / `#NOTES2:` tags. The second argument is a zero-based chart index,
 `list` to print chart indexes with step type, difficulty, meter, and

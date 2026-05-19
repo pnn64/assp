@@ -11,6 +11,7 @@ param(
     [string]$Report,
     [switch]$KeepGoing,
     [switch]$Clean,
+    [switch]$ProfileSymbols,
     [Parameter(ValueFromRemainingArguments = $true)]
     [string[]]$ExtraArgs
 )
@@ -23,6 +24,8 @@ if ([string]::IsNullOrWhiteSpace($root)) {
 }
 $target = Join-Path $root "target"
 $exe = Join-Path $target "assp.exe"
+$pdb = Join-Path $target "assp.pdb"
+$map = Join-Path $target "assp.map"
 $include = (Join-Path $root "include") + [System.IO.Path]::DirectorySeparatorChar
 
 if ($ExtraArgs.Count -ne 0) {
@@ -99,7 +102,12 @@ foreach ($asm in Get-ChildItem (Join-Path $root "asm") -Recurse -Filter "*.asm" 
     $rel = $asm.FullName.Substring((Join-Path $root "asm").Length).TrimStart('\', '/')
     $objName = ($rel -replace '[\\/]', '_') -replace '\.asm$', '.obj'
     $obj = Join-Path $target $objName
-    & nasm -f win64 "-I$include" $asm.FullName -o $obj
+    $nasmArgs = @("-f", "win64", "-I$include")
+    if ($ProfileSymbols) {
+        $nasmArgs += @("-g", "-F", "cv8")
+    }
+    $nasmArgs += @($asm.FullName, "-o", $obj)
+    & nasm @nasmArgs
     if ($LASTEXITCODE -ne 0) {
         exit $LASTEXITCODE
     }
@@ -114,6 +122,15 @@ $linkArgs = @(
     "/nodefaultlib",
     "/out:$exe"
 ) + $objs + @((Join-Path $kitLib "Kernel32.Lib"))
+
+if ($ProfileSymbols) {
+    $linkArgs += @(
+        "/debug",
+        "/pdb:$pdb",
+        "/map:$map",
+        "/mapinfo:exports"
+    )
+}
 
 & $linkerPath @linkFlavorArgs @linkArgs
 if ($LASTEXITCODE -ne 0) {
