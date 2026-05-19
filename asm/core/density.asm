@@ -8,6 +8,60 @@ global assp_measure_equally_spaced_minimized_8
 
 section .text
 
+%macro ASSP_JMP_IF_STEP4 2
+    mov eax, dword [%1]
+    mov ecx, eax
+    xor ecx, 0x31313131
+    mov edx, ecx
+    sub edx, 0x01010101
+    not ecx
+    and edx, ecx
+    and edx, 0x80808080
+    jnz %2
+
+    mov ecx, eax
+    xor ecx, 0x32323232
+    mov edx, ecx
+    sub edx, 0x01010101
+    not ecx
+    and edx, ecx
+    and edx, 0x80808080
+    jnz %2
+
+    xor eax, 0x34343434
+    mov edx, eax
+    sub edx, 0x01010101
+    not eax
+    and edx, eax
+    and edx, 0x80808080
+    jnz %2
+%endmacro
+
+%macro ASSP_STORE_DENSITY 0
+    test rbx, rbx
+    jz %%count
+    cmp r13, r12
+    jae %%count
+    mov [rbx + r13 * 4], r14d
+%%count:
+    inc r13
+%endmacro
+
+%macro ASSP_STORE_EQUALLY 0
+    test rbx, rbx
+    jz %%count
+    cmp r13, r12
+    jae %%count
+    xor eax, eax
+    cmp r14, r15
+    jne %%write
+    mov al, 1
+%%write:
+    mov [rbx + r13], al
+%%count:
+    inc r13
+%endmacro
+
 %macro ASSP_EQUALLY_SPACED_MINIMIZED 2
 ; rcx = minimized note-data bytes, rdx = len, r8 = optional u8 output, r9 = output cap.
 ; rax = total measure count. Writes 1 for equally spaced measures and 0 otherwise.
@@ -31,13 +85,104 @@ section .text
     xor r14d, r14d
     xor r15d, r15d
 
-    cmp rsi, rdi
-    jae %%eof
-
 %%line_loop:
     cmp rsi, rdi
     jae %%eof
 
+    mov al, [rsi]
+    cmp al, 10
+    je %%fast_blank_lf
+    cmp al, 13
+    je %%fast_blank_cr
+    cmp al, ','
+    je %%fast_comma
+    cmp al, ';'
+    je %%fast_semi
+
+    lea rax, [rsi + %2]
+    cmp rax, rdi
+    ja %%slow_line
+    mov al, [rsi + %2]
+    cmp al, 10
+    je %%fast_row_lf
+    cmp al, 13
+    je %%fast_row_cr
+    jmp %%slow_line
+
+%%fast_blank_lf:
+    inc rsi
+    jmp %%line_loop
+
+%%fast_blank_cr:
+    lea rax, [rsi + 1]
+    cmp rax, rdi
+    jae %%eof
+    cmp byte [rsi + 1], 10
+    jne %%slow_line
+    lea rsi, [rsi + 2]
+    jmp %%line_loop
+
+%%fast_comma:
+    lea rax, [rsi + 1]
+    cmp rax, rdi
+    jae %%slow_line
+    cmp byte [rsi + 1], 10
+    je %%fast_comma_lf
+    cmp byte [rsi + 1], 13
+    jne %%slow_line
+    lea rax, [rsi + 2]
+    cmp rax, rdi
+    jae %%slow_line
+    cmp byte [rsi + 2], 10
+    jne %%slow_line
+    ASSP_STORE_EQUALLY
+    xor r14d, r14d
+    xor r15d, r15d
+    lea rsi, [rsi + 3]
+    jmp %%line_loop
+%%fast_comma_lf:
+    ASSP_STORE_EQUALLY
+    xor r14d, r14d
+    xor r15d, r15d
+    lea rsi, [rsi + 2]
+    jmp %%line_loop
+
+%%fast_semi:
+    ASSP_STORE_EQUALLY
+    jmp %%done
+
+%%fast_row_lf:
+    inc r14
+    ASSP_JMP_IF_STEP4 rsi, %%fast_row_lf_note
+%if %2 == 8
+    ASSP_JMP_IF_STEP4 rsi + 4, %%fast_row_lf_note
+%endif
+    lea rsi, [rsi + %2 + 1]
+    jmp %%line_loop
+%%fast_row_lf_note:
+    inc r15
+    lea rsi, [rsi + %2 + 1]
+    jmp %%line_loop
+
+%%fast_row_cr:
+    lea rax, [rsi + %2 + 1]
+    cmp rax, rdi
+    jae %%slow_line
+    cmp byte [rsi + %2 + 1], 10
+    jne %%slow_line
+    inc r14
+    ASSP_JMP_IF_STEP4 rsi, %%fast_row_cr_note
+%if %2 == 8
+    ASSP_JMP_IF_STEP4 rsi + 4, %%fast_row_cr_note
+%endif
+    lea rsi, [rsi + %2 + 2]
+    jmp %%line_loop
+%%fast_row_cr_note:
+    inc r15
+    lea rsi, [rsi + %2 + 2]
+    jmp %%line_loop
+
+%%slow_line:
     mov r10, rsi
 %%find_line_end:
     cmp r10, rdi
@@ -74,32 +219,24 @@ section .text
     ja %%line_done
 
     inc r14
-    xor edx, edx
-%%note_loop:
-    cmp edx, %2
-    jae %%line_done
-    mov al, [rsi + rdx]
-    cmp al, '1'
-    je %%note_row
-    cmp al, '2'
-    je %%note_row
-    cmp al, '4'
-    je %%note_row
-    inc edx
-    jmp %%note_loop
+    ASSP_JMP_IF_STEP4 rsi, %%note_row
+%if %2 == 8
+    ASSP_JMP_IF_STEP4 rsi + 4, %%note_row
+%endif
+    jmp %%line_done
 
 %%note_row:
     inc r15
     jmp %%line_done
 
 %%comma:
-    call %%store
+    ASSP_STORE_EQUALLY
     xor r14d, r14d
     xor r15d, r15d
     jmp %%line_done
 
 %%semi:
-    call %%store
+    ASSP_STORE_EQUALLY
     jmp %%done
 
 %%line_done:
@@ -107,7 +244,7 @@ section .text
     jmp %%line_loop
 
 %%eof:
-    call %%store
+    ASSP_STORE_EQUALLY
     jmp %%done
 
 %%zero:
@@ -125,21 +262,6 @@ section .text
     pop rdi
     pop rsi
     pop rbx
-    ret
-
-%%store:
-    test rbx, rbx
-    jz %%count
-    cmp r13, r12
-    jae %%count
-    xor eax, eax
-    cmp r14, r15
-    jne %%write
-    mov al, 1
-%%write:
-    mov [rbx + r13], al
-%%count:
-    inc r13
     ret
 %endmacro
 
@@ -167,13 +289,98 @@ assp_measure_densities_4:
     xor r13d, r13d
     xor r14d, r14d
 
-    cmp rsi, rdi
-    jae .eof
-
 .line_loop:
     cmp rsi, rdi
     jae .eof
 
+    mov al, [rsi]
+    cmp al, 10
+    je .fast_blank_lf
+    cmp al, 13
+    je .fast_blank_cr
+    cmp al, ' '
+    jbe .slow_line
+    cmp al, '/'
+    je .slow_line
+    cmp al, ','
+    je .fast_comma
+    cmp al, ';'
+    je .fast_semi
+
+    lea rax, [rsi + 4]
+    cmp rax, rdi
+    ja .slow_line
+    mov al, [rsi + 4]
+    cmp al, 10
+    je .fast_row_lf
+    cmp al, 13
+    je .fast_row_cr
+    jmp .slow_line
+
+.fast_blank_lf:
+    inc rsi
+    jmp .line_loop
+
+.fast_blank_cr:
+    lea rax, [rsi + 1]
+    cmp rax, rdi
+    jae .eof
+    cmp byte [rsi + 1], 10
+    jne .slow_line
+    lea rsi, [rsi + 2]
+    jmp .line_loop
+
+.fast_comma:
+    lea rax, [rsi + 1]
+    cmp rax, rdi
+    jae .slow_line
+    cmp byte [rsi + 1], 10
+    je .fast_comma_lf
+    cmp byte [rsi + 1], 13
+    jne .slow_line
+    lea rax, [rsi + 2]
+    cmp rax, rdi
+    jae .slow_line
+    cmp byte [rsi + 2], 10
+    jne .slow_line
+    ASSP_STORE_DENSITY
+    xor r14d, r14d
+    lea rsi, [rsi + 3]
+    jmp .line_loop
+.fast_comma_lf:
+    ASSP_STORE_DENSITY
+    xor r14d, r14d
+    lea rsi, [rsi + 2]
+    jmp .line_loop
+
+.fast_semi:
+    ASSP_STORE_DENSITY
+    jmp .done
+
+.fast_row_lf:
+    ASSP_JMP_IF_STEP4 rsi, .fast_row_lf_note
+    lea rsi, [rsi + 5]
+    jmp .line_loop
+.fast_row_lf_note:
+    inc r14d
+    lea rsi, [rsi + 5]
+    jmp .line_loop
+
+.fast_row_cr:
+    lea rax, [rsi + 5]
+    cmp rax, rdi
+    jae .slow_line
+    cmp byte [rsi + 5], 10
+    jne .slow_line
+    ASSP_JMP_IF_STEP4 rsi, .fast_row_cr_note
+    lea rsi, [rsi + 6]
+    jmp .line_loop
+.fast_row_cr_note:
+    inc r14d
+    lea rsi, [rsi + 6]
+    jmp .line_loop
+
+.slow_line:
     mov r10, rsi
 .find_line_end:
     cmp r10, rdi
@@ -212,42 +419,20 @@ assp_measure_densities_4:
     cmp rax, r11
     ja .line_done
 
-    cmp byte [rsi + 0], '1'
-    je .step_row
-    cmp byte [rsi + 0], '2'
-    je .step_row
-    cmp byte [rsi + 0], '4'
-    je .step_row
-    cmp byte [rsi + 1], '1'
-    je .step_row
-    cmp byte [rsi + 1], '2'
-    je .step_row
-    cmp byte [rsi + 1], '4'
-    je .step_row
-    cmp byte [rsi + 2], '1'
-    je .step_row
-    cmp byte [rsi + 2], '2'
-    je .step_row
-    cmp byte [rsi + 2], '4'
-    je .step_row
-    cmp byte [rsi + 3], '1'
-    je .step_row
-    cmp byte [rsi + 3], '2'
-    je .step_row
-    cmp byte [rsi + 3], '4'
-    jne .line_done
+    ASSP_JMP_IF_STEP4 rsi, .step_row
+    jmp .line_done
 
 .step_row:
     inc r14d
     jmp .line_done
 
 .comma:
-    call store_density
+    ASSP_STORE_DENSITY
     xor r14d, r14d
     jmp .line_done
 
 .semi:
-    call store_density
+    ASSP_STORE_DENSITY
     jmp .done
 
 .line_done:
@@ -255,7 +440,7 @@ assp_measure_densities_4:
     jmp .line_loop
 
 .eof:
-    call store_density
+    ASSP_STORE_DENSITY
     jmp .done
 
 .zero:
@@ -273,16 +458,6 @@ assp_measure_densities_4:
     pop rdi
     pop rsi
     pop rbx
-    ret
-
-store_density:
-    test rbx, rbx
-    jz .count
-    cmp r13, r12
-    jae .count
-    mov [rbx + r13 * 4], r14d
-.count:
-    inc r13
     ret
 
 ; rcx = note-data bytes, rdx = len, r8 = optional u32 output, r9 = output cap.
@@ -306,13 +481,100 @@ assp_measure_densities_8:
     xor r13d, r13d
     xor r14d, r14d
 
-    cmp rsi, rdi
-    jae .eof
-
 .line_loop:
     cmp rsi, rdi
     jae .eof
 
+    mov al, [rsi]
+    cmp al, 10
+    je .fast_blank_lf
+    cmp al, 13
+    je .fast_blank_cr
+    cmp al, ' '
+    jbe .slow_line
+    cmp al, '/'
+    je .slow_line
+    cmp al, ','
+    je .fast_comma
+    cmp al, ';'
+    je .fast_semi
+
+    lea rax, [rsi + 8]
+    cmp rax, rdi
+    ja .slow_line
+    mov al, [rsi + 8]
+    cmp al, 10
+    je .fast_row_lf
+    cmp al, 13
+    je .fast_row_cr
+    jmp .slow_line
+
+.fast_blank_lf:
+    inc rsi
+    jmp .line_loop
+
+.fast_blank_cr:
+    lea rax, [rsi + 1]
+    cmp rax, rdi
+    jae .eof
+    cmp byte [rsi + 1], 10
+    jne .slow_line
+    lea rsi, [rsi + 2]
+    jmp .line_loop
+
+.fast_comma:
+    lea rax, [rsi + 1]
+    cmp rax, rdi
+    jae .slow_line
+    cmp byte [rsi + 1], 10
+    je .fast_comma_lf
+    cmp byte [rsi + 1], 13
+    jne .slow_line
+    lea rax, [rsi + 2]
+    cmp rax, rdi
+    jae .slow_line
+    cmp byte [rsi + 2], 10
+    jne .slow_line
+    ASSP_STORE_DENSITY
+    xor r14d, r14d
+    lea rsi, [rsi + 3]
+    jmp .line_loop
+.fast_comma_lf:
+    ASSP_STORE_DENSITY
+    xor r14d, r14d
+    lea rsi, [rsi + 2]
+    jmp .line_loop
+
+.fast_semi:
+    ASSP_STORE_DENSITY
+    jmp .done
+
+.fast_row_lf:
+    ASSP_JMP_IF_STEP4 rsi, .fast_row_lf_note
+    ASSP_JMP_IF_STEP4 rsi + 4, .fast_row_lf_note
+    lea rsi, [rsi + 9]
+    jmp .line_loop
+.fast_row_lf_note:
+    inc r14d
+    lea rsi, [rsi + 9]
+    jmp .line_loop
+
+.fast_row_cr:
+    lea rax, [rsi + 9]
+    cmp rax, rdi
+    jae .slow_line
+    cmp byte [rsi + 9], 10
+    jne .slow_line
+    ASSP_JMP_IF_STEP4 rsi, .fast_row_cr_note
+    ASSP_JMP_IF_STEP4 rsi + 4, .fast_row_cr_note
+    lea rsi, [rsi + 10]
+    jmp .line_loop
+.fast_row_cr_note:
+    inc r14d
+    lea rsi, [rsi + 10]
+    jmp .line_loop
+
+.slow_line:
     mov r10, rsi
 .find_line_end:
     cmp r10, rdi
@@ -351,66 +613,21 @@ assp_measure_densities_8:
     cmp rax, r11
     ja .line_done
 
-    cmp byte [rsi + 0], '1'
-    je .step_row
-    cmp byte [rsi + 0], '2'
-    je .step_row
-    cmp byte [rsi + 0], '4'
-    je .step_row
-    cmp byte [rsi + 1], '1'
-    je .step_row
-    cmp byte [rsi + 1], '2'
-    je .step_row
-    cmp byte [rsi + 1], '4'
-    je .step_row
-    cmp byte [rsi + 2], '1'
-    je .step_row
-    cmp byte [rsi + 2], '2'
-    je .step_row
-    cmp byte [rsi + 2], '4'
-    je .step_row
-    cmp byte [rsi + 3], '1'
-    je .step_row
-    cmp byte [rsi + 3], '2'
-    je .step_row
-    cmp byte [rsi + 3], '4'
-    je .step_row
-    cmp byte [rsi + 4], '1'
-    je .step_row
-    cmp byte [rsi + 4], '2'
-    je .step_row
-    cmp byte [rsi + 4], '4'
-    je .step_row
-    cmp byte [rsi + 5], '1'
-    je .step_row
-    cmp byte [rsi + 5], '2'
-    je .step_row
-    cmp byte [rsi + 5], '4'
-    je .step_row
-    cmp byte [rsi + 6], '1'
-    je .step_row
-    cmp byte [rsi + 6], '2'
-    je .step_row
-    cmp byte [rsi + 6], '4'
-    je .step_row
-    cmp byte [rsi + 7], '1'
-    je .step_row
-    cmp byte [rsi + 7], '2'
-    je .step_row
-    cmp byte [rsi + 7], '4'
-    jne .line_done
+    ASSP_JMP_IF_STEP4 rsi, .step_row
+    ASSP_JMP_IF_STEP4 rsi + 4, .step_row
+    jmp .line_done
 
 .step_row:
     inc r14d
     jmp .line_done
 
 .comma:
-    call store_density
+    ASSP_STORE_DENSITY
     xor r14d, r14d
     jmp .line_done
 
 .semi:
-    call store_density
+    ASSP_STORE_DENSITY
     jmp .done
 
 .line_done:
@@ -418,7 +635,7 @@ assp_measure_densities_8:
     jmp .line_loop
 
 .eof:
-    call store_density
+    ASSP_STORE_DENSITY
     jmp .done
 
 .zero:
