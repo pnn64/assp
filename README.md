@@ -462,6 +462,26 @@ breakdown strings, arrow counts, mono/candle stats, default pattern counts,
 gimmick counts, stream metrics, stream sequence ranges, and the current
 hold-constrained bracket tech-count slice.
 
+Benchmark RSSP against ASSP on one fixture:
+
+```powershell
+.\assp\bench.ps1 -Fixture .\assp\fixtures\camellia_mix.ssc -AllCharts -Runs 5 -Warmup 1 -Report .\assp\target\bench_camellia.csv
+```
+
+Benchmark every simfile under a normal pack folder:
+
+```powershell
+.\assp\bench.ps1 -Pack ".\assp\fixtures\ITL Online 2026" -Runs 5 -Warmup 1 -Report .\assp\target\bench_itl.csv
+```
+
+`bench.ps1` builds the standalone assembly executable and a release RSSP CLI,
+discovers chart counts with RSSP, warms both programs, then writes one CSV row
+per run per simfile. `-Pack` and `-BundledFixtures` benchmark all charts. RSSP's
+current CLI emits every chart in one process, while ASSP's CLI emits one chart
+per process, so this is a process-level CLI throughput benchmark rather than an
+isolated in-process parser microbenchmark. Use `-NoBuild` for repeat runs after
+both executables already exist.
+
 The standalone executable currently scans SSC files for chart metadata and
 `#NOTES:` / `#NOTES2:` tags. The second argument is a zero-based chart index, or
 `list` to print chart indexes with step type, difficulty, meter, and
