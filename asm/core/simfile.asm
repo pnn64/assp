@@ -4,6 +4,7 @@ default rel
 global assp_count_note_charts
 global assp_find_notes_by_index
 global assp_find_chart_by_index
+global assp_find_next_chart
 global assp_find_global_bpms
 global assp_find_chart_bpms_by_index
 global assp_find_global_tag
@@ -950,6 +951,122 @@ assp_find_chart_by_index:
     inc r14
     add rdi, rax
     jmp .scan
+
+.next:
+    inc rdi
+    jmp .scan
+
+.found:
+    mov [rbx + ASSP_CHART_INFO_META_PTR], r15
+    mov rdx, rdi
+    sub rdx, r15
+    mov [rbx + ASSP_CHART_INFO_META_LEN], rdx
+
+    lea rsi, [rdi + rax]
+    mov rdx, rsi
+
+.find_notes_end:
+    cmp rdx, r12
+    jae .fail
+    cmp byte [rdx], ';'
+    je .store_notes
+    inc rdx
+    jmp .find_notes_end
+
+.store_notes:
+    inc rdx
+    mov r14, rdx
+    mov r10, rsi
+    mov r11, r14
+    call parse_sm_notes_block
+    test eax, eax
+    jnz .success
+
+    mov [rbx + ASSP_CHART_INFO_NOTES_PTR], rsi
+    mov rdx, r14
+    sub rdx, rsi
+    mov [rbx + ASSP_CHART_INFO_NOTES_LEN], rdx
+
+    mov r10, r15
+    mov r11, rdi
+    call parse_chart_meta
+
+.success:
+    mov eax, ASSP_TRUE
+    jmp .done
+
+.fail:
+    xor eax, eax
+
+.done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
+; rcx = simfile bytes, rdx = len, r8 = byte offset to start scanning,
+; r9 = out assp_chart_info.
+; eax = 1 when the next chart at or after the offset is found, 0 otherwise.
+assp_find_next_chart:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+
+    test rcx, rcx
+    jz .fail
+    test r9, r9
+    jz .fail
+    cmp rdx, 8
+    jb .fail
+    cmp r8, rdx
+    jae .fail
+
+    mov rbx, r9
+    xor eax, eax
+    mov r10d, ASSP_CHART_INFO_SIZE / 8
+    mov r11, rbx
+
+.zero:
+    mov [r11], rax
+    add r11, 8
+    dec r10d
+    jnz .zero
+
+    mov rsi, rcx
+    lea r12, [rcx + rdx]
+    lea rdi, [rcx + r8]
+    mov r15, rcx
+    test r8, r8
+    jz .scan
+    mov r15, rdi
+
+.scan:
+    lea rax, [rdi + 10]
+    cmp rax, r12
+    ja .fail
+
+    is_notedata_tag rdi
+    test eax, eax
+    jz .check_notes
+    mov r15, rdi
+    add rdi, 10
+    jmp .scan
+
+.check_notes:
+    lea rax, [rdi + 8]
+    cmp rax, r12
+    ja .fail
+    is_notes_tag rdi
+    test eax, eax
+    jnz .found
 
 .next:
     inc rdi

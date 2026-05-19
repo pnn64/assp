@@ -318,6 +318,12 @@ int32_t assp_find_chart_by_index(
     size_t index,
     assp_chart_info *out
 );
+int32_t assp_find_next_chart(
+    const uint8_t *data,
+    size_t len,
+    size_t start_offset,
+    assp_chart_info *out
+);
 int32_t assp_find_global_bpms(
     const uint8_t *data,
     size_t len,

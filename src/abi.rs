@@ -330,6 +330,12 @@ unsafe extern "C" {
         index: usize,
         out: *mut ChartInfo,
     ) -> c_int;
+    fn assp_find_next_chart(
+        data: *const u8,
+        len: usize,
+        start_offset: usize,
+        out: *mut ChartInfo,
+    ) -> c_int;
     fn assp_find_global_bpms(data: *const u8, len: usize, out: *mut ByteSlice) -> c_int;
     fn assp_find_chart_bpms_by_index(
         data: *const u8,
@@ -960,6 +966,13 @@ pub fn find_notes_by_index(data: &[u8], index: usize) -> Option<ChartRef> {
 pub fn find_chart_by_index(data: &[u8], index: usize) -> Option<ChartInfo> {
     let mut chart = ChartInfo::default();
     let ok = unsafe { assp_find_chart_by_index(data.as_ptr(), data.len(), index, &mut chart) };
+    (ok != 0).then_some(chart)
+}
+
+#[must_use]
+pub fn find_next_chart(data: &[u8], start_offset: usize) -> Option<ChartInfo> {
+    let mut chart = ChartInfo::default();
+    let ok = unsafe { assp_find_next_chart(data.as_ptr(), data.len(), start_offset, &mut chart) };
     (ok != 0).then_some(chart)
 }
 

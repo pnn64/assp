@@ -35,6 +35,7 @@ extern assp_chart_owns_timing_by_index
 extern assp_supported_step_type_lanes
 extern assp_find_chart_bpms_by_index
 extern assp_find_chart_by_index
+extern assp_find_next_chart
 extern assp_find_chart_timing_tags_by_index
 extern assp_find_chart_tag_by_index
 extern assp_find_global_bpms
@@ -151,6 +152,11 @@ run_selected_chart:
     call assp_find_chart_by_index
     test eax, eax
     jz fail_notes
+    add rsp, 40
+    jmp run_loaded_chart
+
+run_loaded_chart:
+    sub rsp, 40
 
     mov rcx, [chart_info + ASSP_CHART_INFO_STEP_TYPE_PTR]
     mov rdx, [chart_info + ASSP_CHART_INFO_STEP_TYPE_LEN]
@@ -706,22 +712,36 @@ current_chart_owns_timing:
 print_all_charts:
     sub rsp, 40
 
-    lea rcx, [file_buffer]
-    mov rdx, [file_len]
-    call assp_count_note_charts
-    mov [chart_count], rax
     mov qword [chart_index], 0
+    mov qword [chart_count], 0
+    mov qword [chart_cursor], 0
 
 .loop:
-    mov rax, [chart_index]
-    cmp rax, [chart_count]
-    jae .success
+    lea rcx, [file_buffer]
+    mov rdx, [file_len]
+    mov r8, [chart_cursor]
+    lea r9, [chart_info]
+    call assp_find_next_chart
+    test eax, eax
+    jz .done_loop
 
-    call run_selected_chart
+    mov rax, [chart_index]
+    mov [chart_info + ASSP_CHART_INFO_INDEX], rax
+    call run_loaded_chart
     test eax, eax
     jz .fail
+    mov rax, [chart_info + ASSP_CHART_INFO_NOTES_PTR]
+    add rax, [chart_info + ASSP_CHART_INFO_NOTES_LEN]
+    lea rdx, [file_buffer]
+    sub rax, rdx
+    mov [chart_cursor], rax
     inc qword [chart_index]
+    inc qword [chart_count]
     jmp .loop
+
+.done_loop:
+    cmp qword [chart_count], 0
+    je .fail
 
 .success:
     mov eax, ASSP_TRUE
@@ -6389,6 +6409,7 @@ all_mode resq 1
 globals_prepared resq 1
 global_timing_prepared resq 1
 chart_count resq 1
+chart_cursor resq 1
 measure_count resq 1
 stream_segment_count resq 1
 stream_token_count resq 1

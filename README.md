@@ -26,6 +26,7 @@ The first implemented pieces are:
 - `assp_count_note_charts`
 - `assp_supported_step_type_lanes`
 - `assp_find_chart_by_index`
+- `assp_find_next_chart`
 - `assp_find_global_bpms`
 - `assp_find_chart_bpms_by_index`
 - `assp_find_global_tag`
