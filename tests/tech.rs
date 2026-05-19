@@ -65,12 +65,19 @@ fn step_counts_subset(counts: rssp_core::step_parity::TechCounts) -> TechCounts 
 }
 
 fn bpm_row_times(beats: &[f32], bpms: &[(f64, f64)], offset: f64) -> (Vec<f32>, Vec<i32>) {
-    let seconds: Vec<f32> = beats
-        .iter()
-        .map(|&beat| {
-            (rssp_core::bpm::get_elapsed_time(f64::from(beat), bpms, &[], &[], &[]) - offset) as f32
-        })
-        .collect();
+    let seconds: Vec<f32> = if bpms.len() == 1 && bpms[0].0 == 0.0 {
+        let start = (-offset) as f32;
+        let bps = bpms[0].1 as f32 / 60.0;
+        beats.iter().map(|&beat| start + beat / bps).collect()
+    } else {
+        beats
+            .iter()
+            .map(|&beat| {
+                (rssp_core::bpm::get_elapsed_time(f64::from(beat), bpms, &[], &[], &[])
+                    - offset) as f32
+            })
+            .collect()
+    };
     let mut row_ms = Vec::with_capacity(seconds.len());
     for (idx, &second) in seconds.iter().enumerate() {
         if idx == 0 {
@@ -196,13 +203,40 @@ fn assert_bpm_only_fixture_step_parity(data: &[u8], chart_idx: usize) {
         "local placement mirror mismatch for chart {chart_idx}"
     );
 
-    let actual = placement_counts(
-        &rows.tech_masks,
+    let actual = step_parity_count_prepared_rows_4(
         &rows.note_counts,
+        &rows.tech_masks,
+        &rows.note_masks,
+        &rows.hold_masks,
+        &rows.mine_masks,
+        &rows.prev_row_live_holds,
+        &rows.row_seconds,
         &rows.row_ms,
-        &actual_placements,
+        4096,
+    )
+    .unwrap();
+    let bpms_string = std::str::from_utf8(bpms_bytes).unwrap();
+    let timing = rssp_core::timing::timing_data_from_chart_data(
+        offset,
+        0.0,
+        None,
+        bpms_string,
+        None,
+        "",
+        None,
+        "",
+        None,
+        "",
+        None,
+        "",
+        None,
+        "",
+        None,
+        "",
+        rssp_core::timing::TimingFormat::Sm,
+        true,
     );
-    let expected = rssp_core::step_parity::analyze_lanes(&rust_minimized, &bpms, offset, 4);
+    let expected = expected_timing_rows_counts(notes, &timing);
 
     assert_eq!(actual, step_counts_subset(expected), "chart {chart_idx}");
 }
@@ -260,6 +294,22 @@ fn placement_counts(
     let placements: Vec<u8> = placements.iter().flatten().copied().collect();
     calculate_step_tech_counts_from_placements_4(tech_masks, note_counts, row_ms, &placements)
         .unwrap()
+}
+
+fn expected_timing_rows_counts(
+    notes: &[u8],
+    timing: &rssp_core::timing::TimingData,
+) -> rssp_core::step_parity::TechCounts {
+    let (_, stats, _, rows, row_to_beat, _) = rssp_core::stats::minimize_rows_typed::<4>(notes);
+    let has_holds = stats.holds != 0 || stats.rolls != 0;
+    let mut scratch = rssp_core::step_parity::timing_rows_scratch::<4>().unwrap();
+    rssp_core::step_parity::analyze_timing_rows_known_holds(
+        &rows,
+        &row_to_beat,
+        timing,
+        has_holds,
+        &mut scratch,
+    )
 }
 
 fn expected_permutations_4(mask: u8) -> Vec<[u8; 4]> {

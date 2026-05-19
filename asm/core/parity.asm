@@ -2,6 +2,7 @@ default rel
 %include "assp.inc"
 
 extern assp_calculate_step_tech_counts_from_placements_4
+extern assp_calculate_step_tech_counts_from_placements_seconds_4
 
 global assp_step_parity_permutations_4
 global assp_step_parity_result_state_no_holds_4
@@ -2487,11 +2488,11 @@ assp_step_parity_count_prepared_rows_4:
 .count_rows:
     mov rcx, [rbx + ASSP_STEP_PARITY_PREPARED_ROWS4_TECH_MASKS]
     mov rdx, [rbx + ASSP_STEP_PARITY_PREPARED_ROWS4_NOTE_COUNTS]
-    mov r8, [rbx + ASSP_STEP_PARITY_PREPARED_ROWS4_ROW_MS]
+    mov r8, [rbx + ASSP_STEP_PARITY_PREPARED_ROWS4_ROW_SECONDS]
     mov r9, [rsi + ASSP_STEP_PARITY_WORKSPACE4_OUT_PLACEMENTS]
     mov [rsp + 32], r12
     mov [rsp + 40], rdi
-    call assp_calculate_step_tech_counts_from_placements_4
+    call assp_calculate_step_tech_counts_from_placements_seconds_4
     jmp .done
 
 .fail:
@@ -2908,6 +2909,8 @@ assp_step_parity_bpm_row_times_4:
     lea r10, [r11 + 1]
     jmp .count_line_loop
 .count_nonempty:
+    cmp al, '/'
+    je .count_skip_comment
     inc r9
 .count_skip_line:
     cmp r11, rdi
@@ -2916,6 +2919,15 @@ assp_step_parity_bpm_row_times_4:
     inc r11
     cmp al, 10
     jne .count_skip_line
+    mov r10, r11
+    jmp .count_line_loop
+.count_skip_comment:
+    cmp r11, rdi
+    jae .count_done
+    mov al, [r11]
+    inc r11
+    cmp al, 10
+    jne .count_skip_comment
     mov r10, r11
     jmp .count_line_loop
 
@@ -2951,6 +2963,8 @@ assp_step_parity_bpm_row_times_4:
     jmp .emit_line_loop
 
 .emit_nonempty:
+    cmp al, '/'
+    je .emit_skip_comment
     lea rax, [r11 + 4]
     cmp rax, rdi
     ja .fail
@@ -2976,7 +2990,15 @@ assp_step_parity_bpm_row_times_4:
 
     mov rdx, [rbp - 24]
     movss [rdx + rax * 4], xmm0
+    cmp r14, 1
+    jne .emit_general_time
+    cmp qword [r13 + ASSP_BPM_SEGMENT_BEAT_MILLI], 0
+    jne .emit_general_time
+    call fixed_bpm_row_time_seconds4
+    jmp .emit_time_done
+.emit_general_time:
     call bpm_row_time_seconds4
+.emit_time_done:
     mov rax, [rbp - 40]
     mov rdx, [rbp - 8]
     movss [rdx + rax * 4], xmm0
@@ -3015,6 +3037,15 @@ assp_step_parity_bpm_row_times_4:
     inc r11
     cmp al, 10
     jne .emit_skip_line
+    mov r10, r11
+    jmp .emit_line_loop
+.emit_skip_comment:
+    cmp r11, [rbp - 72]
+    jae .advance_measure
+    mov al, [r11]
+    inc r11
+    cmp al, 10
+    jne .emit_skip_comment
     mov r10, r11
     jmp .emit_line_loop
 
@@ -3131,6 +3162,20 @@ floor_ss_to_i32_4:
     jbe .done
     dec eax
 .done:
+    ret
+
+; ecx = quantized note row, r13 = one BPM segment at beat 0,
+; r15 = offset milliseconds. xmm0 = seconds matching rssp fixed timing.
+fixed_bpm_row_time_seconds4:
+    cvtsi2ss xmm0, ecx
+    divss xmm0, [rel rows_per_beat_f32]
+    mov rax, [r13 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    cvtsi2ss xmm1, rax
+    divss xmm1, [rel const_sixty_thousand_f32]
+    divss xmm0, xmm1
+    cvtsi2ss xmm2, r15
+    divss xmm2, [rel const_thousand_f32]
+    subss xmm0, xmm2
     ret
 
 %macro prepare_hold_reset_current4 0
@@ -3707,6 +3752,7 @@ cost_spin_weight dd 1000.0
 cost_one dd 1.0
 const_four_f32 dd 4.0
 const_thousand_f32 dd 1000.0
+const_sixty_thousand_f32 dd 60000.0
 const_sixty_f64 dq 60.0
 const_thousand_f64 dq 1000.0
 const_default_bpm_f64 dq 60.0
