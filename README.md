@@ -496,6 +496,18 @@ uses `xperf`, so it must be run from an elevated PowerShell prompt. Open the
 `assp.exe`; the map file also contains labels for inner assembly blocks such as
 `assp_step_parity_row_best_candidates_4.candidate_loop`.
 
+For a non-admin phase breakdown, run the built-in ASSP timers:
+
+```powershell
+.\assp\phase-profile.ps1 -Fixture .\assp\fixtures\camellia_mix.ssc -Runs 3
+```
+
+This runs `assp.exe <fixture> profile`, captures the report output, and prints
+average ticks, milliseconds, and percentages for the major parser/report
+stages. It builds with `build.ps1 -PhaseProfile` so normal builds do not carry
+the QPC instrumentation overhead. It also reports `WriteFile` call count and
+emitted bytes so report formatting overhead is visible.
+
 The standalone executable currently scans SSC files for chart metadata and
 `#NOTES:` / `#NOTES2:` tags. The second argument is a zero-based chart index,
 `list` to print chart indexes with step type, difficulty, meter, and

@@ -8,6 +8,8 @@ extern ExitProcess
 extern GetCommandLineA
 extern GetFileSizeEx
 extern GetStdHandle
+extern QueryPerformanceCounter
+extern QueryPerformanceFrequency
 extern ReadFile
 extern WriteFile
 
@@ -105,6 +107,31 @@ global start
 %define PARITY_BACKTRACK_CAP (PARITY_ROW_CAP * PARITY_STATE_CAP)
 %define MONO_THRESHOLD 6
 
+%ifdef ASSP_PHASE_PROFILE
+    %macro profile_init_call 0
+        call profile_init
+    %endmacro
+    %macro profile_finish_call 0
+        call profile_finish
+    %endmacro
+    %macro profile_begin_call 0
+        call profile_begin
+    %endmacro
+    %macro profile_end_call 1
+        lea rcx, [%1]
+        call profile_end
+    %endmacro
+%else
+    %macro profile_init_call 0
+    %endmacro
+    %macro profile_finish_call 0
+    %endmacro
+    %macro profile_begin_call 0
+    %endmacro
+    %macro profile_end_call 1
+    %endmacro
+%endif
+
 section .text
 
 start:
@@ -112,12 +139,17 @@ start:
 
     call init_stdout
     call parse_args
+    profile_init_call
 
+    profile_begin_call
     call read_file
+    profile_end_call profile_read_file_ticks
     test eax, eax
     jz fail_read
 
+    profile_begin_call
     call prepare_file_md5
+    profile_end_call profile_file_md5_ticks
     test eax, eax
     jz fail_hash
 
@@ -133,6 +165,7 @@ start:
     call print_all_charts
     test eax, eax
     jz fail_notes
+    profile_finish_call
     xor ecx, ecx
     call ExitProcess
 
@@ -140,6 +173,7 @@ start:
     call run_selected_chart
     test eax, eax
     jz fail_notes
+    profile_finish_call
     xor ecx, ecx
     call ExitProcess
 
@@ -150,7 +184,9 @@ run_selected_chart:
     mov rdx, [file_len]
     mov r8, [chart_index]
     lea r9, [chart_info]
+    profile_begin_call
     call assp_find_chart_by_index
+    profile_end_call profile_find_chart_ticks
     test eax, eax
     jz fail_notes
     add rsp, 40
@@ -161,7 +197,9 @@ run_loaded_chart:
 
     mov rcx, [chart_info + ASSP_CHART_INFO_STEP_TYPE_PTR]
     mov rdx, [chart_info + ASSP_CHART_INFO_STEP_TYPE_LEN]
+    profile_begin_call
     call assp_supported_step_type_lanes
+    profile_end_call profile_lane_ticks
     cmp rax, 4
     je .supported_lanes
     cmp rax, 8
@@ -171,38 +209,57 @@ run_loaded_chart:
 
     cmp qword [globals_prepared], 0
     jne .globals_ready
+    profile_begin_call
     call prepare_global_metadata
+    profile_end_call profile_global_ticks
+    profile_begin_call
     call prepare_global_normalized_metadata
+    profile_end_call profile_global_ticks
     test eax, eax
     jz fail_metadata
+    profile_begin_call
     call prepare_global_bpm_data
+    profile_end_call profile_global_ticks
     test eax, eax
     jz fail_hash
     mov qword [globals_prepared], 1
 .globals_ready:
+    profile_begin_call
     call prepare_chart_metadata
+    profile_end_call profile_chart_metadata_ticks
+    profile_begin_call
     call prepare_difficulty_label
+    profile_end_call profile_chart_metadata_ticks
     test eax, eax
     jz fail_metadata
+    profile_begin_call
     call prepare_tech_notation
+    profile_end_call profile_tech_notation_ticks
     test eax, eax
     jz fail_tech
 
+    profile_begin_call
     call prepare_hash
+    profile_end_call profile_hash_ticks
     test eax, eax
     jz fail_hash
 
+    profile_begin_call
     call prepare_offset
+    profile_end_call profile_timing_ticks
     test eax, eax
     jz fail_duration
 
+    profile_begin_call
     call prepare_timing_events
+    profile_end_call profile_timing_ticks
     test eax, eax
     jz fail_duration
 
     lea rcx, [minimized_buffer]
     mov rdx, [minimized_chart_len]
     lea r8, [note_stats]
+    profile_begin_call
     cmp qword [chart_lanes], 8
     je .count_stats_8
     call assp_count_note_stats_4
@@ -210,12 +267,15 @@ run_loaded_chart:
 .count_stats_8:
     call assp_count_note_stats_8
 .count_stats_done:
+    profile_end_call profile_note_stats_ticks
     test eax, eax
     jz fail_stats
     mov rax, [note_stats + ASSP_NOTE_STATS_STEPS]
     mov [raw_total_steps], rax
 
+    profile_begin_call
     call prepare_tech_counts
+    profile_end_call profile_tech_counts_ticks
     test eax, eax
     jz fail_tech
 
@@ -223,6 +283,7 @@ run_loaded_chart:
     mov rdx, [chart_info + ASSP_CHART_INFO_NOTES_LEN]
     lea r8, [density_buffer]
     mov r9d, DENSITY_CAP
+    profile_begin_call
     cmp qword [chart_lanes], 8
     je .measure_density_fill_8
     call assp_measure_densities_4
@@ -230,68 +291,99 @@ run_loaded_chart:
 .measure_density_fill_8:
     call assp_measure_densities_8
 .measure_density_fill_done:
+    profile_end_call profile_density_ticks
     mov [measure_count], rax
     cmp rax, DENSITY_CAP
     ja fail_density
 
+    profile_begin_call
     call prepare_selected_normalized_metadata
+    profile_end_call profile_selected_metadata_ticks
     test eax, eax
     jz fail_metadata
 
+    profile_begin_call
     call prepare_selected_normalized_timing_maps
+    profile_end_call profile_selected_metadata_ticks
     test eax, eax
     jz fail_metadata
 
+    profile_begin_call
     call prepare_bpm_range
+    profile_end_call profile_bpm_range_ticks
     test eax, eax
     jz fail_duration
 
+    profile_begin_call
     call prepare_mines_nonfake
+    profile_end_call profile_mines_fakes_ticks
     test eax, eax
     jz fail_stats
 
+    profile_begin_call
     call prepare_timing_fakes
+    profile_end_call profile_mines_fakes_ticks
     test eax, eax
     jz fail_stats
 
+    profile_begin_call
     call prepare_timing_stats
+    profile_end_call profile_mines_fakes_ticks
     test eax, eax
     jz fail_stats
 
+    profile_begin_call
     call prepare_nps
+    profile_end_call profile_nps_ticks
     test eax, eax
     jz fail_nps
 
+    profile_begin_call
     call prepare_equally_spaced
+    profile_end_call profile_nps_ticks
     test eax, eax
     jz fail_stats
 
+    profile_begin_call
     call prepare_default_patterns
+    profile_end_call profile_patterns_ticks
     test eax, eax
     jz fail_stats
 
+    profile_begin_call
     call prepare_anchors
+    profile_end_call profile_patterns_ticks
     test eax, eax
     jz fail_stats
 
+    profile_begin_call
     call prepare_facing_steps
+    profile_end_call profile_patterns_ticks
     test eax, eax
     jz fail_stats
 
+    profile_begin_call
     call prepare_pattern_percentages
+    profile_end_call profile_patterns_ticks
     test eax, eax
     jz fail_stats
 
+    profile_begin_call
     call prepare_tier_bpm
+    profile_end_call profile_bpm_range_ticks
 
+    profile_begin_call
     call prepare_duration
+    profile_end_call profile_timing_ticks
     test eax, eax
     jz fail_duration
 
     lea rcx, [density_buffer]
     mov rdx, [measure_count]
     lea r8, [stream_counts]
+    profile_begin_call
     call assp_stream_counts_from_densities
+    profile_end_call profile_streams_ticks
     test eax, eax
     jz fail_stats
 
@@ -301,7 +393,9 @@ run_loaded_chart:
     lea r9, [adjusted_stream_percent_centi]
     lea rax, [break_percent_centi]
     mov [rsp + 32], rax
+    profile_begin_call
     call assp_stream_percentages_centi
+    profile_end_call profile_streams_ticks
     test eax, eax
     jz fail_stats
 
@@ -309,7 +403,9 @@ run_loaded_chart:
     mov rdx, [measure_count]
     lea r8, [stream_segment_buffer]
     mov r9d, DENSITY_CAP
+    profile_begin_call
     call assp_stream_segments_from_densities
+    profile_end_call profile_streams_ticks
     mov [stream_segment_count], rax
     cmp rax, DENSITY_CAP
     ja fail_density
@@ -318,12 +414,16 @@ run_loaded_chart:
     mov rdx, [measure_count]
     lea r8, [stream_token_buffer]
     mov r9d, DENSITY_CAP
+    profile_begin_call
     call assp_stream_tokens_from_densities
+    profile_end_call profile_streams_ticks
     mov [stream_token_count], rax
     cmp rax, DENSITY_CAP
     ja fail_density
 
+    profile_begin_call
     call print_report
+    profile_end_call profile_print_ticks
     mov eax, ASSP_TRUE
 
 .done:
@@ -418,6 +518,198 @@ init_stdout:
     add rsp, 40
     ret
 
+profile_init:
+    cmp qword [profile_mode], 0
+    je .done
+    sub rsp, 40
+
+    lea r10, [profile_counters_begin]
+    lea r11, [profile_counters_end]
+    xor eax, eax
+.zero_loop:
+    cmp r10, r11
+    jae .query_frequency
+    mov [r10], rax
+    add r10, 8
+    jmp .zero_loop
+
+.query_frequency:
+    lea rcx, [profile_frequency]
+    call QueryPerformanceFrequency
+    lea rcx, [profile_total_start_tick]
+    call QueryPerformanceCounter
+
+    add rsp, 40
+.done:
+    ret
+
+profile_begin:
+    cmp qword [profile_mode], 0
+    je .done
+    push rax
+    push rcx
+    push rdx
+    push r8
+    push r9
+    push r10
+    push r11
+    sub rsp, 32
+
+    lea rcx, [profile_qpc_tmp]
+    call QueryPerformanceCounter
+    mov rax, [profile_qpc_tmp]
+    mov [profile_start_tick], rax
+
+    add rsp, 32
+    pop r11
+    pop r10
+    pop r9
+    pop r8
+    pop rdx
+    pop rcx
+    pop rax
+.done:
+    ret
+
+profile_end:
+    cmp qword [profile_mode], 0
+    je .done
+    push rax
+    push rcx
+    push rdx
+    push r8
+    push r9
+    push r10
+    push r11
+    sub rsp, 32
+
+    mov [profile_accum_ptr], rcx
+    lea rcx, [profile_qpc_tmp]
+    call QueryPerformanceCounter
+    mov rax, [profile_qpc_tmp]
+    sub rax, [profile_start_tick]
+    mov r10, [profile_accum_ptr]
+    add [r10], rax
+
+    add rsp, 32
+    pop r11
+    pop r10
+    pop r9
+    pop r8
+    pop rdx
+    pop rcx
+    pop rax
+.done:
+    ret
+
+profile_finish:
+    cmp qword [profile_mode], 0
+    je .done
+    sub rsp, 40
+
+    lea rcx, [profile_qpc_tmp]
+    call QueryPerformanceCounter
+    mov rax, [profile_qpc_tmp]
+    sub rax, [profile_total_start_tick]
+    mov [profile_total_ticks], rax
+
+    add rsp, 40
+    call print_profile_summary
+.done:
+    ret
+
+print_profile_summary:
+    sub rsp, 40
+    lea rcx, [label_profile_frequency]
+    mov rdx, [profile_frequency]
+    call print_field
+    lea rcx, [label_profile_total]
+    mov rdx, [profile_total_ticks]
+    call print_field
+    lea rcx, [label_profile_read_file]
+    mov rdx, [profile_read_file_ticks]
+    call print_field
+    lea rcx, [label_profile_file_md5]
+    mov rdx, [profile_file_md5_ticks]
+    call print_field
+    lea rcx, [label_profile_find_chart]
+    mov rdx, [profile_find_chart_ticks]
+    call print_field
+    lea rcx, [label_profile_lane]
+    mov rdx, [profile_lane_ticks]
+    call print_field
+    lea rcx, [label_profile_global]
+    mov rdx, [profile_global_ticks]
+    call print_field
+    lea rcx, [label_profile_chart_metadata]
+    mov rdx, [profile_chart_metadata_ticks]
+    call print_field
+    lea rcx, [label_profile_tech_notation]
+    mov rdx, [profile_tech_notation_ticks]
+    call print_field
+    lea rcx, [label_profile_hash]
+    mov rdx, [profile_hash_ticks]
+    call print_field
+    lea rcx, [label_profile_timing]
+    mov rdx, [profile_timing_ticks]
+    call print_field
+    lea rcx, [label_profile_note_stats]
+    mov rdx, [profile_note_stats_ticks]
+    call print_field
+    lea rcx, [label_profile_tech_counts]
+    mov rdx, [profile_tech_counts_ticks]
+    call print_field
+    lea rcx, [label_profile_density]
+    mov rdx, [profile_density_ticks]
+    call print_field
+    lea rcx, [label_profile_selected_metadata]
+    mov rdx, [profile_selected_metadata_ticks]
+    call print_field
+    lea rcx, [label_profile_bpm_range]
+    mov rdx, [profile_bpm_range_ticks]
+    call print_field
+    lea rcx, [label_profile_mines_fakes]
+    mov rdx, [profile_mines_fakes_ticks]
+    call print_field
+    lea rcx, [label_profile_nps]
+    mov rdx, [profile_nps_ticks]
+    call print_field
+    lea rcx, [label_profile_patterns]
+    mov rdx, [profile_patterns_ticks]
+    call print_field
+    lea rcx, [label_profile_streams]
+    mov rdx, [profile_streams_ticks]
+    call print_field
+    lea rcx, [label_profile_print]
+    mov rdx, [profile_print_ticks]
+    call print_field
+    lea rcx, [label_profile_write_calls]
+    mov rdx, [profile_write_calls]
+    call print_field
+    lea rcx, [label_profile_write_bytes]
+    mov rdx, [profile_write_bytes]
+    call print_field
+    lea rcx, [label_profile_step_row_times]
+    mov rdx, [profile_step_row_times_ticks]
+    call print_field
+    lea rcx, [label_profile_step_hold_ends]
+    mov rdx, [profile_step_hold_ends_ticks]
+    call print_field
+    lea rcx, [label_profile_step_prepare_rows]
+    mov rdx, [profile_step_prepare_rows_ticks]
+    call print_field
+    lea rcx, [label_profile_step_dp_fast]
+    mov rdx, [profile_step_dp_fast_ticks]
+    call print_field
+    lea rcx, [label_profile_step_dp_full]
+    mov rdx, [profile_step_dp_full_ticks]
+    call print_field
+    lea rcx, [label_profile_step_fallback]
+    mov rdx, [profile_step_fallback_ticks]
+    call print_field
+    add rsp, 40
+    ret
+
 parse_args:
     push rsi
     sub rsp, 32
@@ -427,6 +719,7 @@ parse_args:
     mov qword [chart_index], 0
     mov qword [list_mode], 0
     mov qword [all_mode], 0
+    mov qword [profile_mode], 0
     mov qword [globals_prepared], 0
     mov qword [global_timing_prepared], 0
 
@@ -517,6 +810,10 @@ parse_args:
     je .store_list
     cmp byte [rsi], 'L'
     je .store_list
+    cmp byte [rsi], 'p'
+    je .store_profile
+    cmp byte [rsi], 'P'
+    je .store_profile
     cmp byte [rsi], '-'
     jne .parse_chart_number
     cmp byte [rsi + 1], '-'
@@ -529,6 +826,10 @@ parse_args:
     je .store_all
     cmp byte [rsi + 2], 'A'
     je .store_all
+    cmp byte [rsi + 2], 'p'
+    je .store_profile
+    cmp byte [rsi + 2], 'P'
+    je .store_profile
 
 .parse_chart_number:
     xor rax, rax
@@ -554,6 +855,11 @@ parse_args:
 
 .store_all:
     mov qword [all_mode], 1
+    jmp .done
+
+.store_profile:
+    mov qword [all_mode], 1
+    mov qword [profile_mode], 1
 
 .done:
     add rsp, 32
@@ -722,7 +1028,9 @@ print_all_charts:
     mov rdx, [file_len]
     mov r8, [chart_cursor]
     lea r9, [chart_info]
+    profile_begin_call
     call assp_find_next_chart
+    profile_end_call profile_find_chart_ticks
     test eax, eax
     jz .done_loop
 
@@ -2889,7 +3197,9 @@ prepare_step_parity_bpm_4:
     lea rax, [parity_row_beats]
     mov [rsp + 56], rax
     mov qword [rsp + 64], PARITY_ROW_CAP
+    profile_begin_call
     call assp_step_parity_bpm_row_times_4
+    profile_end_call profile_step_row_times_ticks
     cmp rax, ASSP_NOT_FOUND
     je .fail
     cmp rax, PARITY_ROW_CAP
@@ -2916,7 +3226,9 @@ prepare_step_parity_rows_4:
     lea rax, [parity_hold_end_beats]
     mov [rsp + 32], rax
     mov qword [rsp + 40], PARITY_ROW_CAP
+    profile_begin_call
     call assp_step_parity_hold_head_ends_4
+    profile_end_call profile_step_hold_ends_ticks
     cmp rax, ASSP_NOT_FOUND
     je .fail
     cmp rax, [parity_source_row_count]
@@ -2949,7 +3261,9 @@ prepare_step_parity_rows_4:
     lea rax, [parity_prepared_row_ms]
     mov [rsp + 112], rax
     mov qword [rsp + 120], PARITY_ROW_CAP
+    profile_begin_call
     call assp_step_parity_prepare_hold_rows_4
+    profile_end_call profile_step_prepare_rows_ticks
     cmp rax, ASSP_NOT_FOUND
     je .fail
     cmp rax, PARITY_ROW_CAP
@@ -3005,7 +3319,9 @@ prepare_step_parity_rows_4:
     lea rcx, [parity_prepared_rows]
     lea rdx, [parity_workspace]
     lea r8, [tech_counts]
+    profile_begin_call
     call assp_step_parity_count_prepared_rows_4
+    profile_end_call profile_step_dp_fast_ticks
     test eax, eax
     jnz .success
 
@@ -3013,7 +3329,9 @@ prepare_step_parity_rows_4:
     lea rcx, [parity_prepared_rows]
     lea rdx, [parity_workspace]
     lea r8, [tech_counts]
+    profile_begin_call
     call assp_step_parity_count_prepared_rows_4
+    profile_end_call profile_step_dp_full_ticks
     test eax, eax
     jz .fail
 
@@ -3044,7 +3362,9 @@ prepare_step_parity_events_4:
     lea rax, [parity_row_beats]
     mov [rsp + 56], rax
     mov qword [rsp + 64], PARITY_ROW_CAP
+    profile_begin_call
     call assp_step_parity_bpm_row_times_4
+    profile_end_call profile_step_row_times_ticks
     cmp rax, ASSP_NOT_FOUND
     je .fail
     cmp rax, PARITY_ROW_CAP
@@ -3052,6 +3372,7 @@ prepare_step_parity_events_4:
     mov [parity_source_row_count], rax
 
     mov qword [rsp + 96], 0
+    profile_begin_call
 .row_time_loop:
     mov r10, [rsp + 96]
     cmp r10, [parity_source_row_count]
@@ -3090,6 +3411,7 @@ prepare_step_parity_events_4:
     jmp .row_time_loop
 
 .row_time_done:
+    profile_end_call profile_step_row_times_ticks
     add rsp, 152
     call prepare_step_parity_rows_4
     ret
@@ -3126,14 +3448,18 @@ prepare_tech_counts:
     lea rcx, [minimized_buffer]
     mov rdx, [minimized_chart_len]
     lea r8, [tech_counts]
+    profile_begin_call
     call assp_count_step_tech_brackets_minimized_4
+    profile_end_call profile_step_fallback_ticks
     jmp .done
 
 .count_8:
     lea rcx, [minimized_buffer]
     mov rdx, [minimized_chart_len]
     lea r8, [tech_counts]
+    profile_begin_call
     call assp_count_step_tech_brackets_minimized_8
+    profile_end_call profile_step_fallback_ticks
 
 .done:
     add rsp, 40
@@ -5923,6 +6249,13 @@ print_z:
     ret
 
 print_raw:
+%ifdef ASSP_PHASE_PROFILE
+    cmp qword [profile_mode], 0
+    je .write
+    inc qword [profile_write_calls]
+    add [profile_write_bytes], rdx
+.write:
+%endif
     sub rsp, 56
     mov r8, rdx
     mov rdx, rcx
@@ -6388,6 +6721,35 @@ label_up_arrows db "up_arrows: ", 0
 label_right db "right: ", 0
 label_right_arrows db "right_arrows: ", 0
 label_bad_rows db "malformed_rows: ", 0
+label_profile_frequency db "profile_frequency: ", 0
+label_profile_total db "profile_total_ticks: ", 0
+label_profile_read_file db "profile_read_file_ticks: ", 0
+label_profile_file_md5 db "profile_file_md5_ticks: ", 0
+label_profile_find_chart db "profile_find_chart_ticks: ", 0
+label_profile_lane db "profile_lane_ticks: ", 0
+label_profile_global db "profile_global_ticks: ", 0
+label_profile_chart_metadata db "profile_chart_metadata_ticks: ", 0
+label_profile_tech_notation db "profile_tech_notation_ticks: ", 0
+label_profile_hash db "profile_hash_ticks: ", 0
+label_profile_timing db "profile_timing_ticks: ", 0
+label_profile_note_stats db "profile_note_stats_ticks: ", 0
+label_profile_tech_counts db "profile_tech_counts_ticks: ", 0
+label_profile_density db "profile_density_ticks: ", 0
+label_profile_selected_metadata db "profile_selected_metadata_ticks: ", 0
+label_profile_bpm_range db "profile_bpm_range_ticks: ", 0
+label_profile_mines_fakes db "profile_mines_fakes_ticks: ", 0
+label_profile_nps db "profile_nps_ticks: ", 0
+label_profile_patterns db "profile_patterns_ticks: ", 0
+label_profile_streams db "profile_streams_ticks: ", 0
+label_profile_print db "profile_print_ticks: ", 0
+label_profile_write_calls db "profile_write_calls: ", 0
+label_profile_write_bytes db "profile_write_bytes: ", 0
+label_profile_step_row_times db "profile_step_row_times_ticks: ", 0
+label_profile_step_hold_ends db "profile_step_hold_ends_ticks: ", 0
+label_profile_step_prepare_rows db "profile_step_prepare_rows_ticks: ", 0
+label_profile_step_dp_fast db "profile_step_dp_fast_ticks: ", 0
+label_profile_step_dp_full db "profile_step_dp_full_ticks: ", 0
+label_profile_step_fallback db "profile_step_fallback_ticks: ", 0
 space db " ", 0
 comma db ",", 0
 equals db "=", 0
@@ -6417,6 +6779,7 @@ chart_index resq 1
 chart_lanes resq 1
 list_mode resq 1
 all_mode resq 1
+profile_mode resq 1
 globals_prepared resq 1
 global_timing_prepared resq 1
 chart_count resq 1
@@ -6429,6 +6792,41 @@ file_handle resq 1
 file_size resq 1
 file_len resq 1
 file_bytes_read resd 1
+profile_frequency resq 1
+profile_total_start_tick resq 1
+profile_start_tick resq 1
+profile_qpc_tmp resq 1
+profile_accum_ptr resq 1
+profile_counters_begin:
+profile_total_ticks resq 1
+profile_read_file_ticks resq 1
+profile_file_md5_ticks resq 1
+profile_find_chart_ticks resq 1
+profile_lane_ticks resq 1
+profile_global_ticks resq 1
+profile_chart_metadata_ticks resq 1
+profile_tech_notation_ticks resq 1
+profile_hash_ticks resq 1
+profile_timing_ticks resq 1
+profile_note_stats_ticks resq 1
+profile_tech_counts_ticks resq 1
+profile_density_ticks resq 1
+profile_selected_metadata_ticks resq 1
+profile_bpm_range_ticks resq 1
+profile_mines_fakes_ticks resq 1
+profile_nps_ticks resq 1
+profile_patterns_ticks resq 1
+profile_streams_ticks resq 1
+profile_print_ticks resq 1
+profile_write_calls resq 1
+profile_write_bytes resq 1
+profile_step_row_times_ticks resq 1
+profile_step_hold_ends_ticks resq 1
+profile_step_prepare_rows_ticks resq 1
+profile_step_dp_fast_ticks resq 1
+profile_step_dp_full_ticks resq 1
+profile_step_fallback_ticks resq 1
+profile_counters_end:
 chart_info resb ASSP_CHART_INFO_SIZE
 bpms_slice resb ASSP_BYTE_SLICE_SIZE
 offset_slice resb ASSP_BYTE_SLICE_SIZE

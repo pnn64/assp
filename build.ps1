@@ -12,6 +12,7 @@ param(
     [switch]$KeepGoing,
     [switch]$Clean,
     [switch]$ProfileSymbols,
+    [switch]$PhaseProfile,
     [Parameter(ValueFromRemainingArguments = $true)]
     [string[]]$ExtraArgs
 )
@@ -105,6 +106,9 @@ foreach ($asm in Get-ChildItem (Join-Path $root "asm") -Recurse -Filter "*.asm" 
     $nasmArgs = @("-f", "win64", "-I$include")
     if ($ProfileSymbols) {
         $nasmArgs += @("-g", "-F", "cv8")
+    }
+    if ($PhaseProfile) {
+        $nasmArgs += "-DASSP_PHASE_PROFILE"
     }
     $nasmArgs += @($asm.FullName, "-o", $obj)
     & nasm @nasmArgs
