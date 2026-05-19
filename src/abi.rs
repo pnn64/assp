@@ -395,6 +395,9 @@ unsafe extern "C" {
         actual_max_bpm: i64,
         out_min_bpm: *mut i64,
         out_max_bpm: *mut i64,
+        out_text_min_bpm: *mut i64,
+        out_text_max_bpm: *mut i64,
+        out_text_is_range: *mut i64,
     ) -> c_int;
     fn assp_parse_tech_notation(
         credit: *const u8,
@@ -1186,6 +1189,9 @@ pub fn resolve_display_bpm(
             actual_max_bpm,
             &mut out_min,
             &mut out_max,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
         )
     };
     (ok != 0).then_some((out_min, out_max))

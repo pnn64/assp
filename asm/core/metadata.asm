@@ -10,6 +10,18 @@ global assp_steps_timing_allowed
 
 section .text
 
+%define DIFF_ARG_METER_PTR 128
+%define DIFF_ARG_METER_LEN 136
+%define DIFF_ARG_IS_SM 144
+%define DIFF_ARG_OUT_PTR 152
+%define DIFF_ARG_OUT_CAP 160
+
+%define DISPLAY_ARG_OUT_MIN 96
+%define DISPLAY_ARG_OUT_MAX 104
+%define DISPLAY_ARG_TEXT_MIN 112
+%define DISPLAY_ARG_TEXT_MAX 120
+%define DISPLAY_ARG_TEXT_RANGE 128
+
 ; rcx = #VERSION bytes, rdx = len, r8d = nonzero when the file is .sm.
 ; eax = 1 when RSSP allows chart-local step timing.
 assp_steps_timing_allowed:
@@ -235,9 +247,9 @@ assp_resolve_difficulty_label:
     mov rdi, rdx
     mov r12, r8
     mov r13, r9
-    mov r14, [rsp + 128]
-    mov r15, [rsp + 136]
-    mov rbx, [rsp + 144]
+    mov r14, [rsp + DIFF_ARG_METER_PTR]
+    mov r15, [rsp + DIFF_ARG_METER_LEN]
+    mov rbx, [rsp + DIFF_ARG_IS_SM]
 
     test ebx, ebx
     jz .ssc_raw
@@ -300,8 +312,8 @@ assp_resolve_difficulty_label:
 .emit:
     mov r10, rax
     mov r11, rdx
-    mov r8, [rsp + 152]
-    mov r9, [rsp + 160]
+    mov r8, [rsp + DIFF_ARG_OUT_PTR]
+    mov r9, [rsp + DIFF_ARG_OUT_CAP]
     test r8, r8
     jz .success
     cmp r11, r9
@@ -339,7 +351,7 @@ assp_resolve_difficulty_label:
     mov rdx, rdi
     lea r8, [%1]
     mov r9d, %2 - %1
-    call match_trim_ci
+    call match_ci
     test eax, eax
     jz %%next
     lea rax, [%3]
@@ -348,13 +360,37 @@ assp_resolve_difficulty_label:
 %%next:
 %endmacro
 
+%macro trim_difficulty_input 1
+    test rdx, rdx
+    jz %1
+    test rcx, rcx
+    jz %1
+    mov rsi, rcx
+    lea rdi, [rcx + rdx]
+%%trim_left:
+    cmp rsi, rdi
+    jae %1
+    cmp byte [rsi], ' '
+    ja %%trim_right
+    inc rsi
+    jmp %%trim_left
+%%trim_right:
+    cmp rdi, rsi
+    jbe %1
+    cmp byte [rdi - 1], ' '
+    ja %%len
+    dec rdi
+    jmp %%trim_right
+%%len:
+    sub rdi, rsi
+%endmacro
+
 match_canonical_difficulty_label:
     push rsi
     push rdi
     push r12
     sub rsp, 32
-    mov rsi, rcx
-    mov rdi, rdx
+    trim_difficulty_input .not_found
 
     try_difficulty match_beginner, match_beginner_end, label_beginner, label_beginner_end
     try_difficulty match_easy, match_easy_end, label_easy, label_easy_end
@@ -362,6 +398,7 @@ match_canonical_difficulty_label:
     try_difficulty match_hard, match_hard_end, label_hard, label_hard_end
     try_difficulty match_challenge, match_challenge_end, label_challenge, label_challenge_end
     try_difficulty match_edit, match_edit_end, label_edit, label_edit_end
+.not_found:
     xor eax, eax
     xor edx, edx
 
@@ -377,8 +414,7 @@ match_old_difficulty_label:
     push rdi
     push r12
     sub rsp, 32
-    mov rsi, rcx
-    mov rdi, rdx
+    trim_difficulty_input .not_found
 
     try_difficulty match_beginner, match_beginner_end, label_beginner, label_beginner_end
     try_difficulty match_easy, match_easy_end, label_easy, label_easy_end
@@ -398,6 +434,7 @@ match_old_difficulty_label:
     try_difficulty match_oni, match_oni_end, label_challenge, label_challenge_end
     try_difficulty match_smaniac, match_smaniac_end, label_challenge, label_challenge_end
     try_difficulty match_edit, match_edit_end, label_edit, label_edit_end
+.not_found:
     xor eax, eax
     xor edx, edx
 
@@ -408,12 +445,41 @@ match_old_difficulty_label:
     pop rsi
     ret
 
+; rcx = trimmed bytes, rdx = len, r8 = lowercase tag, r9 = tag len. eax = match.
+match_ci:
+    cmp rdx, r9
+    jne .false
+    mov r10, rcx
+    xor ecx, ecx
+
+.loop:
+    cmp rcx, rdx
+    jae .true
+    mov al, [r10 + rcx]
+    cmp al, 'A'
+    jb .input_ready
+    cmp al, 'Z'
+    ja .input_ready
+    or al, 20h
+.input_ready:
+    cmp al, [r8 + rcx]
+    jne .false
+    inc rcx
+    jmp .loop
+
+.true:
+    mov eax, ASSP_TRUE
+    ret
+.false:
+    xor eax, eax
+    ret
+
 ; rcx = bytes, rdx = len, r8 = lowercase tag, r9 = tag len. eax = match.
 match_trim_ci:
     test rdx, rdx
     jz .check_empty
     test rcx, rcx
-    jz .false
+    jz match_ci.false
     mov r10, rcx
     lea r11, [rcx + rdx]
 
@@ -435,47 +501,19 @@ match_trim_ci:
 
 .empty:
     xor edx, edx
-    jmp .compare_len
+    mov rcx, r10
+    jmp match_ci
 
 .len:
     mov rdx, r11
     sub rdx, r10
-
-.compare_len:
-    cmp rdx, r9
-    jne .false
-    xor ecx, ecx
-
-.loop:
-    cmp rcx, rdx
-    jae .true
-    mov al, [r10 + rcx]
-    cmp al, 'A'
-    jb .input_ready
-    cmp al, 'Z'
-    ja .input_ready
-    or al, 20h
-.input_ready:
-    mov r11b, [r8 + rcx]
-    cmp r11b, 'A'
-    jb .tag_ready
-    cmp r11b, 'Z'
-    ja .tag_ready
-    or r11b, 20h
-.tag_ready:
-    cmp al, r11b
-    jne .false
-    inc rcx
-    jmp .loop
+    mov rcx, r10
+    jmp match_ci
 
 .check_empty:
     test r9, r9
-    jnz .false
-.true:
+    jnz match_ci.false
     mov eax, ASSP_TRUE
-    ret
-.false:
-    xor eax, eax
     ret
 
 ; rcx = meter bytes, rdx = len, r8 = nonzero for .sm. rax/rdx = label.
@@ -698,11 +736,11 @@ assp_resolve_display_bpm:
     push r14
     push r15
 
-    mov r14, [rsp + 96]
-    mov r15, [rsp + 104]
-    mov rdi, [rsp + 112]
-    mov rsi, [rsp + 120]
-    mov rbx, [rsp + 128]
+    mov r14, [rsp + DISPLAY_ARG_OUT_MIN]
+    mov r15, [rsp + DISPLAY_ARG_OUT_MAX]
+    mov rdi, [rsp + DISPLAY_ARG_TEXT_MIN]
+    mov rsi, [rsp + DISPLAY_ARG_TEXT_MAX]
+    mov rbx, [rsp + DISPLAY_ARG_TEXT_RANGE]
     test r14, r14
     jz .fail
     test r15, r15
@@ -733,13 +771,13 @@ assp_resolve_display_bpm:
     test rdi, rdi
     jz .text_max
     mov rax, r13
-    call resolve_display_milli_to_text_int
+    call resolve_display_milli_to_int
     mov [rdi], rax
 .text_max:
     test rsi, rsi
     jz .numeric
     mov rax, r12
-    call resolve_display_milli_to_text_int
+    call resolve_display_milli_to_int
     mov [rsi], rax
 
 .numeric:
@@ -999,21 +1037,6 @@ resolve_display_milli_prefix:
 
 ; rax = positive milli. rax = integer BPM rounded like Rust {:.0}.
 resolve_display_milli_to_int:
-    xor edx, edx
-    mov r8d, 1000
-    div r8
-    cmp rdx, 500
-    ja .round_up
-    jb .done
-    test al, 1
-    jz .done
-.round_up:
-    inc rax
-.done:
-    ret
-
-; rax = positive milli. rax = integer BPM rounded like Rust display {:.0}.
-resolve_display_milli_to_text_int:
     xor edx, edx
     mov r8d, 1000
     div r8
