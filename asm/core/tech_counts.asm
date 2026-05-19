@@ -258,8 +258,8 @@ is_footswitch_4:
     cmp al, dl
     je .no
     movzx ecx, al
-    lea r10, [rel other_foot_part]
-    movzx ecx, byte [r10 + rcx]
+    lea rax, [rel other_foot_part]
+    movzx ecx, byte [rax + rcx]
     cmp cl, dl
     je .no
     mov eax, ASSP_TRUE

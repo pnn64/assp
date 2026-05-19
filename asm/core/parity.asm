@@ -2652,9 +2652,18 @@ assp_step_parity_count_prepared_rows_4:
     mov rax, [rsp + (%1 * 8)]
     cmp rax, ASSP_NOT_FOUND
     je %%done
-    mov ecx, [r13 + rbx * 4]
+    movss xmm0, [r13 + rbx * 4]
+    mulss xmm0, [rel rows_per_beat_f32]
+    cvtss2si ecx, xmm0
+    movss xmm1, [r13 + rax * 4]
+    mulss xmm1, [rel rows_per_beat_f32]
+    cvtss2si edx, xmm1
+    sub ecx, edx
+    cvtsi2ss xmm0, ecx
+    divss xmm0, [rel rows_per_beat_f32]
+    addss xmm0, [r13 + rax * 4]
     shl rax, 4
-    mov [rdi + rax + (%1 * 4)], ecx
+    movss [rdi + rax + (%1 * 4)], xmm0
 %%invalidate:
     mov qword [rsp + (%1 * 8)], ASSP_NOT_FOUND
 %%done:
@@ -2820,7 +2829,9 @@ assp_step_parity_hold_head_ends_4:
     mov [rsp + 84], eax
 %endmacro
 
-%macro prepare_hold_live_col4 1
+%macro prepare_hold_live_col4 2
+    test r10d, %2
+    jz %%done
     movss xmm0, [rsp + 72 + (%1 * 4)]
     comiss xmm0, [rsp + 68]
     jbe %%done
@@ -2875,10 +2886,10 @@ assp_step_parity_hold_head_ends_4:
     mov [rdx + rax * 4], ecx
 
     xor ecx, ecx
-    prepare_hold_live_col4 0
-    prepare_hold_live_col4 1
-    prepare_hold_live_col4 2
-    prepare_hold_live_col4 3
+    prepare_hold_live_col4 0, 1
+    prepare_hold_live_col4 1, 2
+    prepare_hold_live_col4 2, 4
+    prepare_hold_live_col4 3, 8
     mov [rsp + 104], ecx
 
     mov eax, [rsp + 72]
@@ -3369,6 +3380,7 @@ cost_twisted_foot_weight dd 100000.0
 cost_facing_weight dd 2.0
 cost_spin_weight dd 1000.0
 cost_one dd 1.0
+rows_per_beat_f32 dd 48.0
 hold_end_none dd -1.0
 dance_single_distances4:
     dd 0.0, 1.4142135623730951, 1.4142135623730951, 2.0

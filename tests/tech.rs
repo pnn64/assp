@@ -3,8 +3,9 @@ use assp::{
     StepParityBracketTapCosts4, StepParityDistanceCosts4, StepParityElapsedCosts4,
     StepParityOrientationCosts4, StepParityState4, StepParitySwitchCosts4, TechCounts,
     calculate_step_tech_counts_from_placements_4, count_step_tech_brackets_minimized_4,
-    count_step_tech_brackets_minimized_8, parse_tech_notation, step_parity_action_cost_4,
-    step_parity_action_flags_4, step_parity_basic_action_costs_4,
+    count_step_tech_brackets_minimized_8, find_bpms_for_chart, find_chart_by_index,
+    find_global_tag, minimize_chart_4, parse_offset_ms, parse_tech_notation,
+    step_parity_action_cost_4, step_parity_action_flags_4, step_parity_basic_action_costs_4,
     step_parity_bracket_tap_action_costs_4, step_parity_count_hold_rows_4,
     step_parity_count_prepared_rows_4, step_parity_distance_action_costs_4,
     step_parity_elapsed_action_costs_4, step_parity_hold_head_ends_4,
@@ -42,6 +43,196 @@ fn assert_brackets_match_rssp(data: &[u8], lanes: usize, counts: TechCounts) {
     let expected = rssp_core::step_parity::analyze_lanes(data, &[(0.0, 120.0)], 0.0, lanes);
     assert_eq!(counts.brackets, expected.brackets);
     assert_only_brackets(counts, expected.brackets);
+}
+
+fn slice_from<'a>(data: &'a [u8], ptr: *const u8, len: usize) -> &'a [u8] {
+    let start = ptr as usize - data.as_ptr() as usize;
+    &data[start..start + len]
+}
+
+fn step_counts_subset(counts: rssp_core::step_parity::TechCounts) -> TechCounts {
+    TechCounts {
+        crossovers: counts.crossovers,
+        footswitches: counts.footswitches,
+        up_footswitches: counts.up_footswitches,
+        down_footswitches: counts.down_footswitches,
+        sideswitches: counts.sideswitches,
+        jacks: counts.jacks,
+        brackets: counts.brackets,
+        doublesteps: counts.doublesteps,
+    }
+}
+
+fn bpm_row_times(beats: &[f32], bpms: &[(f64, f64)], offset: f64) -> (Vec<f32>, Vec<i32>) {
+    let seconds: Vec<f32> = beats
+        .iter()
+        .map(|&beat| {
+            (rssp_core::bpm::get_elapsed_time(f64::from(beat), bpms, &[], &[], &[]) - offset) as f32
+        })
+        .collect();
+    let mut row_ms = Vec::with_capacity(seconds.len());
+    for (idx, &second) in seconds.iter().enumerate() {
+        if idx == 0 {
+            row_ms.push((f64::from(second) * 1000.0).floor() as i32);
+        } else {
+            let elapsed = f64::from(second - seconds[idx - 1]);
+            row_ms.push(row_ms[idx - 1] + (elapsed * 1000.0).floor() as i32);
+        }
+    }
+    (seconds, row_ms)
+}
+
+fn timing_row_times(beats: &[f32], timing: &rssp_core::timing::TimingData) -> (Vec<f32>, Vec<i32>) {
+    let seconds: Vec<f32> = beats
+        .iter()
+        .map(|&beat| rssp_core::timing::get_time_for_beat(timing, f64::from(beat)) as f32)
+        .collect();
+    let mut row_ms = Vec::with_capacity(seconds.len());
+    for (idx, &second) in seconds.iter().enumerate() {
+        if idx == 0 {
+            row_ms.push((f64::from(second) * 1000.0).floor() as i32);
+        } else {
+            let elapsed = f64::from(second - seconds[idx - 1]);
+            row_ms.push(row_ms[idx - 1] + (elapsed * 1000.0).floor() as i32);
+        }
+    }
+    (seconds, row_ms)
+}
+
+fn trim_ws(mut bytes: &[u8]) -> &[u8] {
+    while bytes.first().is_some_and(u8::is_ascii_whitespace) {
+        bytes = &bytes[1..];
+    }
+    while bytes.last().is_some_and(u8::is_ascii_whitespace) {
+        bytes = &bytes[..bytes.len() - 1];
+    }
+    bytes
+}
+
+fn nonzero_row_beats_4(minimized: &[u8]) -> Vec<f32> {
+    let mut beats = Vec::new();
+    for (measure_idx, measure) in minimized.split(|&b| b == b',').enumerate() {
+        let lines: Vec<_> = measure
+            .split(|&b| b == b'\n')
+            .map(trim_ws)
+            .filter(|line| line.len() >= 4)
+            .collect();
+        if lines.is_empty() {
+            continue;
+        }
+
+        let start = measure_idx as f32 * 4.0;
+        let step = 4.0 / lines.len() as f32;
+        for (row_idx, line) in lines.iter().enumerate() {
+            if line[..4].iter().all(|&b| b == b'0') {
+                continue;
+            }
+            let beat = (row_idx as f32).mul_add(step, start);
+            let row = rssp_core::timing::beat_to_note_row(f64::from(beat));
+            beats.push(rssp_core::timing::note_row_to_beat(row) as f32);
+        }
+    }
+    beats
+}
+
+fn assert_bpm_only_fixture_step_parity(data: &[u8], chart_idx: usize) {
+    let chart = find_chart_by_index(data, chart_idx).unwrap();
+    let notes = slice_from(data, chart.note_data, chart.note_data_len);
+    let asm_minimized = minimize_chart_4(notes).unwrap();
+    let (rust_minimized, _, _, _all_row_beats, _) =
+        rssp_core::stats::minimize_chart_count_rows(notes, 4);
+    assert_eq!(asm_minimized, rust_minimized);
+    let row_beats = nonzero_row_beats_4(&asm_minimized);
+
+    let bpms = find_bpms_for_chart(data, chart_idx).unwrap();
+    let bpms = slice_from(data, bpms.data, bpms.len);
+    let mut bpms = rssp_core::bpm::parse_bpm_map(std::str::from_utf8(bpms).unwrap());
+    if bpms.is_empty() {
+        bpms.push((0.0, 60.0));
+    }
+    let offset = find_global_tag(data, b"OFFSET")
+        .map(|slice| parse_offset_ms(slice_from(data, slice.data, slice.len)) as f64 / 1000.0)
+        .unwrap_or(0.0);
+    let (row_seconds, row_ms) = bpm_row_times(&row_beats, &bpms, offset);
+
+    let rows =
+        step_parity_prepare_hold_rows_4(&asm_minimized, &row_seconds, &row_ms, &row_beats).unwrap();
+    let actual_placements = step_parity_place_rows_4(
+        &rows.note_counts,
+        &rows.note_masks,
+        &rows.hold_masks,
+        &rows.mine_masks,
+        &rows.prev_row_live_holds,
+        &rows.row_seconds,
+        4096,
+    )
+    .unwrap();
+    let expected_placements = expected_place_rows(
+        &rows.note_counts,
+        &rows.note_masks,
+        &rows.hold_masks,
+        &rows.mine_masks,
+        &rows.prev_row_live_holds,
+        &rows.row_seconds,
+    );
+    assert_eq!(
+        actual_placements, expected_placements,
+        "local placement mirror mismatch for chart {chart_idx}"
+    );
+
+    let actual = placement_counts(
+        &rows.tech_masks,
+        &rows.note_counts,
+        &rows.row_ms,
+        &actual_placements,
+    );
+    let expected = rssp_core::step_parity::analyze_lanes(&rust_minimized, &bpms, offset, 4);
+
+    assert_eq!(actual, step_counts_subset(expected), "chart {chart_idx}");
+}
+
+fn assert_timing_step_parity_counts(
+    minimized: &[u8],
+    timing: &rssp_core::timing::TimingData,
+    label: &str,
+) {
+    let row_beats = nonzero_row_beats_4(minimized);
+    let (row_seconds, row_ms) = timing_row_times(&row_beats, timing);
+
+    let rows =
+        step_parity_prepare_hold_rows_4(minimized, &row_seconds, &row_ms, &row_beats).unwrap();
+    let actual_placements = step_parity_place_rows_4(
+        &rows.note_counts,
+        &rows.note_masks,
+        &rows.hold_masks,
+        &rows.mine_masks,
+        &rows.prev_row_live_holds,
+        &rows.row_seconds,
+        4096,
+    )
+    .unwrap();
+    let expected_placements = expected_place_rows(
+        &rows.note_counts,
+        &rows.note_masks,
+        &rows.hold_masks,
+        &rows.mine_masks,
+        &rows.prev_row_live_holds,
+        &rows.row_seconds,
+    );
+    assert_eq!(
+        actual_placements, expected_placements,
+        "local placement mirror mismatch for {label}"
+    );
+
+    let actual = placement_counts(
+        &rows.tech_masks,
+        &rows.note_counts,
+        &rows.row_ms,
+        &actual_placements,
+    );
+    let expected = rssp_core::step_parity::analyze_timing_lanes(minimized, timing, 4);
+
+    assert_eq!(actual, step_counts_subset(expected), "{label}");
 }
 
 fn placement_counts(
@@ -706,10 +897,31 @@ fn expected_place_rows(
     prev_row_live_holds: &[u8],
     row_seconds: &[f32],
 ) -> Vec<[u8; 4]> {
+    expected_place_states(
+        note_counts,
+        note_masks,
+        hold_masks,
+        mine_masks,
+        prev_row_live_holds,
+        row_seconds,
+    )
+    .into_iter()
+    .map(|state| state.combined_columns)
+    .collect()
+}
+
+fn expected_place_states(
+    note_counts: &[u8],
+    note_masks: &[u8],
+    hold_masks: &[u8],
+    mine_masks: &[u8],
+    prev_row_live_holds: &[u8],
+    row_seconds: &[f32],
+) -> Vec<StepParityState4> {
     let mut states = vec![StepParityState4::default()];
     let mut costs = vec![0.0f32];
     let mut prev_second = row_seconds[0] - 1.0;
-    let mut backtrack: Vec<Vec<(usize, [u8; 4])>> = Vec::new();
+    let mut backtrack: Vec<Vec<(usize, StepParityState4)>> = Vec::new();
 
     for i in 0..note_counts.len() {
         let elapsed = row_seconds[i] - prev_second;
@@ -735,7 +947,7 @@ fn expected_place_rows(
         backtrack.push(
             candidates
                 .iter()
-                .map(|(pred, _, state, _, _, _)| (*pred as usize, state.combined_columns))
+                .map(|(pred, _, state, _, _, _)| (*pred as usize, *state))
                 .collect(),
         );
     }
@@ -746,7 +958,7 @@ fn expected_place_rows(
         .min_by(|(_, a), (_, b)| a.total_cmp(b))
         .map(|(idx, _)| idx)
         .unwrap();
-    let mut placements = vec![[0; 4]; note_counts.len()];
+    let mut placements = vec![StepParityState4::default(); note_counts.len()];
     for row in (0..note_counts.len()).rev() {
         let (pred, placement) = backtrack[row][idx];
         placements[row] = placement;
@@ -1161,7 +1373,7 @@ fn prepares_hold_rows_with_live_hold_masks() {
     assert_eq!(rows.note_masks, [0b0001, 0b0010, 0b0010, 0b0001]);
     assert_eq!(rows.hold_masks, [0, 0b0001, 0b0001, 0]);
     assert_eq!(rows.mine_masks, [0, 0, 0, 0]);
-    assert_eq!(rows.prev_row_live_holds, [0, 1, 1, 0]);
+    assert_eq!(rows.prev_row_live_holds, [0, 0, 1, 0]);
     assert_eq!(rows.row_seconds, [0.0, 0.5, 1.0, 1.5]);
     assert_eq!(rows.row_ms, [0, 500, 1000, 1500]);
 }
@@ -1264,6 +1476,69 @@ fn counts_hold_rows_through_prepare_and_backtrack_wrapper() {
         step_parity_count_hold_rows_4(data, &seconds, &row_ms, &beats, 256),
         Some(expected)
     );
+}
+
+#[test]
+fn bpm_only_fixture_step_parity_counts_match_rssp_core() {
+    for (data, charts) in [
+        (
+            include_bytes!("../fixtures/200000_step_challenge.sm").as_slice(),
+            0..5,
+        ),
+        (
+            include_bytes!("../fixtures/camellia_mix.ssc").as_slice(),
+            0..5,
+        ),
+    ] {
+        for chart_idx in charts {
+            assert_bpm_only_fixture_step_parity(data, chart_idx);
+        }
+    }
+}
+
+#[test]
+fn timing_event_step_parity_counts_match_rssp_core() {
+    let data = b"1000
+1000
+0100
+0100
+0011
+0000
+0001
+0001
+,
+2000
+0100
+3000
+0000
+1000
+1000
+0011
+0000
+";
+    let minimized = minimize_chart_4(data).unwrap();
+    let timing = rssp_core::timing::timing_data_from_chart_data(
+        0.0,
+        0.0,
+        Some("0.000=120.000"),
+        "",
+        Some("0.500=0.500"),
+        "",
+        Some("5.000=0.250"),
+        "",
+        None,
+        "",
+        None,
+        "",
+        None,
+        "",
+        None,
+        "",
+        rssp_core::timing::TimingFormat::Ssc,
+        false,
+    );
+
+    assert_timing_step_parity_counts(&minimized, &timing, "synthetic timing events");
 }
 
 #[test]
