@@ -19,23 +19,32 @@ global assp_supported_step_type_lanes
 
 section .text
 
-%macro find_timing_tag 3
-    mov r10, rsi
-    mov r11, rdi
+%macro check_timing_tag_at 2
+    lea rax, [r10 + %2]
+    cmp rax, r11
+    ja %%done
     lea r12, [%1]
     mov r13, %2
-    lea rbx, [r15 + %3]
-    call find_tag_in_range
-%endmacro
-
-%macro owns_timing_tag 2
-    mov r10, rsi
-    mov r11, rdi
-    lea r12, [%1]
-    mov r13, %2
-    call tag_exists_in_range
+    call match_tag_at
     test eax, eax
     jnz .yes
+%%done:
+%endmacro
+
+%macro collect_timing_tag_at 3
+    cmp qword [r15 + %3 + ASSP_BYTE_SLICE_PTR], 0
+    jne %%done
+    lea rax, [r10 + %2]
+    cmp rax, r11
+    ja %%done
+    lea r12, [%1]
+    mov r13, %2
+    call match_tag_at
+    test eax, eax
+    jz %%done
+    lea rbx, [r15 + %3]
+    call store_tag_value_at
+%%done:
 %endmacro
 
 %macro expect_alpha_ci 4
@@ -908,23 +917,18 @@ assp_find_chart_by_index:
     jb .fail
 
     mov rbx, r9
+    mov rsi, rcx
     xor eax, eax
-    mov r10d, ASSP_CHART_INFO_SIZE / 8
-    mov r11, rbx
-
-.zero:
-    mov [r11], rax
-    add r11, 8
-    dec r10d
-    jnz .zero
+    mov rdi, rbx
+    mov ecx, ASSP_CHART_INFO_SIZE / 8
+    rep stosq
 
     mov [rbx + ASSP_CHART_INFO_INDEX], r8
-    mov rsi, rcx
-    mov rdi, rcx
-    lea r12, [rcx + rdx]
+    mov rdi, rsi
+    lea r12, [rsi + rdx]
     mov r13, r8
     xor r14d, r14d
-    mov r15, rcx
+    mov r15, rsi
 
 .scan:
     lea rax, [rdi + 10]
@@ -1030,20 +1034,15 @@ assp_find_next_chart:
     jae .fail
 
     mov rbx, r9
-    xor eax, eax
-    mov r10d, ASSP_CHART_INFO_SIZE / 8
-    mov r11, rbx
-
-.zero:
-    mov [r11], rax
-    add r11, 8
-    dec r10d
-    jnz .zero
-
     mov rsi, rcx
-    lea r12, [rcx + rdx]
-    lea rdi, [rcx + r8]
-    mov r15, rcx
+    xor eax, eax
+    mov rdi, rbx
+    mov ecx, ASSP_CHART_INFO_SIZE / 8
+    rep stosq
+
+    lea r12, [rsi + rdx]
+    lea rdi, [rsi + r8]
+    mov r15, rsi
     test r8, r8
     jz .scan
     mov r15, rdi
@@ -1241,6 +1240,30 @@ find_tag_in_range:
     xor eax, eax
     ret
 
+; r10 = matched tag ptr, r11 = scan end, r13 = tag len,
+; rbx = out assp_byte_slice. eax = 1 when stored.
+store_tag_value_at:
+    lea rax, [r10 + r13]
+    mov rdx, rax
+.find_end:
+    cmp rdx, r11
+    jae .fail
+    cmp byte [rdx], ';'
+    je .store
+    inc rdx
+    jmp .find_end
+
+.store:
+    mov [rbx + ASSP_BYTE_SLICE_PTR], rax
+    sub rdx, rax
+    mov [rbx + ASSP_BYTE_SLICE_LEN], rdx
+    mov eax, ASSP_TRUE
+    ret
+
+.fail:
+    xor eax, eax
+    ret
+
 ; r10 = candidate ptr, r12 = tag ptr, r13 = tag len.
 ; eax = 1 on exact byte match, 0 otherwise.
 match_tag_at:
@@ -1252,20 +1275,21 @@ match_tag_at:
     mov dl, [r12 + r8]
     cmp al, dl
     je .next
-    mov cl, al
-    cmp cl, 'A'
-    jb .fold_tag
-    cmp cl, 'Z'
-    ja .fold_tag
-    add cl, 32
-.fold_tag:
     cmp dl, 'A'
-    jb .compare_folded
+    jb .no
     cmp dl, 'Z'
-    ja .compare_folded
+    jbe .tag_upper
+    cmp dl, 'a'
+    jb .no
+    cmp dl, 'z'
+    ja .no
+    sub dl, 32
+    cmp al, dl
+    jne .no
+    jmp .next
+.tag_upper:
     add dl, 32
-.compare_folded:
-    cmp cl, dl
+    cmp al, dl
     jne .no
 .next:
     inc r8
@@ -1277,57 +1301,85 @@ match_tag_at:
     xor eax, eax
     ret
 
-; r10 = scan start, r11 = scan end, r12 = tag ptr, r13 = tag len.
-; eax = 1 when the exact tag exists in the range, 0 otherwise.
-tag_exists_in_range:
-    test r12, r12
-    jz .no
-    test r13, r13
-    jz .no
-
+; r10 = metadata scan start, r11 = metadata end.
+; eax = 1 when the chart has any RSSP chart-owned timing tag.
+range_owns_timing:
 .scan:
-    lea rax, [r10 + r13]
-    cmp rax, r11
-    ja .no
-
+    cmp r10, r11
+    jae .no
     cmp byte [r10], '#'
     jne .next
-    call match_tag_at
-    test eax, eax
-    jnz .yes
+
+    lea rax, [r10 + 1]
+    cmp rax, r11
+    jae .next
+    mov al, [r10 + 1]
+    or al, 32
+    cmp al, 'b'
+    je .check_b
+    cmp al, 'c'
+    je .check_c
+    cmp al, 'd'
+    je .check_d
+    cmp al, 'f'
+    je .check_f
+    cmp al, 'l'
+    je .check_l
+    cmp al, 'o'
+    je .check_o
+    cmp al, 's'
+    je .check_s
+    cmp al, 't'
+    je .check_t
+    cmp al, 'w'
+    je .check_w
+    jmp .next
+
+.check_b:
+    check_timing_tag_at tag_bpms, tag_bpms_end - tag_bpms
+    jmp .next
+
+.check_c:
+    check_timing_tag_at tag_combos, tag_combos_end - tag_combos
+    jmp .next
+
+.check_d:
+    check_timing_tag_at tag_delays, tag_delays_end - tag_delays
+    jmp .next
+
+.check_f:
+    check_timing_tag_at tag_freezes, tag_freezes_end - tag_freezes
+    check_timing_tag_at tag_fakes, tag_fakes_end - tag_fakes
+    jmp .next
+
+.check_l:
+    check_timing_tag_at tag_labels, tag_labels_end - tag_labels
+    jmp .next
+
+.check_o:
+    check_timing_tag_at tag_offset, tag_offset_end - tag_offset
+    jmp .next
+
+.check_s:
+    check_timing_tag_at tag_stops, tag_stops_end - tag_stops
+    check_timing_tag_at tag_speeds, tag_speeds_end - tag_speeds
+    check_timing_tag_at tag_scrolls, tag_scrolls_end - tag_scrolls
+    jmp .next
+
+.check_t:
+    check_timing_tag_at tag_time_signatures, tag_time_signatures_end - tag_time_signatures
+    check_timing_tag_at tag_tickcounts, tag_tickcounts_end - tag_tickcounts
+    jmp .next
+
+.check_w:
+    check_timing_tag_at tag_warps, tag_warps_end - tag_warps
+    jmp .next
 
 .next:
     inc r10
     jmp .scan
 
-.yes:
-    mov eax, ASSP_TRUE
-    ret
-
 .no:
-    xor eax, eax
-    ret
-
-; r10 = metadata scan start, r11 = metadata end.
-; eax = 1 when the chart has any RSSP chart-owned timing tag.
-range_owns_timing:
-    mov rsi, r10
-    mov rdi, r11
-
-    owns_timing_tag tag_bpms, tag_bpms_end - tag_bpms
-    owns_timing_tag tag_stops, tag_stops_end - tag_stops
-    owns_timing_tag tag_freezes, tag_freezes_end - tag_freezes
-    owns_timing_tag tag_delays, tag_delays_end - tag_delays
-    owns_timing_tag tag_warps, tag_warps_end - tag_warps
-    owns_timing_tag tag_speeds, tag_speeds_end - tag_speeds
-    owns_timing_tag tag_scrolls, tag_scrolls_end - tag_scrolls
-    owns_timing_tag tag_fakes, tag_fakes_end - tag_fakes
-    owns_timing_tag tag_offset, tag_offset_end - tag_offset
-    owns_timing_tag tag_time_signatures, tag_time_signatures_end - tag_time_signatures
-    owns_timing_tag tag_labels, tag_labels_end - tag_labels
-    owns_timing_tag tag_tickcounts, tag_tickcounts_end - tag_tickcounts
-    owns_timing_tag tag_combos, tag_combos_end - tag_combos
-
     xor eax, eax
     ret
 
@@ -1350,22 +1402,95 @@ zero_timing_tags:
 
 ; r10 = scan start, r11 = scan end, rbx = assp_timing_tags.
 find_timing_tags_in_range:
-    mov rsi, r10
-    mov rdi, r11
     mov r15, rbx
     call zero_timing_tags
+    xor r14d, r14d
 
-    find_timing_tag tag_bpms, tag_bpms_end - tag_bpms, ASSP_TIMING_TAGS_BPMS
-    find_timing_tag tag_stops, tag_stops_end - tag_stops, ASSP_TIMING_TAGS_STOPS
+.scan:
+    cmp r10, r11
+    jae .done
+    cmp byte [r10], '#'
+    jne .next
+
+    lea rax, [r10 + 1]
+    cmp rax, r11
+    jae .next
+    mov al, [r10 + 1]
+    or al, 32
+    cmp al, 'b'
+    je .check_b
+    cmp al, 'd'
+    je .check_d
+    cmp al, 'f'
+    je .check_f
+    cmp al, 's'
+    je .check_s
+    cmp al, 'w'
+    je .check_w
+    jmp .next
+
+.check_b:
+    collect_timing_tag_at tag_bpms, tag_bpms_end - tag_bpms, ASSP_TIMING_TAGS_BPMS
+    jmp .next
+
+.check_d:
+    collect_timing_tag_at tag_delays, tag_delays_end - tag_delays, ASSP_TIMING_TAGS_DELAYS
+    jmp .next
+
+.check_f:
+    cmp r14d, 0
+    jne .check_fakes
     cmp qword [r15 + ASSP_TIMING_TAGS_STOPS + ASSP_BYTE_SLICE_PTR], 0
-    jne .stops_done
-    find_timing_tag tag_freezes, tag_freezes_end - tag_freezes, ASSP_TIMING_TAGS_STOPS
-.stops_done:
-    find_timing_tag tag_delays, tag_delays_end - tag_delays, ASSP_TIMING_TAGS_DELAYS
-    find_timing_tag tag_warps, tag_warps_end - tag_warps, ASSP_TIMING_TAGS_WARPS
-    find_timing_tag tag_speeds, tag_speeds_end - tag_speeds, ASSP_TIMING_TAGS_SPEEDS
-    find_timing_tag tag_scrolls, tag_scrolls_end - tag_scrolls, ASSP_TIMING_TAGS_SCROLLS
-    find_timing_tag tag_fakes, tag_fakes_end - tag_fakes, ASSP_TIMING_TAGS_FAKES
+    jne .check_fakes
+    lea rax, [r10 + tag_freezes_end - tag_freezes]
+    cmp rax, r11
+    ja .check_fakes
+    lea r12, [tag_freezes]
+    mov r13, tag_freezes_end - tag_freezes
+    call match_tag_at
+    test eax, eax
+    jz .check_fakes
+    lea rbx, [r15 + ASSP_TIMING_TAGS_STOPS]
+    call store_tag_value_at
+    test eax, eax
+    jnz .next
+
+.check_fakes:
+    collect_timing_tag_at tag_fakes, tag_fakes_end - tag_fakes, ASSP_TIMING_TAGS_FAKES
+    jmp .next
+
+.check_s:
+    cmp r14d, 0
+    jne .check_s_other
+    lea rax, [r10 + tag_stops_end - tag_stops]
+    cmp rax, r11
+    ja .check_s_other
+    lea r12, [tag_stops]
+    mov r13, tag_stops_end - tag_stops
+    call match_tag_at
+    test eax, eax
+    jz .check_s_other
+    lea rbx, [r15 + ASSP_TIMING_TAGS_STOPS]
+    call store_tag_value_at
+    test eax, eax
+    jz .check_s_other
+    mov r14d, ASSP_TRUE
+    jmp .next
+
+.check_s_other:
+    collect_timing_tag_at tag_speeds, tag_speeds_end - tag_speeds, ASSP_TIMING_TAGS_SPEEDS
+    collect_timing_tag_at tag_scrolls, tag_scrolls_end - tag_scrolls, ASSP_TIMING_TAGS_SCROLLS
+    jmp .next
+
+.check_w:
+    collect_timing_tag_at tag_warps, tag_warps_end - tag_warps, ASSP_TIMING_TAGS_WARPS
+    jmp .next
+
+.next:
+    inc r10
+    jmp .scan
+
+.done:
     ret
 
 ; r10 = metadata scan start, r11 = metadata end, rbx = assp_chart_info.
