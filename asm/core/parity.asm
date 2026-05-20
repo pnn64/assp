@@ -1591,7 +1591,8 @@ orientation_pair_avg_4:
 %endmacro
 
 ; Internal row-DP hot path. Same inputs as assp_step_parity_action_cost_4
-; except there is no output breakdown pointer; returns total cost in xmm0.
+; except there is no output breakdown pointer; stack arg 8 points at row-local
+; slow bracket, footswitch, and jack costs; returns total cost in xmm0.
 step_parity_action_cost_total_4:
     sub rsp, 128
     mov [rsp + 96], rcx
@@ -1900,13 +1901,8 @@ step_parity_action_cost_total_4:
     xor ecx, eax
     test ecx, 1
     jz .cost_twisted_foot
-    mov rdx, [rsp + 216]
-    movss xmm1, [rdx]
-    comiss xmm1, [rel cost_slow_bracket_threshold]
-    jbe .cost_twisted_foot
-    subss xmm1, [rel cost_slow_bracket_threshold]
-    mulss xmm1, [rel cost_slow_bracket_weight]
-    addss xmm0, xmm1
+    mov rdx, [rsp + 224]
+    addss xmm0, [rdx]
 
 .cost_twisted_foot:
     cmp byte [rsp + 72], 0
@@ -2068,12 +2064,11 @@ step_parity_action_cost_total_4:
 .cost_footswitch:
     cmp dword [rsp + 192], 0
     jne .cost_sideswitch
-    mov rdx, [rsp + 216]
-    movss xmm1, [rdx]
-    comiss xmm1, [rel cost_slow_footswitch_threshold]
-    jb .cost_sideswitch
-    comiss xmm1, [rel cost_slow_footswitch_ignore]
-    jae .cost_sideswitch
+    mov rdx, [rsp + 224]
+    movss xmm1, [rdx + 4]
+    xorps xmm2, xmm2
+    comiss xmm1, xmm2
+    jbe .cost_sideswitch
     mov r10d, [rsp + 176]
     and r10d, 0fh
     xor r11d, r11d
@@ -2105,13 +2100,7 @@ step_parity_action_cost_total_4:
 .check_footswitch_pair_fast:
     cmp edx, ecx
     je .next_footswitch_fast
-    movss xmm2, xmm1
-    subss xmm2, [rel cost_slow_footswitch_threshold]
-    movss xmm3, [rel cost_slow_footswitch_threshold]
-    addss xmm3, xmm2
-    divss xmm2, xmm3
-    mulss xmm2, [rel cost_footswitch_weight]
-    addss xmm0, xmm2
+    addss xmm0, xmm1
     jmp .cost_sideswitch
 
 .next_footswitch_fast:
@@ -2166,22 +2155,8 @@ step_parity_action_cost_total_4:
     jz .cost_big_movement
     test al, 24
     jz .cost_big_movement
-    mov rdx, [rsp + 216]
-    movss xmm1, [rdx]
-    comiss xmm1, [rel cost_jack_threshold]
-    jae .cost_big_movement
-    movss xmm2, [rel cost_jack_threshold]
-    subss xmm2, xmm1
-    xorps xmm3, xmm3
-    comiss xmm2, xmm3
-    jbe .cost_big_movement
-    movss xmm1, [rel cost_one]
-    divss xmm1, xmm2
-    movss xmm2, [rel cost_one]
-    divss xmm2, [rel cost_jack_threshold]
-    subss xmm1, xmm2
-    mulss xmm1, [rel cost_jack_weight]
-    addss xmm0, xmm1
+    mov rdx, [rsp + 224]
+    addss xmm0, [rdx + 8]
 
 .cost_big_movement:
     mov r10d, [rsp + 4]
@@ -2867,8 +2842,49 @@ assp_step_parity_row_best_candidates_4:
     lea r11, [rel step_parity_perm4_values]
     lea r11, [r11 + r10 * 4]
     mov [rsp + 952], r11
+
+    mov rax, [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_ELAPSED_SECONDS]
+    mov dword [rsp + 832], 0
+    movss xmm0, [rax]
+    comiss xmm0, [rel cost_slow_bracket_threshold]
+    jbe .row_slow_bracket_ready
+    subss xmm0, [rel cost_slow_bracket_threshold]
+    mulss xmm0, [rel cost_slow_bracket_weight]
+    movss [rsp + 832], xmm0
+.row_slow_bracket_ready:
+    mov dword [rsp + 836], 0
+    movss xmm1, [rax]
+    comiss xmm1, [rel cost_slow_footswitch_threshold]
+    jb .row_footswitch_ready
+    comiss xmm1, [rel cost_slow_footswitch_ignore]
+    jae .row_footswitch_ready
+    movss xmm2, xmm1
+    subss xmm2, [rel cost_slow_footswitch_threshold]
+    movss xmm3, [rel cost_slow_footswitch_threshold]
+    addss xmm3, xmm2
+    divss xmm2, xmm3
+    mulss xmm2, [rel cost_footswitch_weight]
+    movss [rsp + 836], xmm2
+.row_footswitch_ready:
+    mov dword [rsp + 840], 0
+    movss xmm0, [rax]
+    comiss xmm0, [rel cost_jack_threshold]
+    jae .row_jack_cost_ready
+    movss xmm1, [rel cost_jack_threshold]
+    subss xmm1, xmm0
+    xorps xmm2, xmm2
+    comiss xmm1, xmm2
+    jbe .row_jack_cost_ready
+    movss xmm0, [rel cost_one]
+    divss xmm0, xmm1
+    movss xmm1, [rel cost_one]
+    divss xmm1, [rel cost_jack_threshold]
+    subss xmm0, xmm1
+    mulss xmm0, [rel cost_jack_weight]
+    movss [rsp + 840], xmm0
+.row_jack_cost_ready:
     cmp qword [rsp + 1336], 64
-    ja .state_loop
+    ja .hash_ready
     pxor xmm0, xmm0
     movdqu [rsp + 960], xmm0
     movdqu [rsp + 976], xmm0
@@ -2893,6 +2909,7 @@ assp_step_parity_row_best_candidates_4:
     jnz .clear_fast_key_entries
 .fast_key_generation_ready:
 %endif
+.hash_ready:
     mov dword [rsp + 944], -1
     mov byte [rsp + 900], 0
     mov eax, [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_HOLD_MASK]
@@ -2915,23 +2932,8 @@ assp_step_parity_row_best_candidates_4:
     mov byte [rsp + 900], 1
 .single_clean_flag_ready:
     mov rax, [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_ELAPSED_SECONDS]
-    mov dword [rsp + 908], 0
-    movss xmm0, [rax]
-    comiss xmm0, [rel cost_jack_threshold]
-    jae .single_jack_cost_ready
-    movss xmm1, [rel cost_jack_threshold]
-    subss xmm1, xmm0
-    xorps xmm2, xmm2
-    comiss xmm1, xmm2
-    jbe .single_jack_cost_ready
-    movss xmm0, [rel cost_one]
-    divss xmm0, xmm1
-    movss xmm1, [rel cost_one]
-    divss xmm1, [rel cost_jack_threshold]
-    subss xmm0, xmm1
-    mulss xmm0, [rel cost_jack_weight]
+    movss xmm0, [rsp + 840]
     movss [rsp + 908], xmm0
-.single_jack_cost_ready:
     mov ecx, [rsp + 944]
     lea r10, [rel dance_single_distances4]
     movss xmm0, [r10 + rcx * 4]
@@ -3018,6 +3020,8 @@ assp_step_parity_row_best_candidates_4:
     mov edx, [rsp + 616]
     mov [rsp + 808], edx
     mov r10, [rsp + 1320]
+    cmp qword [rsp + 1336], 64
+    ja .scan_keys_linear_fast
 %ifdef ASSP_STANDALONE_EXE
     cmp dword [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_HOLD_MASK], 0
     je .scan_key_direct_no_hold_fast
@@ -3035,6 +3039,26 @@ assp_step_parity_row_best_candidates_4:
     inc r9d
     and r9d, 127
     jmp .scan_key_hash_fast
+
+.scan_keys_linear_fast:
+    xor ecx, ecx
+
+.scan_key_linear_fast:
+    cmp rcx, [rsp + 784]
+    jae .new_key_linear_fast
+    cmp [r10 + rcx * 4], edx
+    je .found_key_fast
+    inc rcx
+    jmp .scan_key_linear_fast
+
+.new_key_linear_fast:
+    ASSP_PROFILE_TSC_END profile_step_dp_hash_cycles
+    ASSP_PROFILE_INC profile_step_dp_hash_probe_count
+    cmp rcx, [rsp + 1336]
+    jae .fail_with_stack
+    mov [rsp + 816], rcx
+    mov byte [rsp + 824], 3
+    jmp .score_candidate_fast
 
 %ifdef ASSP_STANDALONE_EXE
 .scan_key_direct_no_hold_fast:
@@ -3131,6 +3155,8 @@ assp_step_parity_row_best_candidates_4:
     mov [rsp + 72], eax
     mov rax, [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_ELAPSED_SECONDS]
     mov [rsp + 80], rax
+    lea rax, [rsp + 832]
+    mov [rsp + 88], rax
     mov rcx, [rsp + 880]
     call step_parity_action_cost_total_4
 
@@ -3151,6 +3177,8 @@ assp_step_parity_row_best_candidates_4:
     mov rax, [rsp + 816]
     cmp byte [rsp + 824], 0
     je .copy_candidate_fast
+    cmp byte [rsp + 824], 3
+    je .commit_linear_candidate_fast
 %ifdef ASSP_STANDALONE_EXE
     cmp byte [rsp + 824], 2
     je .commit_direct_candidate_fast
@@ -3158,6 +3186,10 @@ assp_step_parity_row_best_candidates_4:
     mov edx, [rsp + 828]
     mov byte [rsp + rdx + 960], 1
     mov [rsp + rdx + 1088], al
+    inc qword [rsp + 784]
+    jmp .copy_candidate_fast
+
+.commit_linear_candidate_fast:
     inc qword [rsp + 784]
     jmp .copy_candidate_fast
 
@@ -3208,210 +3240,6 @@ assp_step_parity_row_best_candidates_4:
 .next_state_fast:
     inc qword [rsp + 792]
     jmp .state_loop_fast
-
-.state_loop:
-    mov rax, [rsp + 792]
-    cmp rax, r14
-    jae .success
-
-    mov qword [rsp + 776], 0
-    mov qword [rsp + 800], 0
-
-.transition_loop:
-    mov rax, [rsp + 800]
-    cmp rax, [rsp + 928]
-    jae .transitions_done
-
-    mov rdx, [rsp + 952]
-    lea rdx, [rdx + rax * 4]
-    lea rcx, [rax + rax * 2]
-    lea r9, [rsp + 208 + rcx * 4]
-    mov [rsp + 936], r9
-    lea rcx, [rax + rax * 4]
-    lea r11, [rsp + 496 + rcx]
-    mov rcx, [rsp + 792]
-    lea rcx, [rcx + rcx * 2]
-    lea rcx, [r12 + rcx * 4]
-    mov r8d, [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_NOTE_MASK]
-    or r8d, [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_HOLD_MASK]
-    mov r10d, [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_HOLD_MASK]
-    test r10d, r10d
-    jnz .transition_with_holds
-
-    mov [rsp + 32], r11
-    lea r10, [rsp + 616 + rax * 4]
-    mov [rsp + 40], r10
-    call step_parity_result_state_no_holds_fast_4
-    jmp .transition_maybe_emit
-
-.transition_with_holds:
-    mov r9d, r10d
-    mov r10, [rsp + 936]
-    mov [rsp + 32], r10
-    mov [rsp + 40], r11
-    lea r10, [rsp + 616 + rax * 4]
-    mov [rsp + 48], r10
-    call step_parity_result_state_holds_fast_4
-
-.transition_maybe_emit:
-    mov rax, [rsp + 800]
-    mov rdx, [rsp + 952]
-    mov edx, [rdx + rax * 4]
-    mov [rsp + 112 + rax * 4], edx
-    inc qword [rsp + 776]
-    inc qword [rsp + 800]
-    jmp .transition_loop
-
-.transitions_done:
-    mov qword [rsp + 800], 0
-
-.candidate_loop:
-    mov rax, [rsp + 800]
-    cmp rax, [rsp + 776]
-    jae .next_state
-
-    mov edx, [rsp + 616 + rax * 4]
-    mov [rsp + 808], edx
-    mov r10, [rsp + 1320]
-    cmp qword [rsp + 1336], 64
-    ja .scan_keys_linear
-    mov r9d, edx
-    imul r9d, r9d, 09e3779b9h
-    and r9d, 127
-
-.scan_key_hash:
-    cmp byte [rsp + r9 + 960], 0
-    je .new_key_hash
-    movzx ecx, byte [rsp + r9 + 1088]
-    cmp [r10 + rcx * 4], edx
-    je .found_key
-    inc r9d
-    and r9d, 127
-    jmp .scan_key_hash
-
-.new_key_hash:
-    mov rcx, [rsp + 784]
-    cmp rcx, [rsp + 1336]
-    jae .fail_with_stack
-    mov [rsp + 816], rcx
-    mov [rsp + 828], r9d
-    mov byte [rsp + 824], 1
-    jmp .score_candidate
-
-.scan_keys_linear:
-    xor ecx, ecx
-
-.scan_keys:
-    cmp rcx, [rsp + 784]
-    jae .new_key
-    cmp [r10 + rcx * 4], edx
-    je .found_key
-    inc rcx
-    jmp .scan_keys
-
-.new_key:
-    cmp rcx, [rsp + 1336]
-    jae .fail_with_stack
-    mov [rsp + 816], rcx
-    mov byte [rsp + 824], 1
-    jmp .score_candidate
-
-.found_key:
-    mov [rsp + 816], rcx
-    mov byte [rsp + 824], 0
-    mov r11, [rsp + 1328]
-    mov rax, [rsp + 792]
-    movss xmm0, [r13 + rax * 4]
-    comiss xmm0, [r11 + rcx * 4]
-    jae .skip_candidate
-
-.score_candidate:
-    mov rax, [rsp + 800]
-    lea rcx, [rax + rax * 2]
-    lea rdx, [rsp + 208 + rcx * 4]
-    lea r8, [rsp + 112 + rax * 4]
-    lea rcx, [rax + rax * 4]
-    lea r9, [rsp + 496 + rcx]
-    mov eax, [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_NOTE_COUNT]
-    mov [rsp + 32], eax
-    mov eax, [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_NOTE_MASK]
-    or eax, [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_HOLD_MASK]
-    mov [rsp + 40], eax
-    mov eax, [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_HOLD_MASK]
-    mov [rsp + 48], eax
-    mov eax, [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_MINE_MASK]
-    mov [rsp + 56], eax
-    mov eax, [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_SIDE_MASK]
-    mov [rsp + 64], eax
-    mov eax, [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_PREV_ROW_HAS_LIVE_HOLD]
-    mov [rsp + 72], eax
-    mov rax, [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_ELAPSED_SECONDS]
-    mov [rsp + 80], rax
-    mov rax, [rsp + 792]
-    lea rax, [rax + rax * 2]
-    lea rcx, [r12 + rax * 4]
-    call step_parity_action_cost_total_4
-
-    mov rax, [rsp + 792]
-    addss xmm0, [r13 + rax * 4]
-
-    cmp byte [rsp + 824], 0
-    jne .write_candidate
-    mov r11, [rsp + 1328]
-    mov rcx, [rsp + 816]
-    comiss xmm0, [r11 + rcx * 4]
-    jae .skip_candidate
-
-.write_candidate:
-    mov rax, [rsp + 816]
-    cmp byte [rsp + 824], 0
-    je .copy_candidate
-    cmp qword [rsp + 1336], 64
-    ja .inc_unique_count
-    mov edx, [rsp + 828]
-    mov byte [rsp + rdx + 960], 1
-    mov [rsp + rdx + 1088], al
-.inc_unique_count:
-    inc qword [rsp + 784]
-
-.copy_candidate:
-    mov rdx, [rsp + 792]
-    mov [rbx + rax * 4], edx
-
-    mov rcx, [rsp + 800]
-    mov edx, [rsp + 112 + rcx * 4]
-    mov [rsi + rax * 4], edx
-
-    lea r10, [rcx + rcx * 2]
-    lea r10, [r10 * 4]
-    lea r11, [rax + rax * 2]
-    lea r11, [r11 * 4]
-    mov rdx, [rsp + 208 + r10]
-    mov [rdi + r11], rdx
-    mov edx, [rsp + 216 + r10]
-    mov [rdi + r11 + 8], edx
-
-    lea r10, [rcx + rcx * 4]
-    lea r11, [rax + rax * 4]
-    mov edx, [rsp + 496 + r10]
-    mov [rbp + r11], edx
-    mov dl, [rsp + 500 + r10]
-    mov [rbp + r11 + 4], dl
-
-    mov r10, [rsp + 1320]
-    mov edx, [rsp + 808]
-    mov [r10 + rax * 4], edx
-
-    mov r10, [rsp + 1328]
-    movss [r10 + rax * 4], xmm0
-
-.skip_candidate:
-    inc qword [rsp + 800]
-    jmp .candidate_loop
-
-.next_state:
-    inc qword [rsp + 792]
-    jmp .state_loop
 
 .success:
     mov rax, [rsp + 784]
