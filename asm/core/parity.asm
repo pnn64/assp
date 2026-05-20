@@ -2760,6 +2760,104 @@ assp_step_parity_action_cost_4:
     mov [rsp + 616], eax
 %endmacro
 
+%macro ASSP_INLINE_NO_HOLD_ACTIVE 1
+    test r8d, 1 << %1
+    jz %%done
+    movzx eax, byte [rdx + %1]
+    test al, al
+    jz %%done
+    cmp al, 4
+    ja %%done
+    mov [r9 + ASSP_STEP_PARITY_STATE4_COMBINED + %1], al
+    mov byte [rsp + 496 + rax], %1
+    lea ecx, [rax - 1]
+    mov eax, 1
+    shl eax, cl
+    or r11d, eax
+%%done:
+%endmacro
+
+%macro ASSP_INLINE_NO_HOLD_RESOLVE 1
+    movzx eax, byte [r9 + ASSP_STEP_PARITY_STATE4_COMBINED + %1]
+    test al, al
+    jnz %%have_foot
+    movzx eax, byte [r10 + ASSP_STEP_PARITY_STATE4_COMBINED + %1]
+    cmp al, 1
+    je %%prev_left_heel
+    cmp al, 3
+    je %%prev_right_heel
+    cmp al, 2
+    je %%prev_left_toe
+    cmp al, 4
+    je %%prev_right_toe
+    jmp %%done
+
+%%prev_left_heel:
+    test r11b, 1
+    jnz %%done
+    jmp %%store_foot
+
+%%prev_right_heel:
+    test r11b, 4
+    jnz %%done
+    jmp %%store_foot
+
+%%prev_left_toe:
+    test r11b, 3
+    jnz %%done
+    mov eax, 2
+    jmp %%store_foot
+
+%%prev_right_toe:
+    test r11b, 12
+    jnz %%done
+    mov eax, 4
+
+%%store_foot:
+    mov [r9 + ASSP_STEP_PARITY_STATE4_COMBINED + %1], al
+
+%%have_foot:
+    mov edx, eax
+%if %1 != 0
+    shl edx, %1 * 3
+%endif
+    or r8d, edx
+    mov byte [r9 + ASSP_STEP_PARITY_STATE4_WHERE_FEET + rax], %1
+    or ecx, 1 << %1
+
+%%done:
+%endmacro
+
+%macro ASSP_INLINE_NO_HOLD_STATE 0
+    mov dword [r9 + ASSP_STEP_PARITY_STATE4_COMBINED], 0
+    mov dword [r9 + ASSP_STEP_PARITY_STATE4_WHERE_FEET], 0ffffffffh
+    mov byte [r9 + ASSP_STEP_PARITY_STATE4_WHERE_FEET + 4], 0ffh
+
+    mov dword [rsp + 496], 0ffffffffh
+    mov byte [rsp + 500], 0ffh
+
+    xor r11d, r11d
+    ASSP_INLINE_NO_HOLD_ACTIVE 0
+    ASSP_INLINE_NO_HOLD_ACTIVE 1
+    ASSP_INLINE_NO_HOLD_ACTIVE 2
+    ASSP_INLINE_NO_HOLD_ACTIVE 3
+
+    xor r8d, r8d
+    xor ecx, ecx
+    ASSP_INLINE_NO_HOLD_RESOLVE 0
+    ASSP_INLINE_NO_HOLD_RESOLVE 1
+    ASSP_INLINE_NO_HOLD_RESOLVE 2
+    ASSP_INLINE_NO_HOLD_RESOLVE 3
+
+    mov [r9 + ASSP_STEP_PARITY_STATE4_OCCUPIED_MASK], cl
+    mov [r9 + ASSP_STEP_PARITY_STATE4_MOVED_MASK], r11b
+    mov byte [r9 + ASSP_STEP_PARITY_STATE4_HOLDING_MASK], 0
+    mov eax, r11d
+    shl eax, 24
+    or eax, r8d
+    mov [rsp + 616], eax
+%endmacro
+
 ; rcx = initial states, rdx = initial costs, r8 = initial state count,
 ; r9 = assp_step_parity_row_cost_ctx4,
 ; stack arg 5 = out predecessor indexes,
@@ -2980,12 +3078,9 @@ assp_step_parity_row_best_candidates_4:
     jne .transition_single_no_hold_fast
 
     lea r9, [rsp + 208]
-    lea r10, [rsp + 496]
-    mov [rsp + 32], r10
-    lea r10, [rsp + 616]
-    mov [rsp + 40], r10
+    mov r10, rcx
     mov rdx, [rsp + 936]
-    call step_parity_result_state_no_holds_fast_4
+    ASSP_INLINE_NO_HOLD_STATE
     jmp .transition_done_fast
 
 .transition_single_no_hold_fast:
@@ -3258,123 +3353,6 @@ assp_step_parity_row_best_candidates_4:
     pop rdi
     pop rsi
     pop rbx
-    ret
-
-; Internal row-DP state constructor for rows without holds.
-; rcx = initial state, rdx = placement[4], r8d = active mask,
-; r9 = out state, stack arg 5 = out hit[5], stack arg 6 = out key.
-step_parity_result_state_no_holds_fast_4:
-    sub rsp, 32
-    mov [rsp], rcx
-    mov [rsp + 8], rdx
-    mov [rsp + 16], r9
-    mov dword [rsp + 24], 0
-
-    mov dword [r9 + ASSP_STEP_PARITY_STATE4_COMBINED], 0
-    mov dword [r9 + ASSP_STEP_PARITY_STATE4_WHERE_FEET], 0ffffffffh
-    mov byte [r9 + ASSP_STEP_PARITY_STATE4_WHERE_FEET + 4], 0ffh
-    mov byte [r9 + ASSP_STEP_PARITY_STATE4_OCCUPIED_MASK], 0
-    mov byte [r9 + ASSP_STEP_PARITY_STATE4_MOVED_MASK], 0
-    mov byte [r9 + ASSP_STEP_PARITY_STATE4_HOLDING_MASK], 0
-    mov rax, [rsp + 72]
-    mov dword [rax], 0ffffffffh
-    mov byte [rax + 4], 0ffh
-
-    xor r10d, r10d
-.fast_no_hold_active_loop:
-    bt r8d, r10d
-    jnc .fast_no_hold_next_active
-    mov rdx, [rsp + 8]
-    movzx eax, byte [rdx + r10]
-    test al, al
-    jz .fast_no_hold_next_active
-    cmp al, 4
-    ja .fast_no_hold_next_active
-    mov r9, [rsp + 16]
-    mov [r9 + ASSP_STEP_PARITY_STATE4_COMBINED + r10], al
-    mov rdx, [rsp + 72]
-    mov byte [rdx + rax], r10b
-    mov ecx, eax
-    dec ecx
-    mov eax, 1
-    shl eax, cl
-    or dword [rsp + 24], eax
-
-.fast_no_hold_next_active:
-    inc r10d
-    cmp r10d, 4
-    jb .fast_no_hold_active_loop
-
-    mov r9, [rsp + 16]
-    xor r10d, r10d
-    xor r11d, r11d
-    xor edx, edx
-
-.fast_no_hold_resolve_loop:
-    movzx eax, byte [r9 + ASSP_STEP_PARITY_STATE4_COMBINED + r10]
-    test al, al
-    jnz .fast_no_hold_have_foot
-    mov rcx, [rsp]
-    movzx eax, byte [rcx + ASSP_STEP_PARITY_STATE4_COMBINED + r10]
-    cmp al, 1
-    je .fast_no_hold_prev_heel
-    cmp al, 3
-    je .fast_no_hold_prev_heel
-    cmp al, 2
-    je .fast_no_hold_prev_left_toe
-    cmp al, 4
-    je .fast_no_hold_prev_right_toe
-    jmp .fast_no_hold_next_resolve
-
-.fast_no_hold_prev_heel:
-    mov ecx, eax
-    dec ecx
-    mov r8d, 1
-    shl r8d, cl
-    test dword [rsp + 24], r8d
-    jnz .fast_no_hold_next_resolve
-    jmp .fast_no_hold_store_foot
-
-.fast_no_hold_prev_left_toe:
-    test byte [rsp + 24], 3
-    jnz .fast_no_hold_next_resolve
-    mov eax, 2
-    jmp .fast_no_hold_store_foot
-
-.fast_no_hold_prev_right_toe:
-    test byte [rsp + 24], 12
-    jnz .fast_no_hold_next_resolve
-    mov eax, 4
-
-.fast_no_hold_store_foot:
-    mov [r9 + ASSP_STEP_PARITY_STATE4_COMBINED + r10], al
-
-.fast_no_hold_have_foot:
-    mov ecx, r10d
-    imul ecx, 3
-    mov r8d, eax
-    shl r8d, cl
-    or r11d, r8d
-    mov byte [r9 + ASSP_STEP_PARITY_STATE4_WHERE_FEET + rax], r10b
-    mov ecx, r10d
-    mov r8d, 1
-    shl r8d, cl
-    or edx, r8d
-
-.fast_no_hold_next_resolve:
-    inc r10d
-    cmp r10d, 4
-    jb .fast_no_hold_resolve_loop
-
-    mov [r9 + ASSP_STEP_PARITY_STATE4_OCCUPIED_MASK], dl
-    mov eax, [rsp + 24]
-    mov [r9 + ASSP_STEP_PARITY_STATE4_MOVED_MASK], al
-    mov byte [r9 + ASSP_STEP_PARITY_STATE4_HOLDING_MASK], 0
-    shl eax, 24
-    or eax, r11d
-    mov rcx, [rsp + 80]
-    mov [rcx], eax
-    add rsp, 32
     ret
 
 ; Internal row-DP state constructor for rows with holds.
