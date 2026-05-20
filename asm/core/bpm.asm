@@ -1762,6 +1762,11 @@ assp_measure_nps_milli_from_bpms:
 
     test rbx, rbx
     jz .done
+    cmp r14, 1
+    jne .check_empty_bpms
+    cmp qword [r13 + ASSP_BPM_SEGMENT_BEAT_MILLI], 0
+    jle .single_bpm_init
+.check_empty_bpms:
     test r14, r14
     jz .loop
 
@@ -1777,6 +1782,59 @@ assp_measure_nps_milli_from_bpms:
     mov [rsp + 24], r11
     inc qword [rsp + 32]
     jmp .timed_init_loop
+
+.single_bpm_init:
+    mov r11, [r13 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    test r11, r11
+    jle .zero_fill
+    mov rax, 240000000000
+    xor edx, edx
+    div r11
+    cmp rax, 120000
+    jbe .zero_fill
+    mov [rsp + 40], rax
+    xor r15d, r15d
+
+.single_loop:
+    cmp r15, rdi
+    jae .done
+
+    xor eax, eax
+    mov r11d, [rsi + r15 * 4]
+    test r11d, r11d
+    jz .single_store
+
+    mov rax, r11
+    imul rax, rax, 1000000000
+    mov r10, [rsp + 40]
+    mov r9, r10
+    shr r9, 1
+    add rax, r9
+    xor edx, edx
+    div r10
+
+.single_store:
+    cmp r15, r12
+    jae .single_next
+    mov [rbx + r15 * 4], eax
+
+.single_next:
+    inc r15
+    jmp .single_loop
+
+.zero_fill:
+    xor r15d, r15d
+
+.zero_fill_loop:
+    cmp r15, rdi
+    jae .done
+    cmp r15, r12
+    jae .zero_fill_next
+    mov dword [rbx + r15 * 4], 0
+
+.zero_fill_next:
+    inc r15
+    jmp .zero_fill_loop
 
 .loop:
     cmp r15, rdi
