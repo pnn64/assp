@@ -32,11 +32,10 @@ test coverage, read `src/abi.rs` and `tests/`.
 - Windows SDK x64 import libraries
 - `cargo` only for Rust tests or RSSP comparison modes
 
-Linux hosts can cross-build the current Win64 standalone executable with:
+Linux native builds use:
 
 - `nasm`
-- `x86_64-w64-mingw32-gcc`, or LLVM `lld` plus MinGW-w64 import libraries
-- `wine` only when running the built executable from `build.sh`
+- `ld`, `cc`, or `gcc`
 
 ## Build
 
@@ -52,13 +51,15 @@ From the workspace root:
 .\assp\build.ps1
 ```
 
-The executable is written to `assp\target\assp.exe`.
+The Windows executable is written to `assp\target\assp.exe`.
 
-From Linux, cross-build the same standalone Win64 executable:
+From Linux, build the native ELF64 executable:
 
 ```bash
 bash build.sh
 ```
+
+The Linux executable is written to `assp/target/assp`.
 
 Useful Linux build modes:
 
