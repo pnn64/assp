@@ -232,6 +232,78 @@ assp_minimize_chart_4:
     cmp rsi, rdi
     jae .eof
 
+.fast_line:
+    mov al, [rsi]
+    cmp al, ';'
+    je .semi
+    cmp al, ','
+    je .fast_comma
+    cmp al, '/'
+    je .find_line_end_slow
+    cmp al, ' '
+    jbe .find_line_end_slow
+
+    lea r10, [rsi + 4]
+    cmp r10, rdi
+    ja .find_line_end_slow
+    cmp byte [r10], 10
+    je .fast_row_lf
+    cmp byte [r10], 13
+    je .fast_row_cr
+    jmp .find_line_end_slow
+
+.fast_row_lf:
+    lea r15, [r10 + 1]
+    jmp .fast_row
+
+.fast_row_cr:
+    lea r11, [r10 + 1]
+    cmp r11, rdi
+    jae .find_line_end_slow
+    cmp byte [r11], 10
+    jne .find_line_end_slow
+    lea r15, [r10 + 2]
+
+.fast_row:
+    mov r10, [rsp]
+    test r10, r10
+    jz .invalid
+    mov r11, [rsp + 16]
+    cmp r11, [rsp + 8]
+    jae .invalid
+    mov eax, [rsi]
+    mov [r10 + r11 * 4], eax
+    inc qword [rsp + 16]
+    jmp .line_done
+
+.fast_comma:
+    lea r10, [rsi + 1]
+    cmp r10, rdi
+    jae .fast_comma_eof
+    cmp byte [r10], 10
+    je .fast_comma_lf
+    cmp byte [r10], 13
+    je .fast_comma_cr
+    jmp .find_line_end_slow
+
+.fast_comma_eof:
+    mov r15, r10
+    jmp .comma
+
+.fast_comma_lf:
+    lea r15, [rsi + 2]
+    jmp .comma
+
+.fast_comma_cr:
+    lea r11, [r10 + 1]
+    cmp r11, rdi
+    jae .find_line_end_slow
+    cmp byte [r11], 10
+    jne .find_line_end_slow
+    lea r15, [rsi + 3]
+    jmp .comma
+
+.find_line_end_slow:
     mov r14, rsi
 .find_line_end:
     cmp r14, rdi
@@ -392,6 +464,78 @@ assp_minimize_chart_8:
     cmp rsi, rdi
     jae .eof
 
+.fast_line:
+    mov al, [rsi]
+    cmp al, ';'
+    je .semi
+    cmp al, ','
+    je .fast_comma
+    cmp al, '/'
+    je .find_line_end_slow
+    cmp al, ' '
+    jbe .find_line_end_slow
+
+    lea r10, [rsi + 8]
+    cmp r10, rdi
+    ja .find_line_end_slow
+    cmp byte [r10], 10
+    je .fast_row_lf
+    cmp byte [r10], 13
+    je .fast_row_cr
+    jmp .find_line_end_slow
+
+.fast_row_lf:
+    lea r15, [r10 + 1]
+    jmp .fast_row
+
+.fast_row_cr:
+    lea r11, [r10 + 1]
+    cmp r11, rdi
+    jae .find_line_end_slow
+    cmp byte [r11], 10
+    jne .find_line_end_slow
+    lea r15, [r10 + 2]
+
+.fast_row:
+    mov r10, [rsp]
+    test r10, r10
+    jz .invalid
+    mov r11, [rsp + 16]
+    cmp r11, [rsp + 8]
+    jae .invalid
+    mov rax, [rsi]
+    mov [r10 + r11 * 8], rax
+    inc qword [rsp + 16]
+    jmp .line_done
+
+.fast_comma:
+    lea r10, [rsi + 1]
+    cmp r10, rdi
+    jae .fast_comma_eof
+    cmp byte [r10], 10
+    je .fast_comma_lf
+    cmp byte [r10], 13
+    je .fast_comma_cr
+    jmp .find_line_end_slow
+
+.fast_comma_eof:
+    mov r15, r10
+    jmp .comma
+
+.fast_comma_lf:
+    lea r15, [rsi + 2]
+    jmp .comma
+
+.fast_comma_cr:
+    lea r11, [r10 + 1]
+    cmp r11, rdi
+    jae .find_line_end_slow
+    cmp byte [r11], 10
+    jne .find_line_end_slow
+    lea r15, [rsi + 3]
+    jmp .comma
+
+.find_line_end_slow:
     mov r14, rsi
 .find_line_end:
     cmp r14, rdi
