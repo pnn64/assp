@@ -367,6 +367,53 @@ md5_finish:
     call md5_compress_block
     ret
 
+%macro MD5_F 7
+    mov eax, %3
+    xor eax, %4
+    and eax, %2
+    xor eax, %4
+    add %1, eax
+    add %1, [rsi + %5]
+    add %1, %7
+    rol %1, %6
+    add %1, %2
+%endmacro
+
+%macro MD5_G 7
+    mov eax, %2
+    xor eax, %3
+    and eax, %4
+    xor eax, %3
+    add %1, eax
+    add %1, [rsi + %5]
+    add %1, %7
+    rol %1, %6
+    add %1, %2
+%endmacro
+
+%macro MD5_H 7
+    mov eax, %2
+    xor eax, %3
+    xor eax, %4
+    add %1, eax
+    add %1, [rsi + %5]
+    add %1, %7
+    rol %1, %6
+    add %1, %2
+%endmacro
+
+%macro MD5_I 7
+    mov eax, %4
+    not eax
+    or eax, %2
+    xor eax, %3
+    add %1, eax
+    add %1, [rsi + %5]
+    add %1, %7
+    rol %1, %6
+    add %1, %2
+%endmacro
+
 ; rcx = 64-byte little-endian block. Uses rbx as local base.
 align 16
 md5_compress_block:
@@ -375,79 +422,78 @@ md5_compress_block:
     push r14
     push r15
     mov rsi, rcx
-    lea rdi, [md5_k]
-    lea r11, [md5_s]
     mov r12d, [rbx + MD5_H0]
     mov r13d, [rbx + MD5_H1]
     mov r14d, [rbx + MD5_H2]
     mov r15d, [rbx + MD5_H3]
-    xor r8d, r8d
 
-align 16
-.round_loop:
-    cmp r8d, 16
-    jb .round_f
-    cmp r8d, 32
-    jb .round_g
-    cmp r8d, 48
-    jb .round_h
-    jmp .round_i
+    MD5_F r12d, r13d, r14d, r15d,  0*4,  7, 0xd76aa478
+    MD5_F r15d, r12d, r13d, r14d,  1*4, 12, 0xe8c7b756
+    MD5_F r14d, r15d, r12d, r13d,  2*4, 17, 0x242070db
+    MD5_F r13d, r14d, r15d, r12d,  3*4, 22, 0xc1bdceee
+    MD5_F r12d, r13d, r14d, r15d,  4*4,  7, 0xf57c0faf
+    MD5_F r15d, r12d, r13d, r14d,  5*4, 12, 0x4787c62a
+    MD5_F r14d, r15d, r12d, r13d,  6*4, 17, 0xa8304613
+    MD5_F r13d, r14d, r15d, r12d,  7*4, 22, 0xfd469501
+    MD5_F r12d, r13d, r14d, r15d,  8*4,  7, 0x698098d8
+    MD5_F r15d, r12d, r13d, r14d,  9*4, 12, 0x8b44f7af
+    MD5_F r14d, r15d, r12d, r13d, 10*4, 17, 0xffff5bb1
+    MD5_F r13d, r14d, r15d, r12d, 11*4, 22, 0x895cd7be
+    MD5_F r12d, r13d, r14d, r15d, 12*4,  7, 0x6b901122
+    MD5_F r15d, r12d, r13d, r14d, 13*4, 12, 0xfd987193
+    MD5_F r14d, r15d, r12d, r13d, 14*4, 17, 0xa679438e
+    MD5_F r13d, r14d, r15d, r12d, 15*4, 22, 0x49b40821
 
-.round_f:
-    mov r9d, r13d
-    mov r10d, r9d
-    and r9d, r14d
-    not r10d
-    and r10d, r15d
-    or r9d, r10d
-    mov r10d, r8d
-    jmp .round_apply
+    MD5_G r12d, r13d, r14d, r15d,  1*4,  5, 0xf61e2562
+    MD5_G r15d, r12d, r13d, r14d,  6*4,  9, 0xc040b340
+    MD5_G r14d, r15d, r12d, r13d, 11*4, 14, 0x265e5a51
+    MD5_G r13d, r14d, r15d, r12d,  0*4, 20, 0xe9b6c7aa
+    MD5_G r12d, r13d, r14d, r15d,  5*4,  5, 0xd62f105d
+    MD5_G r15d, r12d, r13d, r14d, 10*4,  9, 0x02441453
+    MD5_G r14d, r15d, r12d, r13d, 15*4, 14, 0xd8a1e681
+    MD5_G r13d, r14d, r15d, r12d,  4*4, 20, 0xe7d3fbc8
+    MD5_G r12d, r13d, r14d, r15d,  9*4,  5, 0x21e1cde6
+    MD5_G r15d, r12d, r13d, r14d, 14*4,  9, 0xc33707d6
+    MD5_G r14d, r15d, r12d, r13d,  3*4, 14, 0xf4d50d87
+    MD5_G r13d, r14d, r15d, r12d,  8*4, 20, 0x455a14ed
+    MD5_G r12d, r13d, r14d, r15d, 13*4,  5, 0xa9e3e905
+    MD5_G r15d, r12d, r13d, r14d,  2*4,  9, 0xfcefa3f8
+    MD5_G r14d, r15d, r12d, r13d,  7*4, 14, 0x676f02d9
+    MD5_G r13d, r14d, r15d, r12d, 12*4, 20, 0x8d2a4c8a
 
-.round_g:
-    mov r9d, r15d
-    mov r10d, r9d
-    and r9d, r13d
-    not r10d
-    and r10d, r14d
-    or r9d, r10d
-    lea r10d, [r8 + r8 * 4 + 1]
-    and r10d, 15
-    jmp .round_apply
+    MD5_H r12d, r13d, r14d, r15d,  5*4,  4, 0xfffa3942
+    MD5_H r15d, r12d, r13d, r14d,  8*4, 11, 0x8771f681
+    MD5_H r14d, r15d, r12d, r13d, 11*4, 16, 0x6d9d6122
+    MD5_H r13d, r14d, r15d, r12d, 14*4, 23, 0xfde5380c
+    MD5_H r12d, r13d, r14d, r15d,  1*4,  4, 0xa4beea44
+    MD5_H r15d, r12d, r13d, r14d,  4*4, 11, 0x4bdecfa9
+    MD5_H r14d, r15d, r12d, r13d,  7*4, 16, 0xf6bb4b60
+    MD5_H r13d, r14d, r15d, r12d, 10*4, 23, 0xbebfbc70
+    MD5_H r12d, r13d, r14d, r15d, 13*4,  4, 0x289b7ec6
+    MD5_H r15d, r12d, r13d, r14d,  0*4, 11, 0xeaa127fa
+    MD5_H r14d, r15d, r12d, r13d,  3*4, 16, 0xd4ef3085
+    MD5_H r13d, r14d, r15d, r12d,  6*4, 23, 0x04881d05
+    MD5_H r12d, r13d, r14d, r15d,  9*4,  4, 0xd9d4d039
+    MD5_H r15d, r12d, r13d, r14d, 12*4, 11, 0xe6db99e5
+    MD5_H r14d, r15d, r12d, r13d, 15*4, 16, 0x1fa27cf8
+    MD5_H r13d, r14d, r15d, r12d,  2*4, 23, 0xc4ac5665
 
-.round_h:
-    mov r9d, r13d
-    xor r9d, r14d
-    xor r9d, r15d
-    lea r10d, [r8 + r8 * 2 + 5]
-    and r10d, 15
-    jmp .round_apply
-
-.round_i:
-    mov r9d, r15d
-    not r9d
-    or r9d, r13d
-    xor r9d, r14d
-    lea r10d, [r8 * 8]
-    sub r10d, r8d
-    and r10d, 15
-
-.round_apply:
-    mov eax, r12d
-    add eax, r9d
-    add eax, [rdi + r8 * 4]
-    add eax, [rsi + r10 * 4]
-    movzx ecx, byte [r11 + r8]
-    rol eax, cl
-    add eax, r13d
-
-    mov r12d, r15d
-    mov r15d, r14d
-    mov r14d, r13d
-    mov r13d, eax
-
-    inc r8d
-    cmp r8d, 64
-    jb .round_loop
+    MD5_I r12d, r13d, r14d, r15d,  0*4,  6, 0xf4292244
+    MD5_I r15d, r12d, r13d, r14d,  7*4, 10, 0x432aff97
+    MD5_I r14d, r15d, r12d, r13d, 14*4, 15, 0xab9423a7
+    MD5_I r13d, r14d, r15d, r12d,  5*4, 21, 0xfc93a039
+    MD5_I r12d, r13d, r14d, r15d, 12*4,  6, 0x655b59c3
+    MD5_I r15d, r12d, r13d, r14d,  3*4, 10, 0x8f0ccc92
+    MD5_I r14d, r15d, r12d, r13d, 10*4, 15, 0xffeff47d
+    MD5_I r13d, r14d, r15d, r12d,  1*4, 21, 0x85845dd1
+    MD5_I r12d, r13d, r14d, r15d,  8*4,  6, 0x6fa87e4f
+    MD5_I r15d, r12d, r13d, r14d, 15*4, 10, 0xfe2ce6e0
+    MD5_I r14d, r15d, r12d, r13d,  6*4, 15, 0xa3014314
+    MD5_I r13d, r14d, r15d, r12d, 13*4, 21, 0x4e0811a1
+    MD5_I r12d, r13d, r14d, r15d,  4*4,  6, 0xf7537e82
+    MD5_I r15d, r12d, r13d, r14d, 11*4, 10, 0xbd3af235
+    MD5_I r14d, r15d, r12d, r13d,  2*4, 15, 0x2ad7d2bb
+    MD5_I r13d, r14d, r15d, r12d,  9*4, 21, 0xeb86d391
 
     add [rbx + MD5_H0], r12d
     add [rbx + MD5_H1], r13d
@@ -461,12 +507,15 @@ align 16
 
 md5_write_hex:
     mov rdi, [rbx + MD5_OUT_PTR]
+    lea r11, [hex_pairs]
     xor r8d, r8d
 .hex_loop:
     cmp r8d, 16
     jae .done
-    mov dl, [rbx + MD5_H0 + r8]
-    call write_hex_byte
+    movzx ecx, byte [rbx + MD5_H0 + r8]
+    mov ax, [r11 + rcx * 2]
+    mov [rdi], ax
+    add rdi, 2
     inc r8d
     jmp .hex_loop
 .done:
@@ -707,12 +756,15 @@ align 16
 
 sha1_write_short_hex:
     mov rdi, [rbx + SHA_OUT_PTR]
+    lea r11, [hex_pairs]
     mov r9d, [rbx + SHA_H0]
     bswap r9d
     mov r8d, 4
 .hex_h0_loop:
-    mov dl, r9b
-    call write_hex_byte
+    movzx ecx, r9b
+    mov ax, [r11 + rcx * 2]
+    mov [rdi], ax
+    add rdi, 2
     shr r9d, 8
     dec r8d
     jnz .hex_h0_loop
@@ -721,26 +773,14 @@ sha1_write_short_hex:
     bswap r9d
     mov r8d, 4
 .hex_h1_loop:
-    mov dl, r9b
-    call write_hex_byte
+    movzx ecx, r9b
+    mov ax, [r11 + rcx * 2]
+    mov [rdi], ax
+    add rdi, 2
     shr r9d, 8
     dec r8d
     jnz .hex_h1_loop
 .done:
-    ret
-
-; dl = byte, rdi = output cursor. Advances rdi by 2.
-write_hex_byte:
-    lea r11, [hex_chars]
-    movzx ecx, dl
-    shr ecx, 4
-    mov al, [r11 + rcx]
-    mov [rdi], al
-    movzx ecx, dl
-    and ecx, 0x0f
-    mov al, [r11 + rcx]
-    mov [rdi + 1], al
-    add rdi, 2
     ret
 
 ; rcx = dest, rdx = src, r8 = len.
@@ -768,24 +808,20 @@ zero_bytes:
 section .rdata
 
 neutral_bpms db "0.000=0.000"
-hex_chars db "0123456789abcdef"
-md5_s db 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22
-      db 5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20
-      db 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23
-      db 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21
-md5_k dd 0xd76aa478, 0xe8c7b756, 0x242070db, 0xc1bdceee
-      dd 0xf57c0faf, 0x4787c62a, 0xa8304613, 0xfd469501
-      dd 0x698098d8, 0x8b44f7af, 0xffff5bb1, 0x895cd7be
-      dd 0x6b901122, 0xfd987193, 0xa679438e, 0x49b40821
-      dd 0xf61e2562, 0xc040b340, 0x265e5a51, 0xe9b6c7aa
-      dd 0xd62f105d, 0x02441453, 0xd8a1e681, 0xe7d3fbc8
-      dd 0x21e1cde6, 0xc33707d6, 0xf4d50d87, 0x455a14ed
-      dd 0xa9e3e905, 0xfcefa3f8, 0x676f02d9, 0x8d2a4c8a
-      dd 0xfffa3942, 0x8771f681, 0x6d9d6122, 0xfde5380c
-      dd 0xa4beea44, 0x4bdecfa9, 0xf6bb4b60, 0xbebfbc70
-      dd 0x289b7ec6, 0xeaa127fa, 0xd4ef3085, 0x04881d05
-      dd 0xd9d4d039, 0xe6db99e5, 0x1fa27cf8, 0xc4ac5665
-      dd 0xf4292244, 0x432aff97, 0xab9423a7, 0xfc93a039
-      dd 0x655b59c3, 0x8f0ccc92, 0xffeff47d, 0x85845dd1
-      dd 0x6fa87e4f, 0xfe2ce6e0, 0xa3014314, 0x4e0811a1
-      dd 0xf7537e82, 0xbd3af235, 0x2ad7d2bb, 0xeb86d391
+hex_pairs:
+%assign I 0
+%rep 256
+%assign HI ((I >> 4) & 15)
+%assign LO (I & 15)
+%if HI < 10
+    db '0' + HI
+%else
+    db 'a' + HI - 10
+%endif
+%if LO < 10
+    db '0' + LO
+%else
+    db 'a' + LO - 10
+%endif
+%assign I I + 1
+%endrep

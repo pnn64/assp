@@ -82,4 +82,22 @@ fn hash_cycles_camellia_chart() {
         100,
         simfile.len(),
     );
+
+    bench(
+        || {
+            black_box(sha1_short_hex2(black_box(b"abc"), black_box(b"def")).unwrap());
+        },
+        "sha1_short_hex2_6b",
+        100_000,
+        6,
+    );
+
+    bench(
+        || {
+            black_box(md5_hex(black_box(b"The quick brown fox jumps over the lazy dog")).unwrap());
+        },
+        "md5_hex_43b",
+        100_000,
+        43,
+    );
 }
