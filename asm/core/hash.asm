@@ -60,7 +60,7 @@ assp_md5_hex:
     push r13
     push r14
 
-    sub rsp, MD5_LOCAL_SIZE
+    sub rsp, MD5_LOCAL_SIZE + 8
     mov rbx, rsp
     mov [rbx + MD5_OUT_PTR], r8
 
@@ -90,7 +90,7 @@ assp_md5_hex:
     xor eax, eax
 
 .md5_done:
-    add rsp, MD5_LOCAL_SIZE
+    add rsp, MD5_LOCAL_SIZE + 8
     pop r14
     pop r13
     pop r12
@@ -216,8 +216,30 @@ assp_chart_hash_pair:
 
     lea rsi, [rsp + SHA_PAIR_CTX1]
     lea rdi, [rsp + SHA_PAIR_CTX2]
-    mov ecx, SHA_LOCAL_SIZE / 8
-    rep movsq
+    mov rax, [rsi + SHA_BUF + 0]
+    mov [rdi + SHA_BUF + 0], rax
+    mov rax, [rsi + SHA_BUF + 8]
+    mov [rdi + SHA_BUF + 8], rax
+    mov rax, [rsi + SHA_BUF + 16]
+    mov [rdi + SHA_BUF + 16], rax
+    mov rax, [rsi + SHA_BUF + 24]
+    mov [rdi + SHA_BUF + 24], rax
+    mov rax, [rsi + SHA_BUF + 32]
+    mov [rdi + SHA_BUF + 32], rax
+    mov rax, [rsi + SHA_BUF + 40]
+    mov [rdi + SHA_BUF + 40], rax
+    mov rax, [rsi + SHA_BUF + 48]
+    mov [rdi + SHA_BUF + 48], rax
+    mov rax, [rsi + SHA_BUF + 56]
+    mov [rdi + SHA_BUF + 56], rax
+    mov rax, [rsi + SHA_H0]
+    mov [rdi + SHA_H0], rax
+    mov rax, [rsi + SHA_H2]
+    mov [rdi + SHA_H2], rax
+    mov eax, [rsi + SHA_H4]
+    mov [rdi + SHA_H4], eax
+    mov rax, [rsi + SHA_BUF_LEN]
+    mov [rdi + SHA_BUF_LEN], rax
 
     lea rbx, [rsp + SHA_PAIR_CTX1]
     mov rax, [rsp + SHA_PAIR_CHART_LEN]
@@ -555,8 +577,8 @@ sha1_compress_block:
 .schedule:
     mov r8d, 16
 .schedule_loop:
-    cmp r8d, 76
-    jae .schedule_tail
+    cmp r8d, 80
+    jae .round_init
 %rep 4
     mov eax, [rbx + SHA_W + r8 * 4 - 12]
     xor eax, [rbx + SHA_W + r8 * 4 - 32]
@@ -568,18 +590,6 @@ sha1_compress_block:
 %endrep
     jmp .schedule_loop
 
-.schedule_tail:
-    cmp r8d, 80
-    jae .round_init
-    mov eax, [rbx + SHA_W + r8 * 4 - 12]
-    xor eax, [rbx + SHA_W + r8 * 4 - 32]
-    xor eax, [rbx + SHA_W + r8 * 4 - 56]
-    xor eax, [rbx + SHA_W + r8 * 4 - 64]
-    rol eax, 1
-    mov [rbx + SHA_W + r8 * 4], eax
-    inc r8d
-    jmp .schedule_loop
-
 .round_init:
     mov r12d, [rbx + SHA_H0]
     mov r13d, [rbx + SHA_H1]
@@ -589,56 +599,88 @@ sha1_compress_block:
     xor r8d, r8d
 
 align 16
-.round_loop:
-    cmp r8d, 20
-    jb .round_ch
-    cmp r8d, 40
-    jb .round_parity1
-    cmp r8d, 60
-    jb .round_maj
-    jmp .round_parity2
-
-.round_ch:
-    mov r11d, r13d
-    mov r9d, r13d
-    and r11d, r14d
-    not r9d
-    and r9d, r15d
-    or r11d, r9d
-    mov r10d, 0x5a827999
-    jmp .round_apply
-
-.round_parity1:
-    mov r11d, r13d
-    xor r11d, r14d
+.round_ch_loop:
+    mov r11d, r14d
     xor r11d, r15d
-    mov r10d, 0x6ed9eba1
-    jmp .round_apply
-
-.round_maj:
-    mov r11d, r13d
-    and r11d, r14d
-    mov r9d, r13d
-    and r9d, r15d
-    or r11d, r9d
-    mov r9d, r14d
-    and r9d, r15d
-    or r11d, r9d
-    mov r10d, 0x8f1bbcdc
-    jmp .round_apply
-
-.round_parity2:
-    mov r11d, r13d
-    xor r11d, r14d
+    and r11d, r13d
     xor r11d, r15d
-    mov r10d, 0xca62c1d6
-
-.round_apply:
     mov eax, r12d
     rol eax, 5
     add eax, r11d
     add eax, edx
-    add eax, r10d
+    add eax, 0x5a827999
+    add eax, [rbx + SHA_W + r8 * 4]
+
+    mov edx, r15d
+    mov r15d, r14d
+    mov r14d, r13d
+    rol r14d, 30
+    mov r13d, r12d
+    mov r12d, eax
+
+    inc r8d
+    cmp r8d, 20
+    jb .round_ch_loop
+
+align 16
+.round_parity1_loop:
+    mov r11d, r13d
+    xor r11d, r14d
+    xor r11d, r15d
+    mov eax, r12d
+    rol eax, 5
+    add eax, r11d
+    add eax, edx
+    add eax, 0x6ed9eba1
+    add eax, [rbx + SHA_W + r8 * 4]
+
+    mov edx, r15d
+    mov r15d, r14d
+    mov r14d, r13d
+    rol r14d, 30
+    mov r13d, r12d
+    mov r12d, eax
+
+    inc r8d
+    cmp r8d, 40
+    jb .round_parity1_loop
+
+align 16
+.round_maj_loop:
+    mov r11d, r13d
+    or r11d, r14d
+    and r11d, r15d
+    mov r9d, r13d
+    and r9d, r14d
+    or r11d, r9d
+    mov eax, r12d
+    rol eax, 5
+    add eax, r11d
+    add eax, edx
+    add eax, 0x8f1bbcdc
+    add eax, [rbx + SHA_W + r8 * 4]
+
+    mov edx, r15d
+    mov r15d, r14d
+    mov r14d, r13d
+    rol r14d, 30
+    mov r13d, r12d
+    mov r12d, eax
+
+    inc r8d
+    cmp r8d, 60
+    jb .round_maj_loop
+
+align 16
+.round_parity2_loop:
+    mov r11d, r13d
+    xor r11d, r14d
+    xor r11d, r15d
+    mov eax, r12d
+    rol eax, 5
+    add eax, r11d
+    add eax, edx
+    add eax, 0xca62c1d6
     add eax, [rbx + SHA_W + r8 * 4]
 
     mov edx, r15d
@@ -650,7 +692,7 @@ align 16
 
     inc r8d
     cmp r8d, 80
-    jb .round_loop
+    jb .round_parity2_loop
 
     add [rbx + SHA_H0], r12d
     add [rbx + SHA_H1], r13d
