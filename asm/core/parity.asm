@@ -2295,34 +2295,26 @@ step_parity_action_cost_single_tap_clean_4:
 .single_facing:
     mov rdx, [rsp + 72]
     movsx eax, byte [rdx + ASSP_STEP_PARITY_STATE4_WHERE_FEET + 1]
-    mov [rsp + 24], eax
     movsx ecx, byte [rdx + ASSP_STEP_PARITY_STATE4_WHERE_FEET + 2]
     test ecx, ecx
-    jns .single_store_result_lt
-    mov ecx, eax
-.single_store_result_lt:
-    mov [rsp + 28], ecx
-    movsx eax, byte [rdx + ASSP_STEP_PARITY_STATE4_WHERE_FEET + 3]
-    mov [rsp + 32], eax
-    movsx ecx, byte [rdx + ASSP_STEP_PARITY_STATE4_WHERE_FEET + 4]
-    test ecx, ecx
-    jns .single_store_result_rt
-    mov ecx, eax
-.single_store_result_rt:
-    mov [rsp + 36], ecx
-
-    lea r11, [rel step_parity_col_norm]
-    movzx eax, byte [rsp + 24]
-    movzx eax, byte [r11 + rax]
+    cmovs ecx, eax
+    mov r11d, 4
+    cmp eax, r11d
+    cmovae eax, r11d
+    cmp ecx, r11d
+    cmovae ecx, r11d
     mov [rsp + 24], eax
-    movzx eax, byte [rsp + 28]
-    movzx eax, byte [r11 + rax]
-    mov [rsp + 28], eax
-    movzx eax, byte [rsp + 32]
-    movzx eax, byte [r11 + rax]
-    mov [rsp + 32], eax
-    movzx eax, byte [rsp + 36]
-    movzx eax, byte [r11 + rax]
+    mov [rsp + 28], ecx
+
+    movsx r8d, byte [rdx + ASSP_STEP_PARITY_STATE4_WHERE_FEET + 3]
+    movsx eax, byte [rdx + ASSP_STEP_PARITY_STATE4_WHERE_FEET + 4]
+    test eax, eax
+    cmovs eax, r8d
+    cmp r8d, r11d
+    cmovae r8d, r11d
+    cmp eax, r11d
+    cmovae eax, r11d
+    mov [rsp + 32], r8d
     mov [rsp + 36], eax
 
     xorps xmm1, xmm1
@@ -2366,27 +2358,22 @@ step_parity_action_cost_single_tap_clean_4:
 
     mov rcx, [rsp + 64]
     movsx eax, byte [rcx + ASSP_STEP_PARITY_STATE4_WHERE_FEET + 1]
+    movsx edx, byte [rcx + ASSP_STEP_PARITY_STATE4_WHERE_FEET + 2]
+    movsx r8d, byte [rcx + ASSP_STEP_PARITY_STATE4_WHERE_FEET + 3]
+    movsx ecx, byte [rcx + ASSP_STEP_PARITY_STATE4_WHERE_FEET + 4]
+    mov r11d, 4
+    cmp eax, r11d
+    cmovae eax, r11d
+    cmp edx, r11d
+    cmovae edx, r11d
+    cmp r8d, r11d
+    cmovae r8d, r11d
+    cmp ecx, r11d
+    cmovae ecx, r11d
     mov [rsp + 24], eax
-    movsx eax, byte [rcx + ASSP_STEP_PARITY_STATE4_WHERE_FEET + 2]
-    mov [rsp + 28], eax
-    movsx eax, byte [rcx + ASSP_STEP_PARITY_STATE4_WHERE_FEET + 3]
-    mov [rsp + 32], eax
-    movsx eax, byte [rcx + ASSP_STEP_PARITY_STATE4_WHERE_FEET + 4]
-    mov [rsp + 36], eax
-
-    lea r11, [rel step_parity_col_norm]
-    movzx eax, byte [rsp + 24]
-    movzx eax, byte [r11 + rax]
-    mov [rsp + 24], eax
-    movzx eax, byte [rsp + 28]
-    movzx eax, byte [r11 + rax]
-    mov [rsp + 28], eax
-    movzx eax, byte [rsp + 32]
-    movzx eax, byte [r11 + rax]
-    mov [rsp + 32], eax
-    movzx eax, byte [rsp + 36]
-    movzx eax, byte [r11 + rax]
-    mov [rsp + 36], eax
+    mov [rsp + 28], edx
+    mov [rsp + 32], r8d
+    mov [rsp + 36], ecx
 
     ASSP_PAIR_IDX_NORM_EAX [rsp + 24], [rsp + 28]
     mov [rsp + 56], eax
