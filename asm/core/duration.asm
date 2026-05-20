@@ -29,17 +29,8 @@ section .text
     xor r13d, r13d
 %endmacro
 
-%macro ASSP_SCAN_ROW_OBJECT 1
-    xor r14d, r14d
-%if %1 = 4
-    cmp dword [rsi], 30303030h
-    je %%done
-%endif
-    xor r8d, r8d
-%%lane_loop:
-    cmp r8d, %1
-    jae %%done
-    movzx eax, byte [rsi + r8]
+%macro ASSP_SCAN_ROW_LANE_OBJECT 1
+    movzx eax, byte [rsi + %1]
     movzx eax, byte [r12 + rax]
     cmp al, 1
     je %%tap
@@ -51,22 +42,64 @@ section .text
 
 %%tap:
     mov r14d, ASSP_TRUE
-    mov dword [rbx + DEPTHS + r8 * 4], 0
+    mov dword [rbx + DEPTHS + %1 * 4], 0
     jmp %%next
 
 %%hold_start:
-    inc dword [rbx + DEPTHS + r8 * 4]
+    inc dword [rbx + DEPTHS + %1 * 4]
     jmp %%next
 
 %%hold_end:
-    cmp dword [rbx + DEPTHS + r8 * 4], 0
+    cmp dword [rbx + DEPTHS + %1 * 4], 0
     je %%next
-    dec dword [rbx + DEPTHS + r8 * 4]
+    dec dword [rbx + DEPTHS + %1 * 4]
     mov r14d, ASSP_TRUE
 
 %%next:
-    inc r8d
-    jmp %%lane_loop
+%endmacro
+
+%macro ASSP_REJECT_ZERO_ROW 2
+    cmp dword [rsi], 30303030h
+%if %1 = 4
+    je %2
+%else
+    jne %%not_zero
+    cmp dword [rsi + 4], 30303030h
+    je %2
+%%not_zero:
+%endif
+%endmacro
+
+%macro ASSP_SCAN_ROW_OBJECT_NONZERO 1
+    xor r14d, r14d
+
+    %assign lane 0
+    %rep %1
+        ASSP_SCAN_ROW_LANE_OBJECT lane
+        %assign lane lane + 1
+    %endrep
+
+%%done:
+    mov eax, r14d
+%endmacro
+
+%macro ASSP_SCAN_ROW_OBJECT 1
+    xor r14d, r14d
+    cmp dword [rsi], 30303030h
+%if %1 = 4
+    je %%done
+%else
+    jne %%scan
+    cmp dword [rsi + 4], 30303030h
+    je %%done
+%%scan:
+%endif
+
+    %assign lane 0
+    %rep %1
+        ASSP_SCAN_ROW_LANE_OBJECT lane
+        %assign lane lane + 1
+    %endrep
 
 %%done:
     mov eax, r14d
@@ -134,7 +167,12 @@ section .text
 
 .fast_row_lf:
     lea r15, [r10 + 1]
+%if %2 = 4
+    ASSP_REJECT_ZERO_ROW %2, .count_row
+    jmp .scan_row_nonzero
+%else
     jmp .scan_row
+%endif
 
 .fast_row_cr:
     lea r11, [r10 + 1]
@@ -143,7 +181,12 @@ section .text
     cmp byte [r11], 10
     jne .find_line_end_slow
     lea r15, [r10 + 2]
+%if %2 = 4
+    ASSP_REJECT_ZERO_ROW %2, .count_row
+    jmp .scan_row_nonzero
+%else
     jmp .scan_row
+%endif
 
 .fast_comma:
     lea r10, [rsi + 1]
@@ -212,7 +255,15 @@ section .text
     ja .line_done
 
 .scan_row:
+%if %2 = 4
     ASSP_SCAN_ROW_OBJECT %2
+    jmp .row_scanned
+.scan_row_nonzero:
+    ASSP_SCAN_ROW_OBJECT_NONZERO %2
+.row_scanned:
+%else
+    ASSP_SCAN_ROW_OBJECT %2
+%endif
     test eax, eax
     jz .count_row
     mov qword [rbx + CUR_HAS], 1
