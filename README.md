@@ -32,7 +32,7 @@ test coverage, read `src/abi.rs` and `tests/`.
 - Windows SDK x64 import libraries
 - `cargo` only for Rust tests or RSSP comparison modes
 
-Linux native builds use:
+Linux and FreeBSD native builds use:
 
 - `nasm`
 - `ld`, `cc`, or `gcc`
@@ -53,22 +53,28 @@ From the workspace root:
 
 The Windows executable is written to `assp\target\assp.exe`.
 
-From Linux, build the native ELF64 executable:
+From Linux or FreeBSD, build the native ELF64 executable:
 
 ```bash
-bash build.sh
+sh build.sh
 ```
 
-The Linux executable is written to `assp/target/assp`.
+The target OS is auto-detected from `uname`. The executable is written to
+`assp/target/assp`.
 
-Useful Linux build modes:
+Useful native Unix build modes:
 
 ```bash
-bash build.sh --clean
-bash build.sh --profile-symbols
-bash build.sh --phase-profile
-bash build.sh --run-fixture
+sh build.sh --clean
+sh build.sh --target linux
+sh build.sh --target freebsd
+sh build.sh --profile-symbols
+sh build.sh --phase-profile
+sh build.sh --run-fixture
 ```
+
+`--target freebsd` selects the FreeBSD syscall shim. Build and run it on
+FreeBSD for an executable that can actually execute those syscalls.
 
 Useful build modes:
 

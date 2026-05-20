@@ -1,13 +1,15 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/sh
+set -eu
 
 usage() {
     cat <<'EOF'
-Usage: bash build.sh [options]
+Usage: sh build.sh [options]
 
-Build the native Linux ASSP standalone executable at target/assp.
+Build the native Linux or FreeBSD ASSP standalone executable at target/assp.
+The target OS is auto-detected from uname unless --target is supplied.
 
 Options:
+  --target, -Target OS        target OS: linux or freebsd
   --clean, -Clean             remove target/ before building
   --profile-symbols, -ProfileSymbols
                               emit DWARF debug info and a linker map
@@ -34,34 +36,98 @@ require_cmd() {
     command -v "$1" >/dev/null 2>&1 || die "$1 was not found on PATH."
 }
 
-resolve_path() {
-    if command -v realpath >/dev/null 2>&1; then
-        realpath -m "$1"
-    else
-        local dir
-        dir=$(dirname "$1")
-        local base
-        base=$(basename "$1")
-        (cd "$dir" && printf '%s/%s\n' "$(pwd -P)" "$base")
-    fi
+detect_host_target() {
+    case "$(uname -s 2>/dev/null || true)" in
+        Linux)
+            echo linux
+            ;;
+        FreeBSD)
+            echo freebsd
+            ;;
+        *)
+            echo unknown
+            ;;
+    esac
 }
 
-root=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
+resolve_path() {
+    case "$1" in
+        /*)
+            path=$1
+            ;;
+        *)
+            path=$(pwd -P)/$1
+            ;;
+    esac
+
+    dir=$(dirname "$path")
+    base=$(basename "$path")
+    (cd "$dir" 2>/dev/null && printf '%s/%s\n' "$(pwd -P)" "$base")
+}
+
+assemble_one() {
+    (
+        asm=$1
+        obj=$2
+
+        set -- -f elf64 "-I$include/" -DASSP_STANDALONE_EXE "$target_define"
+        if [ "$profile_symbols" -eq 1 ]; then
+            set -- "$@" -g -F dwarf
+        fi
+        if [ "$phase_profile" -eq 1 ]; then
+            set -- "$@" -DASSP_PHASE_PROFILE
+        fi
+        set -- "$@" "$asm" -o "$obj"
+
+        nasm "$@"
+    )
+}
+
+link_with_ld() {
+    set -- -e _start -o "$exe" "$@"
+    if [ "$profile_symbols" -eq 1 ]; then
+        set -- "-Map=$map" "$@"
+    fi
+
+    ld "$@"
+}
+
+link_with_cc() {
+    compiler=$1
+    shift
+
+    set -- -nostdlib -no-pie -Wl,-e,_start -o "$exe" "$@"
+    if [ "$profile_symbols" -eq 1 ]; then
+        set -- "-Wl,-Map,$map" "$@"
+    fi
+
+    "$compiler" "$@"
+}
+
+root=$(CDPATH= cd "$(dirname "$0")" && pwd -P)
 target="$root/target"
 exe="$target/assp"
 map="$target/assp.map"
 include="$root/include"
+source_list="$target/asm_sources.list"
 
+host_target=$(detect_host_target)
+target_os=
 clean=0
 profile_symbols=0
 phase_profile=0
 run_fixture=0
-fixture=""
+fixture=
 chart=0
 list_charts=0
 
-while (($#)); do
+while [ "$#" -gt 0 ]; do
     case "$1" in
+        --target|-Target)
+            [ "$#" -ge 2 ] || die "$1 requires linux or freebsd."
+            target_os=$2
+            shift
+            ;;
         --clean|-Clean)
             clean=1
             ;;
@@ -75,12 +141,12 @@ while (($#)); do
             run_fixture=1
             ;;
         --fixture|-Fixture)
-            (($# >= 2)) || die "$1 requires a path."
+            [ "$#" -ge 2 ] || die "$1 requires a path."
             fixture=$2
             shift
             ;;
         --chart|-Chart)
-            (($# >= 2)) || die "$1 requires a chart index."
+            [ "$#" -ge 2 ] || die "$1 requires a chart index."
             chart=$2
             shift
             ;;
@@ -98,75 +164,71 @@ while (($#)); do
     shift
 done
 
+if [ -z "$target_os" ]; then
+    target_os=$host_target
+fi
+
+case "$target_os" in
+    linux)
+        target_define=-DASSP_LINUX
+        ;;
+    freebsd)
+        target_define=-DASSP_FREEBSD
+        ;;
+    *)
+        die "unsupported target OS: $target_os. Use --target linux or --target freebsd."
+        ;;
+esac
+
 require_cmd nasm
 
-if ((clean)); then
+if [ "$clean" -eq 1 ]; then
     rm -rf "$target"
 fi
 mkdir -p "$target"
 
-mapfile -d '' asm_files < <(find "$root/asm" -type f -name '*.asm' -print0 | sort -z)
-((${#asm_files[@]} != 0)) || die "no NASM source files found under $root/asm."
+find "$root/asm" -type f -name '*.asm' | sort > "$source_list"
+[ -s "$source_list" ] || die "no NASM source files found under $root/asm."
 
-objs=()
-for asm in "${asm_files[@]}"; do
+set --
+while IFS= read -r asm; do
     rel=${asm#"$root/asm/"}
-    obj_name=${rel//\//_}
-    obj_name=${obj_name%.asm}.o
+    obj_name=$(printf '%s\n' "$rel" | sed 's|/|_|g; s|\.asm$|.o|')
     obj="$target/$obj_name"
 
-    nasm_args=(-f elf64 "-I$include/" -DASSP_STANDALONE_EXE -DASSP_LINUX)
-    if ((profile_symbols)); then
-        nasm_args+=(-g -F dwarf)
-    fi
-    if ((phase_profile)); then
-        nasm_args+=(-DASSP_PHASE_PROFILE)
-    fi
-    nasm_args+=("$asm" -o "$obj")
-
-    nasm "${nasm_args[@]}"
-    objs+=("$obj")
-done
+    assemble_one "$asm" "$obj"
+    set -- "$@" "$obj"
+done < "$source_list"
 
 if command -v ld >/dev/null 2>&1; then
-    link_args=(-nostdlib -e _start -o "$exe")
-    if ((profile_symbols)); then
-        link_args+=("-Map=$map")
-    fi
-    ld "${link_args[@]}" "${objs[@]}"
+    link_with_ld "$@"
 elif command -v cc >/dev/null 2>&1; then
-    link_args=(-nostdlib -no-pie -Wl,-e,_start -o "$exe")
-    if ((profile_symbols)); then
-        link_args+=("-Wl,-Map,$map")
-    fi
-    cc "${link_args[@]}" "${objs[@]}"
+    link_with_cc cc "$@"
 elif command -v gcc >/dev/null 2>&1; then
-    link_args=(-nostdlib -no-pie -Wl,-e,_start -o "$exe")
-    if ((profile_symbols)); then
-        link_args+=("-Wl,-Map,$map")
-    fi
-    gcc "${link_args[@]}" "${objs[@]}"
+    link_with_cc gcc "$@"
 else
-    die "no Linux linker found. Install binutils ld, cc, or gcc."
+    die "no linker found. Install binutils ld, cc, or gcc."
 fi
 
 chmod +x "$exe"
-echo "built $exe"
+echo "built $exe ($target_os)"
 
-if ((run_fixture)); then
-    if [[ -z "$fixture" ]]; then
+if [ "$run_fixture" -eq 1 ]; then
+    if [ "$host_target" != "$target_os" ]; then
+        die "cannot run a $target_os executable on this $host_target host."
+    fi
+
+    if [ -z "$fixture" ]; then
         fixture="$root/fixtures/camellia_mix.ssc"
     fi
-    fixture=$(resolve_path "$fixture")
-    [[ -f "$fixture" ]] || die "fixture was not found: $fixture"
+    fixture=$(resolve_path "$fixture") || die "could not resolve fixture path: $fixture"
+    [ -f "$fixture" ] || die "fixture was not found: $fixture"
 
-    run_args=("$fixture")
-    if ((list_charts)); then
-        run_args+=("list")
+    if [ "$list_charts" -eq 1 ]; then
+        echo "running $exe $fixture list"
+        (cd "$root" && "$exe" "$fixture" list)
     else
-        run_args+=("$chart")
+        echo "running $exe $fixture $chart"
+        (cd "$root" && "$exe" "$fixture" "$chart")
     fi
-
-    echo "running $exe ${run_args[*]}"
-    (cd "$root" && "$exe" "${run_args[@]}")
 fi
