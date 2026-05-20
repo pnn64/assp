@@ -31,6 +31,10 @@ section .text
 
 %macro ASSP_SCAN_ROW_OBJECT 1
     xor r14d, r14d
+%if %1 = 4
+    cmp dword [rsi], 30303030h
+    je %%done
+%endif
     xor r8d, r8d
 %%lane_loop:
     cmp r8d, %1
