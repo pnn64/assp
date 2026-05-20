@@ -28,6 +28,7 @@ extern start
 %define CLOCK_MONOTONIC 4
 %define SEEK_SET 0
 %define SEEK_END 2
+%define FREEBSD_ARGV_SCAN_CAP 64
 %define FREEBSD_CMDLINE_CAP 65536
 %define FREEBSD_PATH_CAP 4096
 
@@ -84,11 +85,30 @@ _start:
 
 .load_stack_args:
     mov rax, [r10]
+    cmp rax, FREEBSD_ARGV_SCAN_CAP
+    ja .load_argv_vector
     mov [freebsd_argc], rax
     lea rax, [r10 + 8]
     mov [freebsd_argv], rax
-    FREEBSD_TRACE freebsd_trace_stack_args, freebsd_trace_stack_args_end - freebsd_trace_stack_args
     mov rsp, r10
+    FREEBSD_TRACE freebsd_trace_argc_block, freebsd_trace_argc_block_end - freebsd_trace_argc_block
+    jmp .call_start
+
+.load_argv_vector:
+    mov [freebsd_argv], r10
+    xor eax, eax
+.count_argv_loop:
+    cmp rax, FREEBSD_ARGV_SCAN_CAP
+    jae .count_argv_done
+    mov r11, [r10 + rax * 8]
+    test r11, r11
+    jz .count_argv_done
+    inc rax
+    jmp .count_argv_loop
+.count_argv_done:
+    mov [freebsd_argc], rax
+    lea rsp, [r10 - 8]
+    FREEBSD_TRACE freebsd_trace_argv_vector, freebsd_trace_argv_vector_end - freebsd_trace_argv_vector
 
 .call_start:
     FREEBSD_TRACE freebsd_trace_call_start, freebsd_trace_call_start_end - freebsd_trace_call_start
@@ -134,9 +154,13 @@ GetCommandLineA:
 .arg_loop:
     cmp r14, r12
     jae .finish
+    cmp r14, FREEBSD_ARGV_SCAN_CAP
+    jae .finish
     mov rsi, [r13 + r14 * 8]
     test rsi, rsi
     jz .finish
+    cmp rsi, 4096
+    jb .finish
 
     test r14, r14
     jz .scan_quote
@@ -462,8 +486,10 @@ freebsd_trace_start db "assp freebsd: _start", 10
 freebsd_trace_start_end:
 freebsd_trace_abi_args db "assp freebsd: argv from abi", 10
 freebsd_trace_abi_args_end:
-freebsd_trace_stack_args db "assp freebsd: argv from stack", 10
-freebsd_trace_stack_args_end:
+freebsd_trace_argc_block db "assp freebsd: argv from argc block", 10
+freebsd_trace_argc_block_end:
+freebsd_trace_argv_vector db "assp freebsd: argv from vector", 10
+freebsd_trace_argv_vector_end:
 freebsd_trace_call_start db "assp freebsd: call start", 10
 freebsd_trace_call_start_end:
 freebsd_trace_cmdline db "assp freebsd: GetCommandLineA", 10
