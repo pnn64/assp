@@ -34,7 +34,8 @@ extern start
 section .text
 
 _start:
-    mov [freebsd_initial_rsp], rsp
+    ; FreeBSD/amd64 passes the initial argc/argv stack pointer in rdi.
+    mov [freebsd_initial_rsp], rdi
     and rsp, -16
     call start
     mov edi, eax
