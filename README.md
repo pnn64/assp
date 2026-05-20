@@ -70,11 +70,13 @@ sh build.sh --target linux
 sh build.sh --target freebsd
 sh build.sh --profile-symbols
 sh build.sh --phase-profile
+sh build.sh --startup-trace
 sh build.sh --run-fixture
 ```
 
 `--target freebsd` selects the FreeBSD syscall shim. Build and run it on
 FreeBSD for an executable that can actually execute those syscalls.
+`--startup-trace` emits low-level platform-shim startup breadcrumbs on stderr.
 
 Useful build modes:
 

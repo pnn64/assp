@@ -31,11 +31,69 @@ extern start
 %define FREEBSD_CMDLINE_CAP 65536
 %define FREEBSD_PATH_CAP 4096
 
+%macro FREEBSD_TRACE 2
+%ifdef ASSP_STARTUP_TRACE
+    push rax
+    push rcx
+    push rdx
+    push rsi
+    push rdi
+    push r10
+    push r11
+    mov eax, SYS_WRITE
+    mov edi, 2
+    lea rsi, [%1]
+    mov edx, %2
+    syscall
+    pop r11
+    pop r10
+    pop rdi
+    pop rsi
+    pop rdx
+    pop rcx
+    pop rax
+%endif
+%endmacro
+
 section .text
 
 _start:
-    ; FreeBSD/amd64 passes the initial argc/argv stack pointer in rdi.
-    mov [freebsd_initial_rsp], rdi
+    mov [freebsd_entry_rsp], rsp
+    mov [freebsd_entry_rdi], rdi
+    mov [freebsd_entry_rsi], rsi
+    FREEBSD_TRACE freebsd_trace_start, freebsd_trace_start_end - freebsd_trace_start
+
+    ; FreeBSD kernel entry passes the argc/argv stack pointer in rdi. If the
+    ; runtime loader calls us instead, rdi/rsi may already be argc/argv.
+    cmp rdi, 4096
+    ja .check_stack_ptr
+    test rsi, rsi
+    jz .check_stack_ptr
+    mov [freebsd_argc], rdi
+    mov [freebsd_argv], rsi
+    FREEBSD_TRACE freebsd_trace_abi_args, freebsd_trace_abi_args_end - freebsd_trace_abi_args
+    jmp .call_start
+
+.check_stack_ptr:
+    mov rax, rdi
+    sub rax, rsp
+    cmp rax, 4096
+    ja .use_rsp
+    mov r10, rdi
+    jmp .load_stack_args
+
+.use_rsp:
+    mov r10, rsp
+
+.load_stack_args:
+    mov rax, [r10]
+    mov [freebsd_argc], rax
+    lea rax, [r10 + 8]
+    mov [freebsd_argv], rax
+    FREEBSD_TRACE freebsd_trace_stack_args, freebsd_trace_stack_args_end - freebsd_trace_stack_args
+
+.call_start:
+    FREEBSD_TRACE freebsd_trace_call_start, freebsd_trace_call_start_end - freebsd_trace_call_start
     and rsp, -16
     call start
     mov edi, eax
@@ -65,12 +123,12 @@ GetCommandLineA:
 
     cmp byte [freebsd_cmdline_ready], 0
     jne .return_buffer
+    FREEBSD_TRACE freebsd_trace_cmdline, freebsd_trace_cmdline_end - freebsd_trace_cmdline
 
-    mov rsi, [freebsd_initial_rsp]
-    test rsi, rsi
+    mov r12, [freebsd_argc]
+    mov r13, [freebsd_argv]
+    test r13, r13
     jz .finish
-    mov r12, [rsi]
-    lea r13, [rsi + 8]
     lea rdi, [freebsd_cmdline]
     mov r15d, FREEBSD_CMDLINE_CAP - 1
     xor r14d, r14d
@@ -400,9 +458,26 @@ QueryPerformanceCounter:
     pop rsi
     ret
 
+section .rdata
+
+freebsd_trace_start db "assp freebsd: _start", 10
+freebsd_trace_start_end:
+freebsd_trace_abi_args db "assp freebsd: argv from abi", 10
+freebsd_trace_abi_args_end:
+freebsd_trace_stack_args db "assp freebsd: argv from stack", 10
+freebsd_trace_stack_args_end:
+freebsd_trace_call_start db "assp freebsd: call start", 10
+freebsd_trace_call_start_end:
+freebsd_trace_cmdline db "assp freebsd: GetCommandLineA", 10
+freebsd_trace_cmdline_end:
+
 section .bss
 
-freebsd_initial_rsp resq 1
+freebsd_entry_rsp resq 1
+freebsd_entry_rdi resq 1
+freebsd_entry_rsi resq 1
+freebsd_argc resq 1
+freebsd_argv resq 1
 freebsd_cmdline_ready resb 1
 freebsd_cmdline resb FREEBSD_CMDLINE_CAP
 freebsd_path_buffer resb FREEBSD_PATH_CAP

@@ -15,6 +15,8 @@ Options:
                               emit DWARF debug info and a linker map
   --phase-profile, -PhaseProfile
                               define ASSP_PHASE_PROFILE
+  --startup-trace, -StartupTrace
+                              define ASSP_STARTUP_TRACE for platform shim logs
   --run-fixture, -RunFixture  run the built executable
   --fixture, -Fixture PATH    fixture path for --run-fixture
   --chart, -Chart N           chart index for --run-fixture (default: 0)
@@ -77,6 +79,9 @@ assemble_one() {
         if [ "$phase_profile" -eq 1 ]; then
             set -- "$@" -DASSP_PHASE_PROFILE
         fi
+        if [ "$startup_trace" -eq 1 ]; then
+            set -- "$@" -DASSP_STARTUP_TRACE
+        fi
         set -- "$@" "$asm" -o "$obj"
 
         nasm "$@"
@@ -84,7 +89,7 @@ assemble_one() {
 }
 
 link_with_ld() {
-    set -- -e _start -o "$exe" "$@"
+    set -- -static -e _start -o "$exe" "$@"
     if [ "$profile_symbols" -eq 1 ]; then
         set -- "-Map=$map" "$@"
     fi
@@ -96,7 +101,7 @@ link_with_cc() {
     compiler=$1
     shift
 
-    set -- -nostdlib -no-pie -Wl,-e,_start -o "$exe" "$@"
+    set -- -static -nostdlib -no-pie -Wl,-e,_start -o "$exe" "$@"
     if [ "$profile_symbols" -eq 1 ]; then
         set -- "-Wl,-Map,$map" "$@"
     fi
@@ -116,6 +121,7 @@ target_os=
 clean=0
 profile_symbols=0
 phase_profile=0
+startup_trace=0
 run_fixture=0
 fixture=
 chart=0
@@ -136,6 +142,9 @@ while [ "$#" -gt 0 ]; do
             ;;
         --phase-profile|-PhaseProfile)
             phase_profile=1
+            ;;
+        --startup-trace|-StartupTrace)
+            startup_trace=1
             ;;
         --run-fixture|-RunFixture)
             run_fixture=1
