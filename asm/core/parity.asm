@@ -3672,14 +3672,14 @@ assp_step_parity_place_rows_4:
     jz .fail
     mov [rsp + 200], rax
 
+    mov r9, [rsp + 160]
+    imul r9, [rsp + 480]
     xor rcx, rcx
 .store_backtrack_loop:
     cmp rcx, [rsp + 200]
     jae .swap_rows
 
-    mov rax, [rsp + 160]
-    imul rax, [rsp + 480]
-    add rax, rcx
+    lea rax, [r9 + rcx]
 
     mov rdx, [rsp + 432]
     mov edx, [rdx + rcx * 4]
