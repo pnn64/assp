@@ -66,6 +66,10 @@ fn variable_bpms() -> Vec<BpmSegment> {
 #[ignore]
 fn bpm_nps_cycles() {
     let bpms = variable_bpms();
+    let single_bpm = [BpmSegment {
+        beat_milli: 0,
+        bpm_milli: 175_000,
+    }];
     let densities: Vec<u32> = (0..4096).map(|i| 16 + (i % 5) as u32 * 4).collect();
     let mut out = vec![0u32; densities.len()];
     let nps_values: Vec<u32> = (0..4096)
@@ -84,6 +88,22 @@ fn bpm_nps_cycles() {
             ));
         },
         "measure_nps_variable_bpms",
+        100,
+        densities.len(),
+    );
+
+    bench(
+        || unsafe {
+            black_box(assp_measure_nps_milli_from_bpms(
+                black_box(densities.as_ptr()),
+                densities.len(),
+                black_box(single_bpm.as_ptr()),
+                single_bpm.len(),
+                black_box(out.as_mut_ptr()),
+                out.len(),
+            ));
+        },
+        "measure_nps_single_bpm",
         100,
         densities.len(),
     );
