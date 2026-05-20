@@ -2219,15 +2219,11 @@ step_parity_action_cost_single_tap_clean_4:
     sub rsp, 96
     mov [rsp + 64], rcx
     mov [rsp + 72], rdx
-    mov [rsp + 80], r8
-    mov [rsp + 88], r9d
 
     movzx r10d, byte [r8 + r9]
-    mov [rsp + 20], r10d
     xorps xmm0, xmm0
 
     movzx eax, byte [rcx + ASSP_STEP_PARITY_STATE4_MOVED_MASK]
-    mov [rsp + 12], eax
     movzx r11d, byte [rcx + ASSP_STEP_PARITY_STATE4_HOLDING_MASK]
     not r11d
     and eax, r11d
@@ -2258,12 +2254,11 @@ step_parity_action_cost_single_tap_clean_4:
 .single_check_jack:
     test r11b, 4
     jnz .single_store_flags
-    mov ecx, [rsp + 88]
     mov rdx, [rsp + 64]
-    movzx eax, byte [rdx + ASSP_STEP_PARITY_STATE4_COMBINED + rcx]
-    cmp eax, [rsp + 20]
+    movzx eax, byte [rdx + ASSP_STEP_PARITY_STATE4_COMBINED + r9]
+    cmp eax, r10d
     jne .single_store_flags
-    cmp dword [rsp + 20], 3
+    cmp r10d, 3
     jae .single_check_right_jack
     test r11b, 32
     jz .single_store_flags
@@ -2282,7 +2277,7 @@ step_parity_action_cost_single_tap_clean_4:
     jnz .single_facing
     cmp dword [rsp + 136], 0
     jne .single_facing
-    cmp dword [rsp + 20], 3
+    cmp r10d, 3
     jae .single_right_doublestep
     test r11b, 8
     jnz .single_facing
@@ -2440,13 +2435,12 @@ step_parity_action_cost_single_tap_clean_4:
     comiss xmm1, [rel cost_slow_footswitch_ignore]
     jae .single_jack
     mov rcx, [rsp + 64]
-    mov r8d, [rsp + 88]
-    movzx eax, byte [rcx + ASSP_STEP_PARITY_STATE4_COMBINED + r8]
+    movzx eax, byte [rcx + ASSP_STEP_PARITY_STATE4_COMBINED + r9]
     test eax, eax
     jz .single_jack
-    cmp eax, [rsp + 20]
+    cmp eax, r10d
     je .single_jack
-    mov ecx, [rsp + 20]
+    mov ecx, r10d
     test cl, 1
     jz .single_other_part_even
     inc ecx
@@ -2472,7 +2466,7 @@ step_parity_action_cost_single_tap_clean_4:
 
 .single_big_movement:
     mov rcx, [rsp + 64]
-    mov eax, [rsp + 20]
+    mov eax, r10d
     movsx r8d, byte [rcx + ASSP_STEP_PARITY_STATE4_WHERE_FEET + rax]
     test r8d, r8d
     js .single_done
