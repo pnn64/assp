@@ -32,6 +32,8 @@ section .text
 
 %macro count_lane 3
     mov al, [rsi + %1]
+    cmp al, '0'
+    je %%done
     cmp al, '1'
     je %%tap
     cmp al, '2'
@@ -121,6 +123,8 @@ section .text
 
 %macro count_masked_lane 2
     mov al, [rsi + %1]
+    cmp al, '0'
+    je %%done
     cmp al, '1'
     je %%tap
     cmp al, '2'
@@ -275,6 +279,8 @@ assp_count_note_stats_4:
     cmp rax, rdi
     ja .malformed_row
 
+    cmp dword [rsi], 30303030h
+    je .zero_row
     invalid_lane_break 0, .malformed_row
     invalid_lane_break 1, .malformed_row
     invalid_lane_break 2, .malformed_row
@@ -324,6 +330,10 @@ assp_count_note_stats_4:
 
 .store_empty_active:
     mov r12d, eax
+    jmp .skip_line
+
+.zero_row:
+    inc qword [rbx + ASSP_NOTE_STATS_ROWS]
     jmp .skip_line
 
 .malformed_row:
@@ -412,6 +422,8 @@ assp_count_note_stats_4:
     cmp rax, rdi
     ja .recount_malformed_row
 
+    cmp dword [rsi], 30303030h
+    je .recount_zero_row
     invalid_lane_break 0, .recount_malformed_row
     invalid_lane_break 1, .recount_malformed_row
     invalid_lane_break 2, .recount_malformed_row
@@ -461,6 +473,10 @@ assp_count_note_stats_4:
 
 .recount_store_empty_active:
     mov r12d, eax
+    jmp .recount_skip_line
+
+.recount_zero_row:
+    inc qword [rbx + ASSP_NOTE_STATS_ROWS]
     jmp .recount_skip_line
 
 .recount_malformed_row:
@@ -582,6 +598,11 @@ assp_count_note_stats_8:
     cmp rax, rdi
     ja .malformed_row
 
+    cmp dword [rsi], 30303030h
+    jne .not_zero_row
+    cmp dword [rsi + 4], 30303030h
+    je .zero_row
+.not_zero_row:
     invalid_lane_break 0, .malformed_row
     invalid_lane_break 1, .malformed_row
     invalid_lane_break 2, .malformed_row
@@ -639,6 +660,10 @@ assp_count_note_stats_8:
 
 .store_empty_active:
     mov r12d, eax
+    jmp .skip_line
+
+.zero_row:
+    inc qword [rbx + ASSP_NOTE_STATS_ROWS]
     jmp .skip_line
 
 .malformed_row:
@@ -731,6 +756,11 @@ assp_count_note_stats_8:
     cmp rax, rdi
     ja .recount_malformed_row
 
+    cmp dword [rsi], 30303030h
+    jne .recount_not_zero_row
+    cmp dword [rsi + 4], 30303030h
+    je .recount_zero_row
+.recount_not_zero_row:
     invalid_lane_break 0, .recount_malformed_row
     invalid_lane_break 1, .recount_malformed_row
     invalid_lane_break 2, .recount_malformed_row
@@ -788,6 +818,10 @@ assp_count_note_stats_8:
 
 .recount_store_empty_active:
     mov r12d, eax
+    jmp .recount_skip_line
+
+.recount_zero_row:
+    inc qword [rbx + ASSP_NOTE_STATS_ROWS]
     jmp .recount_skip_line
 
 .recount_malformed_row:
