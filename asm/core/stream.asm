@@ -33,6 +33,12 @@ global assp_format_stream_segments
 %%done:
 %endmacro
 
+%define FMT_SEG_RUN_SUM 0
+%define FMT_SEG_TOTAL_SUM 8
+%define FMT_SEG_MERGED_FLAG 16
+%define FMT_SEG_CUR_SIZE 24
+%define FMT_TOKEN_BREAK_THRESHOLD 8
+
 section .text
 
 ; rcx = u32 densities, rdx = density count, r8 = out assp_stream_counts.
@@ -292,6 +298,7 @@ stream_round_unsigned_div_ties_even:
 
 ; rcx = u32 densities, rdx = density count, r8 = optional output segments,
 ; r9 = output cap. rax = total segment count.
+align 16
 assp_stream_segments_from_densities:
     push rbx
     push rsi
@@ -413,6 +420,7 @@ store_segment:
 
 ; rcx = u32 densities, rdx = density count, r8 = optional output tokens,
 ; r9 = output cap. rax = total token count in RSSP's active stream range.
+align 16
 assp_stream_tokens_from_densities:
     push rbx
     push rsi
@@ -502,8 +510,7 @@ store_token:
     jae .count
     mov r8, r13
     shl r8, 4
-    mov [rbx + r8 + ASSP_STREAM_TOKEN_KIND], eax
-    mov dword [rbx + r8 + 4], 0
+    mov [rbx + r8 + ASSP_STREAM_TOKEN_KIND], rax
     mov [rbx + r8 + ASSP_STREAM_TOKEN_LEN], rdx
 .count:
     inc r13
@@ -512,6 +519,7 @@ store_token:
 ; rcx = assp_stream_token tokens, rdx = token count, r8d = breakdown mode,
 ; r9 = optional output bytes, stack arg 5 = output cap.
 ; rax = total bytes required/written, not including a nul terminator.
+align 16
 assp_format_stream_tokens:
     push rbx
     push rsi
@@ -522,6 +530,7 @@ assp_format_stream_tokens:
     push r15
 
     mov r12, [rsp + 96]
+    sub rsp, 32
 
     test rcx, rcx
     jz .maybe_empty
@@ -534,6 +543,20 @@ assp_format_stream_tokens:
 .validate:
     cmp r8d, ASSP_BREAKDOWN_SIMPLIFIED
     ja .zero
+
+    xor eax, eax
+    cmp r8d, ASSP_BREAKDOWN_PARTIAL
+    jne .threshold_simplified
+    mov eax, 1
+    jmp .threshold_done
+
+.threshold_simplified:
+    cmp r8d, ASSP_BREAKDOWN_SIMPLIFIED
+    jne .threshold_done
+    mov eax, 4
+
+.threshold_done:
+    mov [rsp], rax
 
     mov rsi, rcx
     mov rdi, rdx
@@ -581,6 +604,7 @@ assp_format_stream_tokens:
     xor eax, eax
 
 .pop_done:
+    add rsp, 32
     pop r15
     pop r14
     pop r13
@@ -610,18 +634,7 @@ merge_run_tokens:
     jne .done
     mov r11, [rsi + r10 + ASSP_STREAM_TOKEN_LEN]
 
-    xor edx, edx
-    cmp r15d, ASSP_BREAKDOWN_PARTIAL
-    jne .not_partial
-    mov edx, 1
-    jmp .check_threshold
-
-.not_partial:
-    cmp r15d, ASSP_BREAKDOWN_SIMPLIFIED
-    jne .check_threshold
-    mov edx, 4
-
-.check_threshold:
+    mov rdx, [rsp + FMT_TOKEN_BREAK_THRESHOLD]
     cmp r11, rdx
     ja .done
 
@@ -640,7 +653,7 @@ merge_run_tokens:
     jmp .loop
 
 .different_run:
-    cmp r15d, ASSP_BREAKDOWN_SIMPLIFIED
+    cmp qword [rsp + FMT_TOKEN_BREAK_THRESHOLD], 4
     jne .skip_break
     cmp r11, 1
     jbe .skip_break
@@ -658,50 +671,38 @@ merge_run_tokens:
 
 ; input: r8d = run kind, r10 = length, r11d = star flag.
 write_run_token:
+    xor r9d, r9d
     cmp r8d, ASSP_STREAM_TOKEN_RUN20
-    jne .prefix24
-    mov al, '~'
-    call append_byte
-    jmp .number
-
-.prefix24:
+    je .set_tilde
     cmp r8d, ASSP_STREAM_TOKEN_RUN24
-    jne .prefix32
-    mov al, '\'
-    call append_byte
-    jmp .number
-
-.prefix32:
+    je .set_backslash
     cmp r8d, ASSP_STREAM_TOKEN_RUN32
-    jne .number
-    mov al, '='
+    jne .maybe_prefix
+    mov r9b, '='
+    jmp .maybe_prefix
+
+.set_tilde:
+    mov r9b, '~'
+    jmp .maybe_prefix
+
+.set_backslash:
+    mov r9b, '\'
+
+.maybe_prefix:
+    test r9b, r9b
+    jz .number
+    mov al, r9b
     call append_byte
 
 .number:
-    push r8
     push r11
     mov rax, r10
     call append_u64
     pop r11
-    pop r8
 
-    cmp r8d, ASSP_STREAM_TOKEN_RUN20
-    jne .suffix24
-    mov al, '~'
-    call append_byte
-    jmp .star
-
-.suffix24:
-    cmp r8d, ASSP_STREAM_TOKEN_RUN24
-    jne .suffix32
-    mov al, '\'
-    call append_byte
-    jmp .star
-
-.suffix32:
-    cmp r8d, ASSP_STREAM_TOKEN_RUN32
-    jne .star
-    mov al, '='
+    test r9b, r9b
+    jz .star
+    mov al, r9b
     call append_byte
 
 .star:
@@ -812,6 +813,43 @@ append_u64:
     add rsp, 32
     ret
 
+; input: r10 = bytes, r8 = byte count.
+append_bytes:
+    test r8, r8
+    jz .done
+    test rbx, rbx
+    jz .count_only
+    mov rax, r13
+    add rax, r8
+    jc .slow
+    cmp rax, r12
+    ja .slow
+
+    push rsi
+    push rdi
+    mov rsi, r10
+    lea rdi, [rbx + r13]
+    mov rcx, r8
+    rep movsb
+    pop rdi
+    pop rsi
+    add r13, r8
+    jmp .done
+
+.slow:
+    mov al, [r10]
+    call append_byte
+    inc r10
+    dec r8
+    jnz .slow
+    jmp .done
+
+.count_only:
+    add r13, r8
+
+.done:
+    ret
+
 ; input: al = byte.
 append_byte:
     test rbx, rbx
@@ -856,13 +894,15 @@ assp_format_stream_segments:
     mov rbx, r9
     xor r13d, r13d
     xor r14d, r14d
-    mov qword [rsp], 0
-    mov qword [rsp + 8], 0
-    mov qword [rsp + 16], 0
-    mov qword [rsp + 24], 0
+    mov qword [rsp + FMT_SEG_RUN_SUM], 0
+    mov qword [rsp + FMT_SEG_TOTAL_SUM], 0
+    mov qword [rsp + FMT_SEG_MERGED_FLAG], 0
+    mov qword [rsp + FMT_SEG_CUR_SIZE], 0
 
     test rdi, rdi
     jz .no_streams
+    cmp r15d, ASSP_STREAM_BREAKDOWN_TOTAL
+    je .total_loop_init
 
 .segment_loop:
     cmp r14, rdi
@@ -872,7 +912,7 @@ assp_format_stream_segments:
     shl r10, 3
     mov rax, [rsi + r10 + ASSP_STREAM_SEGMENT_END]
     sub rax, [rsi + r10 + ASSP_STREAM_SEGMENT_START]
-    mov [rsp + 24], rax
+    mov [rsp + FMT_SEG_CUR_SIZE], rax
 
     cmp qword [rsi + r10 + ASSP_STREAM_SEGMENT_IS_BREAK], 0
     jne .break_segment
@@ -893,7 +933,7 @@ assp_format_stream_segments:
     call append_byte
 
 .stream_write_size:
-    mov rax, [rsp + 24]
+    mov rax, [rsp + FMT_SEG_CUR_SIZE]
     call append_u64
     inc r14
     jmp .segment_loop
@@ -906,14 +946,14 @@ assp_format_stream_segments:
     shl r10, 3
     cmp qword [rsi + r10 + ASSP_STREAM_SEGMENT_IS_BREAK], 0
     jne .stream_add_size
-    mov qword [rsp + 16], ASSP_TRUE
+    mov qword [rsp + FMT_SEG_MERGED_FLAG], ASSP_TRUE
     cmp r15d, ASSP_STREAM_BREAKDOWN_SIMPLE
     jne .stream_add_size
-    inc qword [rsp]
+    inc qword [rsp + FMT_SEG_RUN_SUM]
 
 .stream_add_size:
-    mov rax, [rsp + 24]
-    add [rsp], rax
+    mov rax, [rsp + FMT_SEG_CUR_SIZE]
+    add [rsp + FMT_SEG_RUN_SUM], rax
     inc r14
     jmp .segment_loop
 
@@ -930,7 +970,7 @@ assp_format_stream_segments:
     call append_byte
     mov al, '('
     call append_byte
-    mov rax, [rsp + 24]
+    mov rax, [rsp + FMT_SEG_CUR_SIZE]
     call append_u64
     mov al, ')'
     call append_byte
@@ -941,24 +981,24 @@ assp_format_stream_segments:
 .break_not_detailed:
     cmp r15d, ASSP_STREAM_BREAKDOWN_TOTAL
     jne .break_symbol
-    mov rax, [rsp]
-    add [rsp + 8], rax
+    mov rax, [rsp + FMT_SEG_RUN_SUM]
+    add [rsp + FMT_SEG_TOTAL_SUM], rax
     jmp .break_clear
 
 .break_symbol:
     cmp r15d, ASSP_STREAM_BREAKDOWN_SIMPLE
     jne .break_emit_symbol
-    cmp qword [rsp], 0
+    cmp qword [rsp + FMT_SEG_RUN_SUM], 0
     je .break_emit_symbol
-    mov rax, [rsp]
+    mov rax, [rsp + FMT_SEG_RUN_SUM]
     call append_u64
-    cmp qword [rsp + 16], 0
+    cmp qword [rsp + FMT_SEG_MERGED_FLAG], 0
     je .break_emit_symbol
     mov al, '*'
     call append_byte
 
 .break_emit_symbol:
-    mov rax, [rsp + 24]
+    mov rax, [rsp + FMT_SEG_CUR_SIZE]
     cmp rax, 4
     jbe .break_dash
     cmp rax, 31
@@ -982,21 +1022,21 @@ assp_format_stream_segments:
     call append_byte
 
 .break_clear:
-    mov qword [rsp], 0
-    mov qword [rsp + 16], 0
+    mov qword [rsp + FMT_SEG_RUN_SUM], 0
+    mov qword [rsp + FMT_SEG_MERGED_FLAG], 0
 
 .break_done:
     inc r14
     jmp .segment_loop
 
 .finish:
-    cmp qword [rsp], 0
+    cmp qword [rsp + FMT_SEG_RUN_SUM], 0
     je .finish_level
     cmp r15d, ASSP_STREAM_BREAKDOWN_SIMPLE
     jne .finish_total
-    mov rax, [rsp]
+    mov rax, [rsp + FMT_SEG_RUN_SUM]
     call append_u64
-    cmp qword [rsp + 16], 0
+    cmp qword [rsp + FMT_SEG_MERGED_FLAG], 0
     je .finish_level
     mov al, '*'
     call append_byte
@@ -1005,13 +1045,13 @@ assp_format_stream_segments:
 .finish_total:
     cmp r15d, ASSP_STREAM_BREAKDOWN_TOTAL
     jne .finish_level
-    mov rax, [rsp]
-    add [rsp + 8], rax
+    mov rax, [rsp + FMT_SEG_RUN_SUM]
+    add [rsp + FMT_SEG_TOTAL_SUM], rax
 
 .finish_level:
     cmp r15d, ASSP_STREAM_BREAKDOWN_TOTAL
     jne .finish_non_total
-    mov rax, [rsp + 8]
+    mov rax, [rsp + FMT_SEG_TOTAL_SUM]
     call append_u64
     call append_total_suffix
     jmp .done
@@ -1023,6 +1063,29 @@ assp_format_stream_segments:
 .no_streams:
     call append_no_streams
     jmp .done
+
+.total_loop_init:
+    xor r11d, r11d
+
+.total_loop:
+    cmp r14, rdi
+    jae .total_done
+    lea r10, [r14 + r14 * 2]
+    shl r10, 3
+    cmp qword [rsi + r10 + ASSP_STREAM_SEGMENT_IS_BREAK], 0
+    jne .total_next
+    mov rax, [rsi + r10 + ASSP_STREAM_SEGMENT_END]
+    sub rax, [rsi + r10 + ASSP_STREAM_SEGMENT_START]
+    add r11, rax
+
+.total_next:
+    inc r14
+    jmp .total_loop
+
+.total_done:
+    mov rax, r11
+    call append_u64
+    call append_total_suffix
 
 .done:
     mov rax, r13
@@ -1043,41 +1106,19 @@ assp_format_stream_segments:
     ret
 
 append_no_streams:
-    mov al, 'N'
-    call append_byte
-    mov al, 'o'
-    call append_byte
-    mov al, ' '
-    call append_byte
-    mov al, 'S'
-    call append_byte
-    mov al, 't'
-    call append_byte
-    mov al, 'r'
-    call append_byte
-    mov al, 'e'
-    call append_byte
-    mov al, 'a'
-    call append_byte
-    mov al, 'm'
-    call append_byte
-    mov al, 's'
-    call append_byte
-    mov al, '!'
-    call append_byte
+    lea r10, [rel no_streams_text]
+    mov r8d, no_streams_text_end - no_streams_text
+    call append_bytes
     ret
 
 append_total_suffix:
-    mov al, ' '
-    call append_byte
-    mov al, 'T'
-    call append_byte
-    mov al, 'o'
-    call append_byte
-    mov al, 't'
-    call append_byte
-    mov al, 'a'
-    call append_byte
-    mov al, 'l'
-    call append_byte
+    lea r10, [rel total_suffix_text]
+    mov r8d, total_suffix_text_end - total_suffix_text
+    call append_bytes
     ret
+
+section .rdata
+no_streams_text db "No Streams!"
+no_streams_text_end:
+total_suffix_text db " Total"
+total_suffix_text_end:
