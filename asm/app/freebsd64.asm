@@ -143,13 +143,28 @@ GetCommandLineA:
     jne .return_buffer
     FREEBSD_TRACE freebsd_trace_cmdline, freebsd_trace_cmdline_end - freebsd_trace_cmdline
 
+    lea rdi, [freebsd_cmdline]
+    mov r15d, FREEBSD_CMDLINE_CAP - 1
+    mov byte [rdi], 'a'
+    inc rdi
+    dec r15
+    mov byte [rdi], 's'
+    inc rdi
+    dec r15
+    mov byte [rdi], 's'
+    inc rdi
+    dec r15
+    mov byte [rdi], 'p'
+    inc rdi
+    dec r15
+
     mov r12, [freebsd_argc]
     mov r13, [freebsd_argv]
     test r13, r13
     jz .finish
-    lea rdi, [freebsd_cmdline]
-    mov r15d, FREEBSD_CMDLINE_CAP - 1
-    xor r14d, r14d
+    cmp r12, 1
+    jbe .finish
+    mov r14d, 1
 
 .arg_loop:
     cmp r14, r12
