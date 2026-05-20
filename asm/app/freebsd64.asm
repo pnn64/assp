@@ -63,8 +63,8 @@ _start:
     mov [freebsd_entry_rsi], rsi
     FREEBSD_TRACE freebsd_trace_start, freebsd_trace_start_end - freebsd_trace_start
 
-    ; FreeBSD kernel entry passes the argc/argv stack pointer in rdi. If the
-    ; runtime loader calls us instead, rdi/rsi may already be argc/argv.
+    ; FreeBSD kernel entry passes the argc/argv stack pointer in rdi. If a
+    ; loader calls us instead, rdi/rsi may already be argc/argv.
     cmp rdi, 4096
     ja .check_stack_ptr
     test rsi, rsi
@@ -75,12 +75,9 @@ _start:
     jmp .call_start
 
 .check_stack_ptr:
-    mov rax, rdi
-    sub rax, rsp
-    cmp rax, 4096
-    ja .use_rsp
     mov r10, rdi
-    jmp .load_stack_args
+    test r10, r10
+    jnz .load_stack_args
 
 .use_rsp:
     mov r10, rsp
@@ -91,6 +88,7 @@ _start:
     lea rax, [r10 + 8]
     mov [freebsd_argv], rax
     FREEBSD_TRACE freebsd_trace_stack_args, freebsd_trace_stack_args_end - freebsd_trace_stack_args
+    mov rsp, r10
 
 .call_start:
     FREEBSD_TRACE freebsd_trace_call_start, freebsd_trace_call_start_end - freebsd_trace_call_start
