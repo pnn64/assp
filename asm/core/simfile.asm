@@ -177,6 +177,8 @@ assp_count_note_charts:
     cmp rax, r11
     ja .done
 
+    cmp byte [r10], '#'
+    jne .next
     is_notes_tag r10
     test eax, eax
     jz .next
@@ -285,9 +287,13 @@ assp_find_global_bpms:
     cmp rax, r11
     ja .fail
 
+    cmp byte [r10], '#'
+    jne .next
     is_bpms_tag r10
     test eax, eax
     jnz .found
+
+.next:
     inc r10
     jmp .scan
 
@@ -347,6 +353,8 @@ assp_find_chart_bpms_by_index:
     cmp rax, r12
     ja .fail
 
+    cmp byte [rdi], '#'
+    jne .next
     is_notedata_tag rdi
     test eax, eax
     jz .check_notes
@@ -530,6 +538,8 @@ assp_find_chart_tag_by_index:
     cmp rax, rsi
     ja .fail
 
+    cmp byte [rdi], '#'
+    jne .next
     is_notedata_tag rdi
     test eax, eax
     jz .check_notes
@@ -684,6 +694,8 @@ assp_find_chart_timing_tags_by_index:
     cmp rax, rsi
     ja .fail
 
+    cmp byte [rdi], '#'
+    jne .next
     is_notedata_tag rdi
     test eax, eax
     jz .check_notes
@@ -791,6 +803,8 @@ assp_chart_owns_timing_by_index:
     cmp rax, rsi
     ja .fail
 
+    cmp byte [rdi], '#'
+    jne .next
     is_notedata_tag rdi
     test eax, eax
     jz .check_notes
@@ -860,6 +874,8 @@ assp_find_notes_by_index:
     cmp rax, r11
     ja .fail
 
+    cmp byte [r10], '#'
+    jne .next
     is_notes_tag r10
     test eax, eax
     jz .next
@@ -935,6 +951,8 @@ assp_find_chart_by_index:
     cmp rax, r12
     ja .fail
 
+    cmp byte [rdi], '#'
+    jne .next
     is_notedata_tag rdi
     test eax, eax
     jz .check_notes
@@ -1052,6 +1070,8 @@ assp_find_next_chart:
     cmp rax, r12
     ja .fail
 
+    cmp byte [rdi], '#'
+    jne .next
     is_notedata_tag rdi
     test eax, eax
     jz .check_notes
@@ -1131,9 +1151,13 @@ find_bpms_in_range:
     cmp rax, r11
     ja .fail
 
+    cmp byte [r10], '#'
+    jne .next
     is_bpms_tag r10
     test eax, eax
     jnz .found
+
+.next:
     inc r10
     jmp .scan
 
@@ -1169,6 +1193,8 @@ find_global_scan_end:
     cmp rdx, r11
     jae .done
 
+    cmp byte [rdx], '#'
+    jne .next
     lea rax, [rdx + 10]
     cmp rax, r11
     ja .check_notes
