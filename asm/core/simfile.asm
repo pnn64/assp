@@ -118,13 +118,10 @@ section .text
 %macro store_tag 3
     lea rax, [r10 + %1]
     mov rdx, rax
-%%find_end:
-    cmp rdx, r11
-    jae .meta_next
-    cmp byte [rdx], ';'
-    je %%found_end
-    inc rdx
-    jmp %%find_end
+    call find_semicolon
+    test eax, eax
+    jz .meta_next
+    lea rax, [r10 + %1]
 %%found_end:
     mov [rbx + %2], rax
     sub rdx, rax
@@ -173,12 +170,14 @@ assp_count_note_charts:
     xor r8d, r8d
 
 .scan:
+    call find_hash
+    test eax, eax
+    jz .done
+
     lea rax, [r10 + 8]
     cmp rax, r11
     ja .done
 
-    cmp byte [r10], '#'
-    jne .next
     is_notes_tag r10
     test eax, eax
     jz .next
@@ -283,12 +282,14 @@ assp_find_global_bpms:
     call find_global_scan_end
 
 .scan:
+    call find_hash
+    test eax, eax
+    jz .fail
+
     lea rax, [r10 + 6]
     cmp rax, r11
     ja .fail
 
-    cmp byte [r10], '#'
-    jne .next
     is_bpms_tag r10
     test eax, eax
     jnz .found
@@ -300,13 +301,10 @@ assp_find_global_bpms:
 .found:
     lea rax, [r10 + 6]
     mov rdx, rax
-.find_end:
-    cmp rdx, r11
-    jae .fail
-    cmp byte [rdx], ';'
-    je .store
-    inc rdx
-    jmp .find_end
+    call find_semicolon
+    test eax, eax
+    jz .fail
+    lea rax, [r10 + 6]
 
 .store:
     mov [r8 + ASSP_BYTE_SLICE_PTR], rax
@@ -349,12 +347,17 @@ assp_find_chart_bpms_by_index:
     xor r15d, r15d
 
 .scan:
+    mov r10, rdi
+    mov r11, r12
+    call find_hash
+    test eax, eax
+    jz .fail
+    mov rdi, r10
+
     lea rax, [rdi + 10]
     cmp rax, r12
     ja .fail
 
-    cmp byte [rdi], '#'
-    jne .next
     is_notedata_tag rdi
     test eax, eax
     jz .check_notes
@@ -534,12 +537,17 @@ assp_find_chart_tag_by_index:
     xor r15d, r15d
 
 .scan:
+    mov r10, rdi
+    mov r11, rsi
+    call find_hash
+    test eax, eax
+    jz .fail
+    mov rdi, r10
+
     lea rax, [rdi + 10]
     cmp rax, rsi
     ja .fail
 
-    cmp byte [rdi], '#'
-    jne .next
     is_notedata_tag rdi
     test eax, eax
     jz .check_notes
@@ -690,12 +698,17 @@ assp_find_chart_timing_tags_by_index:
     xor r15d, r15d
 
 .scan:
+    mov r10, rdi
+    mov r11, rsi
+    call find_hash
+    test eax, eax
+    jz .fail
+    mov rdi, r10
+
     lea rax, [rdi + 10]
     cmp rax, rsi
     ja .fail
 
-    cmp byte [rdi], '#'
-    jne .next
     is_notedata_tag rdi
     test eax, eax
     jz .check_notes
@@ -799,12 +812,17 @@ assp_chart_owns_timing_by_index:
     xor r15d, r15d
 
 .scan:
+    mov r10, rdi
+    mov r11, rsi
+    call find_hash
+    test eax, eax
+    jz .fail
+    mov rdi, r10
+
     lea rax, [rdi + 10]
     cmp rax, rsi
     ja .fail
 
-    cmp byte [rdi], '#'
-    jne .next
     is_notedata_tag rdi
     test eax, eax
     jz .check_notes
@@ -870,12 +888,14 @@ assp_find_notes_by_index:
     xor ecx, ecx
 
 .scan:
+    call find_hash
+    test eax, eax
+    jz .fail
+
     lea rax, [r10 + 8]
     cmp rax, r11
     ja .fail
 
-    cmp byte [r10], '#'
-    jne .next
     is_notes_tag r10
     test eax, eax
     jz .next
@@ -892,15 +912,13 @@ assp_find_notes_by_index:
 
 .found:
     add rax, r10
+    mov r8, rax
     mov rdx, rax
 
-.find_end:
-    cmp rdx, r11
-    jae .fail
-    cmp byte [rdx], ';'
-    je .store
-    inc rdx
-    jmp .find_end
+    call find_semicolon
+    test eax, eax
+    jz .fail
+    mov rax, r8
 
 .store:
     inc rdx
@@ -947,12 +965,17 @@ assp_find_chart_by_index:
     mov r15, rsi
 
 .scan:
+    mov r10, rdi
+    mov r11, r12
+    call find_hash
+    test eax, eax
+    jz .fail
+    mov rdi, r10
+
     lea rax, [rdi + 10]
     cmp rax, r12
     ja .fail
 
-    cmp byte [rdi], '#'
-    jne .next
     is_notedata_tag rdi
     test eax, eax
     jz .check_notes
@@ -987,13 +1010,10 @@ assp_find_chart_by_index:
     lea rsi, [rdi + rax]
     mov rdx, rsi
 
-.find_notes_end:
-    cmp rdx, r12
-    jae .fail
-    cmp byte [rdx], ';'
-    je .store_notes
-    inc rdx
-    jmp .find_notes_end
+    mov r11, r12
+    call find_semicolon
+    test eax, eax
+    jz .fail
 
 .store_notes:
     inc rdx
@@ -1066,12 +1086,17 @@ assp_find_next_chart:
     mov r15, rdi
 
 .scan:
+    mov r10, rdi
+    mov r11, r12
+    call find_hash
+    test eax, eax
+    jz .fail
+    mov rdi, r10
+
     lea rax, [rdi + 10]
     cmp rax, r12
     ja .fail
 
-    cmp byte [rdi], '#'
-    jne .next
     is_notedata_tag rdi
     test eax, eax
     jz .check_notes
@@ -1100,13 +1125,10 @@ assp_find_next_chart:
     lea rsi, [rdi + rax]
     mov rdx, rsi
 
-.find_notes_end:
-    cmp rdx, r12
-    jae .fail
-    cmp byte [rdx], ';'
-    je .store_notes
-    inc rdx
-    jmp .find_notes_end
+    mov r11, r12
+    call find_semicolon
+    test eax, eax
+    jz .fail
 
 .store_notes:
     inc rdx
@@ -1147,12 +1169,14 @@ assp_find_next_chart:
 ; eax = 1 when a #BPMS: tag is found, 0 otherwise.
 find_bpms_in_range:
 .scan:
+    call find_hash
+    test eax, eax
+    jz .fail
+
     lea rax, [r10 + 6]
     cmp rax, r11
     ja .fail
 
-    cmp byte [r10], '#'
-    jne .next
     is_bpms_tag r10
     test eax, eax
     jnz .found
@@ -1164,13 +1188,10 @@ find_bpms_in_range:
 .found:
     lea rax, [r10 + 6]
     mov rdx, rax
-.find_end:
-    cmp rdx, r11
-    jae .fail
-    cmp byte [rdx], ';'
-    je .store
-    inc rdx
-    jmp .find_end
+    call find_semicolon
+    test eax, eax
+    jz .fail
+    lea rax, [r10 + 6]
 
 .store:
     mov [rbx + ASSP_BYTE_SLICE_PTR], rax
@@ -1187,14 +1208,16 @@ find_bpms_in_range:
 ; Narrows r11 to the first chart section so global scans do not consume
 ; chart-local SSC tags.
 find_global_scan_end:
+    push r10
     mov rdx, r10
 
 .scan:
-    cmp rdx, r11
-    jae .done
+    mov r10, rdx
+    call find_hash
+    test eax, eax
+    jz .done
+    mov rdx, r10
 
-    cmp byte [rdx], '#'
-    jne .next
     lea rax, [rdx + 10]
     cmp rax, r11
     ja .check_notes
@@ -1218,6 +1241,7 @@ find_global_scan_end:
     mov r11, rdx
 
 .done:
+    pop r10
     ret
 
 ; r10 = scan start, r11 = scan end, r12 = tag ptr, r13 = tag len,
@@ -1230,12 +1254,14 @@ find_tag_in_range:
     jz .fail
 
 .scan:
+    call find_hash
+    test eax, eax
+    jz .fail
+
     lea rax, [r10 + r13]
     cmp rax, r11
     ja .fail
 
-    cmp byte [r10], '#'
-    jne .next
     call match_tag_at
     test eax, eax
     jnz .found
@@ -1247,13 +1273,10 @@ find_tag_in_range:
 .found:
     lea rax, [r10 + r13]
     mov rdx, rax
-.find_end:
-    cmp rdx, r11
-    jae .fail
-    cmp byte [rdx], ';'
-    je .store
-    inc rdx
-    jmp .find_end
+    call find_semicolon
+    test eax, eax
+    jz .fail
+    lea rax, [r10 + r13]
 
 .store:
     mov [rbx + ASSP_BYTE_SLICE_PTR], rax
@@ -1271,13 +1294,10 @@ find_tag_in_range:
 store_tag_value_at:
     lea rax, [r10 + r13]
     mov rdx, rax
-.find_end:
-    cmp rdx, r11
-    jae .fail
-    cmp byte [rdx], ';'
-    je .store
-    inc rdx
-    jmp .find_end
+    call find_semicolon
+    test eax, eax
+    jz .fail
+    lea rax, [r10 + r13]
 
 .store:
     mov [rbx + ASSP_BYTE_SLICE_PTR], rax
@@ -1327,14 +1347,95 @@ match_tag_at:
     xor eax, eax
     ret
 
+; r10 = scan start, r11 = scan end. r10 is advanced to the next '#'.
+; eax = 1 when found, 0 otherwise.
+find_hash:
+    cmp r10, r11
+    jae .not_found
+    movdqu xmm1, [hash_bytes]
+
+.wide:
+    lea rax, [r10 + 16]
+    cmp rax, r11
+    ja .tail
+    movdqu xmm0, [r10]
+    pcmpeqb xmm0, xmm1
+    pmovmskb eax, xmm0
+    test eax, eax
+    jnz .mask
+    add r10, 16
+    jmp .wide
+
+.mask:
+    bsf eax, eax
+    add r10, rax
+    mov eax, ASSP_TRUE
+    ret
+
+.tail:
+    cmp r10, r11
+    jae .not_found
+    cmp byte [r10], '#'
+    je .found
+    inc r10
+    jmp .tail
+
+.found:
+    mov eax, ASSP_TRUE
+    ret
+
+.not_found:
+    xor eax, eax
+    ret
+
+; rdx = scan start, r11 = scan end. rdx is advanced to the next ';'.
+; eax = 1 when found, 0 otherwise.
+find_semicolon:
+    cmp rdx, r11
+    jae .not_found
+    movdqu xmm1, [semicolon_bytes]
+
+.wide:
+    lea rax, [rdx + 16]
+    cmp rax, r11
+    ja .tail
+    movdqu xmm0, [rdx]
+    pcmpeqb xmm0, xmm1
+    pmovmskb eax, xmm0
+    test eax, eax
+    jnz .mask
+    add rdx, 16
+    jmp .wide
+
+.mask:
+    bsf eax, eax
+    add rdx, rax
+    mov eax, ASSP_TRUE
+    ret
+
+.tail:
+    cmp rdx, r11
+    jae .not_found
+    cmp byte [rdx], ';'
+    je .found
+    inc rdx
+    jmp .tail
+
+.found:
+    mov eax, ASSP_TRUE
+    ret
+
+.not_found:
+    xor eax, eax
+    ret
+
 ; r10 = metadata scan start, r11 = metadata end.
 ; eax = 1 when the chart has any RSSP chart-owned timing tag.
 range_owns_timing:
 .scan:
-    cmp r10, r11
-    jae .no
-    cmp byte [r10], '#'
-    jne .next
+    call find_hash
+    test eax, eax
+    jz .no
 
     lea rax, [r10 + 1]
     cmp rax, r11
@@ -1433,10 +1534,9 @@ find_timing_tags_in_range:
     xor r14d, r14d
 
 .scan:
-    cmp r10, r11
-    jae .done
-    cmp byte [r10], '#'
-    jne .next
+    call find_hash
+    test eax, eax
+    jz .done
 
     lea rax, [r10 + 1]
     cmp rax, r11
@@ -1522,10 +1622,9 @@ find_timing_tags_in_range:
 ; r10 = metadata scan start, r11 = metadata end, rbx = assp_chart_info.
 parse_chart_meta:
 .meta_loop:
-    cmp r10, r11
-    jae .done
-    cmp byte [r10], '#'
-    jne .meta_next
+    call find_hash
+    test eax, eax
+    jz .done
 
     lea rax, [r10 + tag_description_end - tag_description]
     cmp rax, r11
@@ -1656,6 +1755,10 @@ parse_sm_notes_block:
     ret
 
 section .rdata
+
+align 16
+hash_bytes times 16 db '#'
+semicolon_bytes times 16 db ';'
 
 tag_bpms db "#BPMS:"
 tag_bpms_end:
