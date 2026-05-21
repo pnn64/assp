@@ -21,12 +21,11 @@ extern start
 %define SYS_EXIT 1
 %define SYS_READ 3
 %define SYS_WRITE 4
+%define SYS_OPEN 5
 %define SYS_CLOSE 6
 %define SYS_CLOCK_GETTIME 232
 %define SYS_LSEEK 478
-%define SYS_OPENAT 499
 
-%define AT_FDCWD -100
 %define CLOCK_MONOTONIC 4
 %define SEEK_SET 0
 %define SEEK_END 2
@@ -161,11 +160,10 @@ assp_os_open_readonly:
 
 .path_done:
     stosb
-    mov eax, SYS_OPENAT
-    mov edi, AT_FDCWD
-    lea rsi, [freebsd_path_buffer]
+    mov eax, SYS_OPEN
+    lea rdi, [freebsd_path_buffer]
+    xor esi, esi
     xor edx, edx
-    xor r10d, r10d
     syscall
     jc .fail
     jmp .done

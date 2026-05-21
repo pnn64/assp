@@ -1023,17 +1023,21 @@ read_file:
     mov qword [file_size], 0
     mov dword [file_bytes_read], 0
 
+    app_trace trace_read_open
     mov rcx, [input_path]
     call assp_os_open_readonly
     cmp rax, ASSP_OS_INVALID_HANDLE
     je .fail
     mov [file_handle], rax
+    app_trace trace_read_open_done
 
+    app_trace trace_read_size
     mov rcx, rax
     lea rdx, [file_size]
     call assp_os_file_size
     test eax, eax
     jz .close_fail
+    app_trace trace_read_size_done
 
     mov rax, [file_size]
     test rax, rax
@@ -1041,6 +1045,7 @@ read_file:
     cmp rax, FILE_BUFFER_CAP
     ja .close_fail
 
+    app_trace trace_read_body
     mov rcx, [file_handle]
     lea rdx, [file_buffer]
     mov r8d, eax
@@ -1049,6 +1054,7 @@ read_file:
     call assp_os_read
     test eax, eax
     jz .close_fail
+    app_trace trace_read_body_done
 
     mov rcx, [file_handle]
     call assp_os_close
@@ -1070,6 +1076,7 @@ read_file:
     mov qword [file_handle], 0
 
 .fail:
+    app_trace trace_read_fail
     xor eax, eax
 
 .done:
@@ -6991,6 +6998,20 @@ trace_app_read db "assp app: read file", 10
 trace_app_read_end:
 trace_app_read_done db "assp app: read done", 10
 trace_app_read_done_end:
+trace_read_open db "assp read: open", 10
+trace_read_open_end:
+trace_read_open_done db "assp read: open done", 10
+trace_read_open_done_end:
+trace_read_size db "assp read: size", 10
+trace_read_size_end:
+trace_read_size_done db "assp read: size done", 10
+trace_read_size_done_end:
+trace_read_body db "assp read: body", 10
+trace_read_body_end:
+trace_read_body_done db "assp read: body done", 10
+trace_read_body_done_end:
+trace_read_fail db "assp read: fail", 10
+trace_read_fail_end:
 trace_app_hash db "assp app: md5", 10
 trace_app_hash_end:
 trace_app_hash_done db "assp app: md5 done", 10
