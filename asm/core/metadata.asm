@@ -721,8 +721,9 @@ match_edit_end:
 
 section .text
 
-; rcx = DISPLAYBPM tag bytes, rdx = len, r8 = actual min BPM,
-; r9 = actual max BPM, [rsp+40] = out min BPM, [rsp+48] = out max BPM.
+; rcx = DISPLAYBPM tag bytes, rdx = len, r8 = actual min BPM milli,
+; r9 = actual max BPM milli, [rsp+40] = out min BPM milli,
+; [rsp+48] = out max BPM milli.
 ; Optional text outputs: [rsp+56] = out text min, [rsp+64] = out text max,
 ; [rsp+72] = out text range flag. Numeric outputs keep RSSP JSON-cast
 ; parity; text outputs mirror RSSP's formatted display string.
@@ -781,13 +782,8 @@ assp_resolve_display_bpm:
     mov [rsi], rax
 
 .numeric:
-    mov rax, r13
-    call resolve_display_milli_to_int
-    mov r13, rax
-    mov rax, r12
-    call resolve_display_milli_to_int
     mov [r14], r13
-    mov [r15], rax
+    mov [r15], r12
 
 .success:
     mov eax, ASSP_TRUE

@@ -2,8 +2,8 @@ use std::arch::x86_64::{_mm_lfence, _rdtsc};
 use std::hint::black_box;
 
 use assp::{
-    StreamCounts, StreamSegment, StreamToken, BREAKDOWN_DETAILED, BREAKDOWN_SIMPLIFIED,
-    STREAM_BREAKDOWN_DETAILED, STREAM_BREAKDOWN_TOTAL,
+    BREAKDOWN_DETAILED, BREAKDOWN_SIMPLIFIED, STREAM_BREAKDOWN_DETAILED, STREAM_BREAKDOWN_TOTAL,
+    StreamCounts, StreamSegment, StreamToken,
 };
 
 unsafe extern "C" {

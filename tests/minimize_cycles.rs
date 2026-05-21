@@ -123,7 +123,14 @@ fn minimize_cycles() {
     let synthetic4 = synthetic_chart(4, 4096, 16);
     let synthetic8 = synthetic_chart(8, 4096, 16);
 
-    let mut out = vec![0u8; camellia_notes.len().max(big_notes.len()).max(synthetic8.len()) + 32];
+    let mut out = vec![
+        0u8;
+        camellia_notes
+            .len()
+            .max(big_notes.len())
+            .max(synthetic8.len())
+            + 32
+    ];
     let mut scratch4 = vec![[0u8; 4]; out.len() / 4 + 1];
     let mut scratch8 = vec![[0u8; 8]; out.len() / 8 + 1];
 

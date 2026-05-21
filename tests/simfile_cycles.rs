@@ -27,11 +27,7 @@ unsafe extern "C" {
         out: *mut ByteSlice,
     ) -> c_int;
     fn assp_find_global_timing_tags(data: *const u8, len: usize, out: *mut TimingTags) -> c_int;
-    fn assp_find_timing_tags_in_range(
-        data: *const u8,
-        len: usize,
-        out: *mut TimingTags,
-    ) -> c_int;
+    fn assp_find_timing_tags_in_range(data: *const u8, len: usize, out: *mut TimingTags) -> c_int;
     fn assp_find_chart_timing_tags_by_index(
         data: *const u8,
         len: usize,
@@ -114,9 +110,7 @@ fn chart_metadata_with_timing(tags: usize, value_len: usize) -> Vec<u8> {
         data.extend_from_slice(long_value(i, value_len).as_bytes());
         data.extend_from_slice(b";\n");
     }
-    data.extend_from_slice(
-        b"#BPMS:0.000=175.000;\n#STOPS:4.000=0.250;\n#DELAYS:8.000=0.125;\n",
-    );
+    data.extend_from_slice(b"#BPMS:0.000=175.000;\n#STOPS:4.000=0.250;\n#DELAYS:8.000=0.125;\n");
     data.extend_from_slice(
         b"#WARPS:12.000=4.000;\n#SPEEDS:0.000=1.500=0.000=0;\n#SCROLLS:0.000=1.000;\n#FAKES:16.000=4.000;\n",
     );

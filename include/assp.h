@@ -408,10 +408,13 @@ size_t assp_resolve_difficulty_label(
 int32_t assp_resolve_display_bpm(
     const uint8_t *tag,
     size_t tag_len,
-    int64_t actual_min_bpm,
-    int64_t actual_max_bpm,
-    int64_t *out_min_bpm,
-    int64_t *out_max_bpm
+    int64_t actual_min_bpm_milli,
+    int64_t actual_max_bpm_milli,
+    int64_t *out_min_bpm_milli,
+    int64_t *out_max_bpm_milli,
+    int64_t *out_text_min_bpm,
+    int64_t *out_text_max_bpm,
+    int64_t *out_text_is_range
 );
 size_t assp_parse_tech_notation(
     const uint8_t *credit,

@@ -1,7 +1,7 @@
 use std::arch::x86_64::{_mm_lfence, _rdtsc};
 use std::hint::black_box;
 
-use assp::{step_parity_row_transitions_4, StepParityRowCostCtx4, StepParityState4, NOT_FOUND};
+use assp::{NOT_FOUND, StepParityRowCostCtx4, StepParityState4, step_parity_row_transitions_4};
 
 unsafe extern "C" {
     fn assp_step_parity_row_best_candidates_4(
@@ -72,8 +72,8 @@ fn bench(mut f: impl FnMut(), name: &str, iters: usize, work_units: usize) {
 
 fn parity_rows(row_count: usize) -> (Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>, Vec<f32>) {
     let masks = [
-        0b0001u8, 0b0010, 0b0100, 0b1000, 0b0101, 0b1010, 0b0011, 0b1100, 0b0110, 0b1001,
-        0b1111, 0b0001,
+        0b0001u8, 0b0010, 0b0100, 0b1000, 0b0101, 0b1010, 0b0011, 0b1100, 0b0110, 0b1001, 0b1111,
+        0b0001,
     ];
     let mut note_counts = Vec::with_capacity(row_count);
     let mut note_masks = Vec::with_capacity(row_count);

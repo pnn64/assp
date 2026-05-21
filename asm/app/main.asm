@@ -2708,6 +2708,8 @@ prepare_bpm_range:
     test eax, eax
     jz .done
 
+    call prepare_raw_bpm_range
+
     lea rcx, [bpm_segment_buffer]
     mov rdx, [bpm_segment_count]
     call assp_bpm_average_centi
@@ -2725,6 +2727,51 @@ prepare_bpm_range:
     add rsp, 40
     ret
 
+prepare_raw_bpm_range:
+    mov qword [raw_min_bpm_milli], 0
+    mov qword [raw_max_bpm_milli], 0
+
+    mov rdx, [bpm_segment_count]
+    test rdx, rdx
+    jz .done
+
+    lea rcx, [bpm_segment_buffer]
+    mov r8, 0x7fffffffffffffff
+    mov r9, 0x8000000000000000
+    xor r10d, r10d
+
+.loop:
+    cmp r10, rdx
+    jae .store
+    mov r11, r10
+    shl r11, 4
+    mov rax, [rcx + r11 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    cmp rax, r8
+    jge .check_max
+    mov r8, rax
+.check_max:
+    cmp rax, r9
+    jle .next
+    mov r9, rax
+.next:
+    inc r10
+    jmp .loop
+
+.store:
+    test r8, r8
+    jge .min_ok
+    xor r8d, r8d
+.min_ok:
+    test r9, r9
+    jge .max_ok
+    xor r9d, r9d
+.max_ok:
+    mov [raw_min_bpm_milli], r8
+    mov [raw_max_bpm_milli], r9
+
+.done:
+    ret
+
 prepare_display_bpm_range:
     sub rsp, 72
 
@@ -2733,8 +2780,8 @@ prepare_display_bpm_range:
     mov rcx, [display_bpm_slice + ASSP_BYTE_SLICE_PTR]
     mov rdx, [display_bpm_slice + ASSP_BYTE_SLICE_LEN]
 
-    mov r8, [min_bpm]
-    mov r9, [max_bpm]
+    mov r8, [raw_min_bpm_milli]
+    mov r9, [raw_max_bpm_milli]
     lea rax, [display_min_bpm]
     mov [rsp + 32], rax
     lea rax, [display_max_bpm]
@@ -2750,92 +2797,22 @@ prepare_display_bpm_range:
     ret
 
 prepare_actual_display_bpm_text_range:
-    push rbx
-    push rsi
-    push rdi
-    push r12
-    push r13
-    push r14
-
     mov qword [display_text_min_bpm], 0
     mov qword [display_text_max_bpm], 0
     mov qword [display_bpm_range_flag], 0
 
-    mov r14, [bpm_segment_count]
-    test r14, r14
-    jz .done
-    lea rdi, [bpm_segment_buffer]
-    mov rbx, 0x7fffffffffffffff
-    mov rsi, 0x8000000000000000
-    xor r12d, r12d
-    xor r13d, r13d
-
-.display_loop:
-    cmp r12, r14
-    jae .display_done
-    mov rax, r12
-    shl rax, 4
-    mov rax, [rdi + rax + ASSP_BPM_SEGMENT_BPM_MILLI]
-    cmp rax, 0
-    jle .display_next
-    cmp rax, 10000000
-    jge .display_next
-    cmp rax, rbx
-    jge .display_check_max
-    mov rbx, rax
-.display_check_max:
-    cmp rax, rsi
-    jle .display_count
-    mov rsi, rax
-.display_count:
-    inc r13
-.display_next:
-    inc r12
-    jmp .display_loop
-
-.display_done:
-    test r13, r13
-    jnz .store
-
-    mov rbx, 0x7fffffffffffffff
-    mov rsi, 0x8000000000000000
-    xor r12d, r12d
-.fallback_loop:
-    cmp r12, r14
-    jae .store
-    mov rax, r12
-    shl rax, 4
-    mov rax, [rdi + rax + ASSP_BPM_SEGMENT_BPM_MILLI]
-    cmp rax, rbx
-    jge .fallback_check_max
-    mov rbx, rax
-.fallback_check_max:
-    cmp rax, rsi
-    jle .fallback_next
-    mov rsi, rax
-.fallback_next:
-    inc r12
-    jmp .fallback_loop
-
-.store:
-    mov rax, rbx
+    mov rax, [raw_min_bpm_milli]
     call display_milli_to_text_int
     mov [display_text_min_bpm], rax
-    mov rax, rsi
+    mov rax, [raw_max_bpm_milli]
     call display_milli_to_text_int
     mov [display_text_max_bpm], rax
     xor eax, eax
-    cmp rbx, rsi
+    mov r10, [raw_min_bpm_milli]
+    cmp r10, [raw_max_bpm_milli]
     setne al
     mov [display_bpm_range_flag], rax
 
-.done:
-    pop r14
-    pop r13
-    pop r12
-    pop rdi
-    pop rsi
-    pop rbx
     ret
 
 display_milli_to_text_int:
@@ -4158,9 +4135,10 @@ prepare_bpm_median_nps_f32:
     jmp .fill_loop
 
 .median:
+    call copy_nps_sort_buffer
     mov rax, rdi
     shr rax, 1
-    lea rsi, [nps_raw_buffer]
+    lea rsi, [nps_sort_buffer]
     test rdi, 1
     jz .even
 
@@ -4460,9 +4438,10 @@ prepare_events_median_nps_f32:
     jmp .fill_loop
 
 .median:
+    call copy_nps_sort_buffer
     mov rax, rdi
     shr rax, 1
-    lea rsi, [nps_raw_buffer]
+    lea rsi, [nps_sort_buffer]
     test rdi, 1
     jz .even
 
@@ -4563,9 +4542,10 @@ prepare_fixed_median_nps_f32:
     jmp .fill_loop
 
 .median:
+    call copy_nps_sort_buffer
     mov rax, rdi
     shr rax, 1
-    lea rsi, [nps_raw_buffer]
+    lea rsi, [nps_sort_buffer]
     test rdi, 1
     jz .even
 
@@ -4601,6 +4581,22 @@ prepare_fixed_median_nps_f32:
     pop rdi
     pop rsi
     pop rbx
+    ret
+
+copy_nps_sort_buffer:
+    xor r10d, r10d
+    lea r11, [nps_raw_buffer]
+    lea rax, [nps_sort_buffer]
+
+.loop:
+    cmp r10, rdi
+    jae .done
+    mov rdx, [r11 + r10 * 8]
+    mov [rax + r10 * 8], rdx
+    inc r10
+    jmp .loop
+
+.done:
     ret
 
 ; rsi = f64 values, rdi = count, r8 = kth index. xmm0 = kth value.
@@ -5187,10 +5183,10 @@ print_report:
     call print_field
     lea rcx, [label_display_bpm_min]
     mov rdx, [display_min_bpm]
-    call print_field
+    call print_fixed3_field
     lea rcx, [label_display_bpm_max]
     mov rdx, [display_max_bpm]
-    call print_field
+    call print_fixed3_field
     lea rcx, [label_average_bpm]
     mov rdx, [average_bpm_centi]
     call print_fixed2_field
@@ -6212,6 +6208,30 @@ print_json_fixed3_field:
     add rsp, 56
     ret
 
+print_json_nps_max_field:
+    sub rsp, 72
+    call print_z
+
+    xorpd xmm0, xmm0
+    xor r8d, r8d
+    lea r9, [nps_raw_buffer]
+
+.loop:
+    cmp r8, [nps_count]
+    jae .print
+    movsd xmm1, [r9 + r8 * 8]
+    ucomisd xmm1, xmm0
+    jbe .next
+    movapd xmm0, xmm1
+.next:
+    inc r8
+    jmp .loop
+
+.print:
+    call print_f64_sig6_inline
+    add rsp, 72
+    ret
+
 print_json_slice_value:
     sub rsp, 88
     mov [rsp + 32], rdx
@@ -6449,6 +6469,129 @@ print_fixed3_inline:
     add rsp, 72
     ret
 
+print_f64_sig6_inline:
+    sub rsp, 72
+
+    xorpd xmm1, xmm1
+    ucomisd xmm0, xmm1
+    jp .zero
+    je .zero
+    jb .zero
+
+    mov edx, 6
+    mov ecx, 1000000
+    ucomisd xmm0, [rel app_const_1_f64]
+    jb .scale_ready
+    mov edx, 5
+    mov ecx, 100000
+    ucomisd xmm0, [rel app_const_10_f64]
+    jb .scale_ready
+    mov edx, 4
+    mov ecx, 10000
+    ucomisd xmm0, [rel app_const_100_f64]
+    jb .scale_ready
+    mov edx, 3
+    mov ecx, 1000
+    ucomisd xmm0, [rel app_const_1000_f64]
+    jb .scale_ready
+    mov edx, 2
+    mov ecx, 100
+    ucomisd xmm0, [rel app_const_10000_f64]
+    jb .scale_ready
+    mov edx, 1
+    mov ecx, 10
+    ucomisd xmm0, [rel app_const_100000_f64]
+    jb .scale_ready
+    xor edx, edx
+    mov ecx, 1
+
+.scale_ready:
+    mov [rsp + 32], rdx
+    cvtsi2sd xmm1, rcx
+    mulsd xmm0, xmm1
+    cvtsd2si rcx, xmm0
+    mov rdx, [rsp + 32]
+    call print_scaled_inline
+    jmp .done
+
+.zero:
+    xor ecx, ecx
+    mov edx, 1
+    call print_scaled_inline
+
+.done:
+    add rsp, 72
+    ret
+
+print_scaled_inline:
+    sub rsp, 104
+    mov [rsp + 32], rcx
+    mov [rsp + 40], rdx
+
+    mov rax, [rsp + 32]
+    test rax, rax
+    jge .positive
+    neg rax
+    mov [rsp + 32], rax
+    json_z minus
+
+.positive:
+    mov qword [rsp + 48], 1
+    mov r10, [rsp + 40]
+
+.divisor_loop:
+    test r10, r10
+    jz .divisor_ready
+    mov rax, [rsp + 48]
+    imul rax, rax, 10
+    mov [rsp + 48], rax
+    dec r10
+    jmp .divisor_loop
+
+.divisor_ready:
+    mov rax, [rsp + 32]
+    xor edx, edx
+    mov r11, [rsp + 48]
+    div r11
+    mov [rsp + 56], rdx
+    mov rcx, rax
+    call print_u64
+
+    cmp qword [rsp + 40], 0
+    je .done
+    json_z dot
+
+    mov rax, [rsp + 48]
+    xor edx, edx
+    mov r11d, 10
+    div r11
+    mov [rsp + 64], rax
+    mov r10, [rsp + 40]
+
+.fraction_loop:
+    test r10, r10
+    jz .done
+    mov [rsp + 72], r10
+    mov rax, [rsp + 56]
+    xor edx, edx
+    mov r11, [rsp + 64]
+    div r11
+    mov [rsp + 56], rdx
+    mov rcx, rax
+    call print_u64
+    mov rax, [rsp + 64]
+    xor edx, edx
+    mov r11d, 10
+    div r11
+    mov [rsp + 64], rax
+    mov r10, [rsp + 72]
+    dec r10
+    jmp .fraction_loop
+
+.done:
+    add rsp, 104
+    ret
+
 print_json_u32_array:
     sub rsp, 88
     mov [rsp + 32], rdx
@@ -6497,6 +6640,34 @@ print_json_milli3_array:
     mov r10, [rsp + 32]
     mov ecx, [r10 + rax * 4]
     call print_milli3_inline
+    inc qword [rsp + 48]
+    jmp .loop
+
+.done_array:
+    json_z close_bracket
+    add rsp, 88
+    ret
+
+print_json_f64_sig6_array:
+    sub rsp, 88
+    mov [rsp + 32], rdx
+    mov [rsp + 40], r8
+    mov qword [rsp + 48], 0
+    json_z open_bracket
+
+.loop:
+    mov rax, [rsp + 48]
+    cmp rax, [rsp + 40]
+    jae .done_array
+    test rax, rax
+    jz .value
+    json_z comma
+
+.value:
+    mov rax, [rsp + 48]
+    mov r10, [rsp + 32]
+    movsd xmm0, [r10 + rax * 8]
+    call print_f64_sig6_inline
     inc qword [rsp + 48]
     jmp .loop
 
@@ -6868,12 +7039,20 @@ print_json_chart:
     lea rdx, [bpm_segment_buffer]
     mov r8, [bpm_segment_count]
     call print_json_bpm_segments_string
-    json_u64 json_key_bpm_min, [min_bpm]
-    json_u64 json_key_bpm_max, [max_bpm]
+    lea rcx, [json_key_bpm_min]
+    mov rdx, [raw_min_bpm_milli]
+    call print_json_fixed3_field
+    lea rcx, [json_key_bpm_max]
+    mov rdx, [raw_max_bpm_milli]
+    call print_json_fixed3_field
     json_z json_key_display_bpm
     call print_json_display_bpm_value
-    json_u64 json_key_display_bpm_min, [display_min_bpm]
-    json_u64 json_key_display_bpm_max, [display_max_bpm]
+    lea rcx, [json_key_display_bpm_min]
+    mov rdx, [display_min_bpm]
+    call print_json_fixed3_field
+    lea rcx, [json_key_display_bpm_max]
+    mov rdx, [display_max_bpm]
+    call print_json_fixed3_field
     json_z json_key_bpms
     lea rdx, [bpm_segment_buffer]
     mov r8, [bpm_segment_count]
@@ -6939,8 +7118,7 @@ print_json_chart:
 
     json_z json_chart_nps
     lea rcx, [json_key_max_nps_first]
-    mov rdx, [max_nps_centi]
-    call print_json_fixed2_field
+    call print_json_nps_max_field
     lea rcx, [json_key_median_nps]
     mov rdx, [median_nps_centi]
     call print_json_fixed2_field
@@ -6949,9 +7127,9 @@ print_json_chart:
     mov r8, [measure_count]
     call print_json_u32_array
     json_z json_key_nps_per_measure
-    lea rdx, [nps_buffer]
+    lea rdx, [nps_raw_buffer]
     mov r8, [nps_count]
-    call print_json_milli3_array
+    call print_json_f64_sig6_array
     json_z json_key_equally_spaced
     lea rdx, [equally_spaced_buffer]
     mov r8, [equally_spaced_count]
@@ -8369,7 +8547,12 @@ app_const_60_f32 dd 60.0
 app_const_million_f32 dd 1000000.0
 app_const_0_12_f64 dq 0.12
 app_const_half_f64 dq 0.5
+app_const_1_f64 dq 1.0
+app_const_10_f64 dq 10.0
 app_const_100_f64 dq 100.0
+app_const_1000_f64 dq 1000.0
+app_const_10000_f64 dq 10000.0
+app_const_100000_f64 dq 100000.0
 app_const_million_f64 dq 1000000.0
 tag_title db "#TITLE:"
 tag_title_end:
@@ -9278,6 +9461,8 @@ offset_ms resq 1
 offset_us resq 1
 min_bpm resq 1
 max_bpm resq 1
+raw_min_bpm_milli resq 1
+raw_max_bpm_milli resq 1
 display_min_bpm resq 1
 display_max_bpm resq 1
 display_text_min_bpm resq 1
@@ -9329,6 +9514,7 @@ warp_stats_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
 fake_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
 nps_buffer resd DENSITY_CAP
 nps_raw_buffer resq DENSITY_CAP
+nps_sort_buffer resq DENSITY_CAP
 equally_spaced_buffer resb DENSITY_CAP
 default_pattern_counts resd ASSP_PATTERN_COUNT
 anchor_counts resd 4

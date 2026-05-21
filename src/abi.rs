@@ -391,10 +391,10 @@ unsafe extern "C" {
     fn assp_resolve_display_bpm(
         tag: *const u8,
         tag_len: usize,
-        actual_min_bpm: i64,
-        actual_max_bpm: i64,
-        out_min_bpm: *mut i64,
-        out_max_bpm: *mut i64,
+        actual_min_bpm_milli: i64,
+        actual_max_bpm_milli: i64,
+        out_min_bpm_milli: *mut i64,
+        out_max_bpm_milli: *mut i64,
         out_text_min_bpm: *mut i64,
         out_text_max_bpm: *mut i64,
         out_text_is_range: *mut i64,
@@ -1176,8 +1176,8 @@ pub fn resolve_difficulty_label(
 #[must_use]
 pub fn resolve_display_bpm(
     tag: &[u8],
-    actual_min_bpm: i64,
-    actual_max_bpm: i64,
+    actual_min_bpm_milli: i64,
+    actual_max_bpm_milli: i64,
 ) -> Option<(i64, i64)> {
     let mut out_min = 0;
     let mut out_max = 0;
@@ -1185,8 +1185,8 @@ pub fn resolve_display_bpm(
         assp_resolve_display_bpm(
             tag.as_ptr(),
             tag.len(),
-            actual_min_bpm,
-            actual_max_bpm,
+            actual_min_bpm_milli,
+            actual_max_bpm_milli,
             &mut out_min,
             &mut out_max,
             std::ptr::null_mut(),

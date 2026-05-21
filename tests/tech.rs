@@ -73,8 +73,8 @@ fn bpm_row_times(beats: &[f32], bpms: &[(f64, f64)], offset: f64) -> (Vec<f32>, 
         beats
             .iter()
             .map(|&beat| {
-                (rssp_core::bpm::get_elapsed_time(f64::from(beat), bpms, &[], &[], &[])
-                    - offset) as f32
+                (rssp_core::bpm::get_elapsed_time(f64::from(beat), bpms, &[], &[], &[]) - offset)
+                    as f32
             })
             .collect()
     };

@@ -49,18 +49,22 @@ fn assert_normalized_timing_tag(data: &[u8], tag: assp::ByteSlice) {
     assert_eq!(std::str::from_utf8(&asm).unwrap(), rust);
 }
 
-fn rust_display_bpm(tag: &[u8], actual_min: i64, actual_max: i64) -> (i64, i64) {
+fn rust_display_bpm(tag: &[u8], actual_min_milli: i64, actual_max_milli: i64) -> (i64, i64) {
     let tag = std::str::from_utf8(tag).unwrap();
-    let (min, max, _) =
-        bpm::resolve_display_bpm(Some(tag), actual_min as f64, actual_max as f64, 1.0);
-    let fmt = |v: f64| format!("{v:.0}").parse::<i64>().unwrap();
-    (fmt(min), fmt(max))
+    let (min, max, _) = bpm::resolve_display_bpm(
+        Some(tag),
+        actual_min_milli as f64 / 1000.0,
+        actual_max_milli as f64 / 1000.0,
+        1.0,
+    );
+    let to_milli = |v: f64| (v * 1000.0).round_ties_even() as i64;
+    (to_milli(min), to_milli(max))
 }
 
-fn assert_display_bpm(tag: &[u8], actual_min: i64, actual_max: i64) {
+fn assert_display_bpm(tag: &[u8], actual_min_milli: i64, actual_max_milli: i64) {
     assert_eq!(
-        resolve_display_bpm(tag, actual_min, actual_max).unwrap(),
-        rust_display_bpm(tag, actual_min, actual_max)
+        resolve_display_bpm(tag, actual_min_milli, actual_max_milli).unwrap(),
+        rust_display_bpm(tag, actual_min_milli, actual_max_milli)
     );
 }
 
@@ -120,15 +124,15 @@ fn computes_display_bpm_range_like_rssp_core() {
 
 #[test]
 fn resolves_display_bpm_tags_like_rssp_core() {
-    assert_display_bpm(b"", 120, 180);
-    assert_display_bpm(b"*", 120, 180);
-    assert_display_bpm(b"100", 120, 180);
-    assert_display_bpm(b"100:200", 120, 180);
-    assert_display_bpm(b"100.5:101.5", 120, 180);
-    assert_display_bpm(b"100:", 120, 180);
-    assert_display_bpm(b"100:bad", 120, 180);
-    assert_display_bpm(b"0:200", 120, 180);
-    assert_display_bpm(b"100\\:200", 120, 180);
+    assert_display_bpm(b"", 120000, 180000);
+    assert_display_bpm(b"*", 120000, 180000);
+    assert_display_bpm(b"100", 120000, 180000);
+    assert_display_bpm(b"100:200", 120000, 180000);
+    assert_display_bpm(b"100.5:101.5", 120000, 180000);
+    assert_display_bpm(b"100:", 120000, 180000);
+    assert_display_bpm(b"100:bad", 120000, 180000);
+    assert_display_bpm(b"0:200", 120000, 180000);
+    assert_display_bpm(b"100\\:200", 120000, 180000);
 }
 
 #[test]

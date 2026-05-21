@@ -1,8 +1,8 @@
 use std::arch::x86_64::{_mm_lfence, _rdtsc};
 use std::hint::black_box;
 
+use assp::{BpmSegment, parse_bpm_map};
 use assp::{find_bpms_for_chart, find_chart_by_index, matrix_rating_centi, measure_densities_4};
-use assp::{parse_bpm_map, BpmSegment};
 
 #[inline(always)]
 fn ticks() -> u64 {
