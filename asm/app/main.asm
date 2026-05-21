@@ -196,6 +196,12 @@ start:
     call init_stdout
     call parse_args
     app_trace trace_app_args
+    cmp qword [usage_mode], 1
+    je show_usage
+    cmp qword [usage_mode], 2
+    je show_usage_fail
+    cmp qword [input_path], 0
+    je show_usage_fail
     profile_init_call
 
     app_trace trace_app_read
@@ -253,6 +259,18 @@ exit_app:
     call print_flush
     mov ecx, [exit_code_tmp]
     call assp_os_exit
+
+show_usage:
+    lea rcx, [msg_usage]
+    call print_z
+    xor ecx, ecx
+    call exit_app
+
+show_usage_fail:
+    lea rcx, [msg_usage]
+    call print_z
+    mov ecx, 1
+    call exit_app
 
 run_selected_chart:
     sub rsp, 40
@@ -823,13 +841,13 @@ parse_args:
     push rsi
     sub rsp, 32
 
-    lea rax, [default_fixture]
-    mov [input_path], rax
+    mov qword [input_path], 0
     mov qword [chart_index], 0
     mov qword [list_mode], 0
-    mov qword [all_mode], 0
+    mov qword [all_mode], 1
     mov qword [quiet_mode], 0
     mov qword [profile_mode], 0
+    mov qword [usage_mode], 0
     mov qword [globals_prepared], 0
     mov qword [global_timing_prepared], 0
 
@@ -843,6 +861,23 @@ parse_args:
     mov rsi, [rdx + 8]
     test rsi, rsi
     jz .done
+    cmp byte [rsi], '?'
+    je .store_usage
+    cmp byte [rsi], '-'
+    jne .unix_store_path
+    mov al, [rsi + 1]
+    cmp al, 'h'
+    je .store_usage
+    cmp al, 'H'
+    je .store_usage
+    cmp al, '-'
+    jne .unix_store_path
+    mov al, [rsi + 2]
+    cmp al, 'h'
+    je .store_usage
+    cmp al, 'H'
+    je .store_usage
+.unix_store_path:
     mov [input_path], rsi
     cmp rax, 2
     jbe .done
@@ -887,6 +922,24 @@ parse_args:
     jmp .skip_spaces
 
 .path_start:
+    cmp al, '-'
+    jne .check_help_question
+    mov al, [rsi + 1]
+    cmp al, 'h'
+    je .store_usage
+    cmp al, 'H'
+    je .store_usage
+    cmp al, '-'
+    jne .check_help_question
+    mov al, [rsi + 2]
+    cmp al, 'h'
+    je .store_usage
+    cmp al, 'H'
+    je .store_usage
+
+.check_help_question:
+    cmp byte [rsi], '?'
+    je .store_usage
     cmp al, '"'
     jne .path_plain
     inc rsi
@@ -977,6 +1030,11 @@ parse_args:
     je .store_quiet_all
 
 .parse_chart_number:
+    movzx rdx, byte [rsi]
+    cmp dl, '0'
+    jb .store_usage_error
+    cmp dl, '9'
+    ja .store_usage_error
     xor rax, rax
 .chart_loop:
     movzx rdx, byte [rsi]
@@ -991,6 +1049,7 @@ parse_args:
     jmp .chart_loop
 
 .store_chart:
+    mov qword [all_mode], 0
     mov [chart_index], rax
     jmp .done
 
@@ -1010,6 +1069,14 @@ parse_args:
 .store_profile:
     mov qword [all_mode], 1
     mov qword [profile_mode], 1
+    jmp .done
+
+.store_usage:
+    mov qword [usage_mode], 1
+    jmp .done
+
+.store_usage_error:
+    mov qword [usage_mode], 2
 
 .done:
     add rsp, 32
@@ -7033,7 +7100,6 @@ app_const_0_12_f64 dq 0.12
 app_const_half_f64 dq 0.5
 app_const_100_f64 dq 100.0
 app_const_million_f64 dq 1000000.0
-default_fixture db "fixtures\camellia_mix.ssc", 0
 tag_title db "#TITLE:"
 tag_title_end:
 tag_subtitle db "#SUBTITLE:"
@@ -7085,6 +7151,9 @@ tag_display_bpm_end:
 tag_credit db "#CREDIT:"
 tag_credit_end:
 msg_header db "assp standalone", 13, 10, 0
+msg_usage db "Usage: assp <simfile_path> [chart_index|all|list|quiet|bench|profile]", 13, 10
+          db "       assp --help", 13, 10
+          db "Default: analyze every chart in the file.", 13, 10, 0
 msg_read_fail db "failed to read input file", 13, 10, 0
 msg_notes_fail db "failed to find selected #NOTES chart", 13, 10, 0
 msg_lanes_fail db "unsupported step type; standalone currently supports dance-single and dance-double", 13, 10, 0
@@ -7549,6 +7618,7 @@ list_mode resq 1
 all_mode resq 1
 quiet_mode resq 1
 profile_mode resq 1
+usage_mode resq 1
 globals_prepared resq 1
 global_timing_prepared resq 1
 chart_count resq 1

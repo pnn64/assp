@@ -90,10 +90,16 @@ Useful build modes:
 
 ## Run
 
-Run the default Camellia fixture:
+Run the default Camellia fixture through the build script:
 
 ```powershell
 .\build.ps1 -RunFixture
+```
+
+Analyze every chart in a simfile, matching RSSP's default file behavior:
+
+```powershell
+.\target\assp.exe .\fixtures\camellia_mix.ssc
 ```
 
 List charts in a simfile:
@@ -108,7 +114,7 @@ Run one chart:
 .\target\assp.exe .\fixtures\camellia_mix.ssc 4
 ```
 
-Process every chart in one process:
+The explicit all-chart mode remains available:
 
 ```powershell
 .\target\assp.exe .\fixtures\camellia_mix.ssc all
@@ -123,6 +129,8 @@ Quiet all-chart modes:
 
 `quiet` and `bench` process every chart without printing chart reports. `bench`
 is intended for timing the parser/report computation without console output.
+Unsupported RSSP output flags such as `--json` currently fail with usage instead
+of silently selecting chart 0.
 
 ## RSSP Parity
 
