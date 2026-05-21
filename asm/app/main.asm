@@ -1,17 +1,21 @@
 default rel
 %include "assp.inc"
-%include "win64.inc"
 
-extern CloseHandle
-extern CreateFileA
-extern ExitProcess
-extern GetCommandLineA
-extern GetFileSizeEx
-extern GetStdHandle
-extern QueryPerformanceCounter
-extern QueryPerformanceFrequency
-extern ReadFile
-extern WriteFile
+extern assp_os_close
+extern assp_os_counter
+extern assp_os_counter_frequency
+extern assp_os_exit
+extern assp_os_file_size
+extern assp_os_open_readonly
+extern assp_os_read
+extern assp_os_stdout
+extern assp_os_write
+%ifdef ASSP_UNIX
+extern assp_os_argc
+extern assp_os_argv
+%else
+extern assp_os_command_line
+%endif
 
 extern assp_chart_hash_pair
 extern assp_md5_hex
@@ -125,6 +129,7 @@ global profile_step_dp_skip_count
 %define PARITY_STATE_CAP 512
 %define PARITY_BACKTRACK_CAP (PARITY_ROW_CAP * PARITY_STATE_CAP)
 %define MONO_THRESHOLD 6
+%define ASSP_OS_INVALID_HANDLE -1
 
 %ifdef ASSP_PHASE_PROFILE
     %macro profile_init_call 0
@@ -209,7 +214,7 @@ exit_app:
     mov [exit_code_tmp], ecx
     call print_flush
     mov ecx, [exit_code_tmp]
-    call ExitProcess
+    call assp_os_exit
 
 run_selected_chart:
     sub rsp, 40
@@ -549,8 +554,7 @@ prepare_file_md5:
 
 init_stdout:
     sub rsp, 40
-    mov ecx, STD_OUTPUT_HANDLE
-    call GetStdHandle
+    call assp_os_stdout
     mov [stdout_handle], rax
     add rsp, 40
     ret
@@ -572,9 +576,9 @@ profile_init:
 
 .query_frequency:
     lea rcx, [profile_frequency]
-    call QueryPerformanceFrequency
+    call assp_os_counter_frequency
     lea rcx, [profile_total_start_tick]
-    call QueryPerformanceCounter
+    call assp_os_counter
 
     add rsp, 40
 .done:
@@ -593,7 +597,7 @@ profile_begin:
     sub rsp, 32
 
     lea rcx, [profile_qpc_tmp]
-    call QueryPerformanceCounter
+    call assp_os_counter
     mov rax, [profile_qpc_tmp]
     mov [profile_start_tick], rax
 
@@ -622,7 +626,7 @@ profile_end:
 
     mov [profile_accum_ptr], rcx
     lea rcx, [profile_qpc_tmp]
-    call QueryPerformanceCounter
+    call assp_os_counter
     mov rax, [profile_qpc_tmp]
     sub rax, [profile_start_tick]
     mov r10, [profile_accum_ptr]
@@ -645,7 +649,7 @@ profile_finish:
     sub rsp, 40
 
     lea rcx, [profile_qpc_tmp]
-    call QueryPerformanceCounter
+    call assp_os_counter
     mov rax, [profile_qpc_tmp]
     sub rax, [profile_total_start_tick]
     mov [profile_total_ticks], rax
@@ -791,7 +795,25 @@ parse_args:
     mov qword [globals_prepared], 0
     mov qword [global_timing_prepared], 0
 
-    call GetCommandLineA
+%ifdef ASSP_UNIX
+    mov rax, [assp_os_argc]
+    cmp rax, 1
+    jbe .done
+    mov rdx, [assp_os_argv]
+    test rdx, rdx
+    jz .done
+    mov rsi, [rdx + 8]
+    test rsi, rsi
+    jz .done
+    mov [input_path], rsi
+    cmp rax, 2
+    jbe .done
+    mov rsi, [rdx + 16]
+    test rsi, rsi
+    jz .done
+    jmp .parse_chart
+%else
+    call assp_os_command_line
     mov rsi, rax
     test rsi, rsi
     jz .done
@@ -868,6 +890,7 @@ parse_args:
     jz .done
     inc rsi
     jmp .skip_arg_spaces
+%endif
 
 .parse_chart:
     cmp byte [rsi], 'a'
@@ -963,20 +986,14 @@ read_file:
     mov dword [file_bytes_read], 0
 
     mov rcx, [input_path]
-    mov edx, GENERIC_READ
-    mov r8d, FILE_SHARE_READ
-    xor r9d, r9d
-    mov qword [rsp + 32], OPEN_EXISTING
-    mov qword [rsp + 40], FILE_ATTRIBUTE_NORMAL
-    mov qword [rsp + 48], 0
-    call CreateFileA
-    cmp rax, INVALID_HANDLE_VALUE
+    call assp_os_open_readonly
+    cmp rax, ASSP_OS_INVALID_HANDLE
     je .fail
     mov [file_handle], rax
 
     mov rcx, rax
     lea rdx, [file_size]
-    call GetFileSizeEx
+    call assp_os_file_size
     test eax, eax
     jz .close_fail
 
@@ -991,12 +1008,12 @@ read_file:
     mov r8d, eax
     lea r9, [file_bytes_read]
     mov qword [rsp + 32], 0
-    call ReadFile
+    call assp_os_read
     test eax, eax
     jz .close_fail
 
     mov rcx, [file_handle]
-    call CloseHandle
+    call assp_os_close
     mov qword [file_handle], 0
 
     mov eax, [file_bytes_read]
@@ -1011,7 +1028,7 @@ read_file:
     mov rcx, [file_handle]
     test rcx, rcx
     jz .fail
-    call CloseHandle
+    call assp_os_close
     mov qword [file_handle], 0
 
 .fail:
@@ -6915,7 +6932,7 @@ print_write_direct:
     mov rcx, [stdout_handle]
     lea r9, [stdout_written]
     mov qword [rsp + 32], 0
-    call WriteFile
+    call assp_os_write
     add rsp, 48
     ret
 
@@ -7686,9 +7703,6 @@ parity_predecessors resd PARITY_STATE_CAP
 parity_placements resb PARITY_STATE_CAP * 4
 parity_hits resb PARITY_STATE_CAP * 5
 parity_keys resd PARITY_STATE_CAP
-alignb 16
-parity_backtrack_placements resb PARITY_BACKTRACK_CAP * 4
-parity_backtrack_predecessors resd PARITY_BACKTRACK_CAP
 row_scratch resq ROW_SCRATCH_CAP
 minimized_buffer resb MINIMIZED_BUFFER_CAP
 density_buffer resd DENSITY_CAP
@@ -7697,3 +7711,6 @@ stream_token_buffer resb DENSITY_CAP * ASSP_STREAM_TOKEN_SIZE
 text_buffer resb TEXT_BUFFER_CAP
 file_buffer resb FILE_BUFFER_CAP
 print_buffer resb PRINT_BUFFER_CAP
+alignb 16
+parity_backtrack_placements resb PARITY_BACKTRACK_CAP * 4
+parity_backtrack_predecessors resd PARITY_BACKTRACK_CAP

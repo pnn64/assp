@@ -103,7 +103,7 @@ foreach ($asm in Get-ChildItem (Join-Path $root "asm") -Recurse -Filter "*.asm" 
     $rel = $asm.FullName.Substring((Join-Path $root "asm").Length).TrimStart('\', '/')
     $objName = ($rel -replace '[\\/]', '_') -replace '\.asm$', '.obj'
     $obj = Join-Path $target $objName
-    $nasmArgs = @("-f", "win64", "-I$include", "-DASSP_STANDALONE_EXE")
+    $nasmArgs = @("-f", "win64", "-I$include", "-DASSP_STANDALONE_EXE", "-DASSP_WINDOWS")
     if ($ProfileSymbols) {
         $nasmArgs += @("-g", "-F", "cv8")
     }

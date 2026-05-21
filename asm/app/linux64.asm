@@ -3,16 +3,17 @@ default rel
 %ifdef ASSP_LINUX
 
 global _start
-global CloseHandle
-global CreateFileA
-global ExitProcess
-global GetCommandLineA
-global GetFileSizeEx
-global GetStdHandle
-global QueryPerformanceCounter
-global QueryPerformanceFrequency
-global ReadFile
-global WriteFile
+global assp_os_argc
+global assp_os_argv
+global assp_os_close
+global assp_os_counter
+global assp_os_counter_frequency
+global assp_os_exit
+global assp_os_file_size
+global assp_os_open_readonly
+global assp_os_read
+global assp_os_stdout
+global assp_os_write
 
 extern start
 
@@ -28,13 +29,15 @@ extern start
 %define CLOCK_MONOTONIC 1
 %define SEEK_SET 0
 %define SEEK_END 2
-%define LINUX_CMDLINE_CAP 65536
 %define LINUX_PATH_CAP 4096
 
 section .text
 
 _start:
-    mov [linux_initial_rsp], rsp
+    mov rax, [rsp]
+    mov [assp_os_argc], rax
+    lea rax, [rsp + 8]
+    mov [assp_os_argv], rax
     and rsp, -16
     call start
     mov edi, eax
@@ -42,128 +45,18 @@ _start:
     syscall
 
 ; rcx = exit code.
-ExitProcess:
+assp_os_exit:
     mov rdi, rcx
     mov eax, SYS_EXIT
     syscall
 
-; rcx = STD_OUTPUT_HANDLE. Returns stdout fd.
-GetStdHandle:
+; Returns stdout fd.
+assp_os_stdout:
     mov eax, 1
     ret
 
-; Returns a writable Windows-style command line built from Linux argv.
-GetCommandLineA:
-    push rbx
-    push rsi
-    push rdi
-    push r12
-    push r13
-    push r14
-    push r15
-
-    cmp byte [linux_cmdline_ready], 0
-    jne .return_buffer
-
-    mov rsi, [linux_initial_rsp]
-    test rsi, rsi
-    jz .finish
-    mov r12, [rsi]
-    lea r13, [rsi + 8]
-    lea rdi, [linux_cmdline]
-    mov r15d, LINUX_CMDLINE_CAP - 1
-    xor r14d, r14d
-
-.arg_loop:
-    cmp r14, r12
-    jae .finish
-    mov rsi, [r13 + r14 * 8]
-    test rsi, rsi
-    jz .finish
-
-    test r14, r14
-    jz .scan_quote
-    test r15, r15
-    jz .finish
-    mov byte [rdi], ' '
-    inc rdi
-    dec r15
-
-.scan_quote:
-    mov rbx, rsi
-    xor eax, eax
-.scan_loop:
-    mov dl, [rbx]
-    test dl, dl
-    jz .copy_arg
-    cmp dl, ' '
-    ja .scan_next
-    mov eax, 1
-.scan_next:
-    inc rbx
-    jmp .scan_loop
-
-.copy_arg:
-    test eax, eax
-    jnz .quote_arg
-    xor ebx, ebx
-    jmp .copy_loop
-
-.quote_arg:
-    test r15, r15
-    jz .finish
-    mov byte [rdi], '"'
-    inc rdi
-    dec r15
-    mov ebx, 1
-    jmp .copy_loop
-
-.copy_loop:
-    mov al, [rsi]
-    test al, al
-    jz .copy_done
-    test r15, r15
-    jz .finish
-    mov [rdi], al
-    inc rsi
-    inc rdi
-    dec r15
-    jmp .copy_loop
-
-.copy_done:
-    cmp ebx, 1
-    jne .next_arg
-    test r15, r15
-    jz .finish
-    mov byte [rdi], '"'
-    inc rdi
-    dec r15
-
-.next_arg:
-    inc r14
-    jmp .arg_loop
-
-.finish:
-    lea rax, [linux_cmdline]
-    mov byte [rdi], 0
-    mov byte [linux_cmdline_ready], 1
-    jmp .done
-
-.return_buffer:
-    lea rax, [linux_cmdline]
-
-.done:
-    pop r15
-    pop r14
-    pop r13
-    pop r12
-    pop rdi
-    pop rsi
-    pop rbx
-    ret
-
-; rcx = path. Returns Linux fd or INVALID_HANDLE_VALUE.
-CreateFileA:
+; rcx = path. Returns Linux fd or -1.
+assp_os_open_readonly:
     push rsi
     push rdi
 
@@ -205,7 +98,7 @@ CreateFileA:
     ret
 
 ; rcx = fd. eax = nonzero on success.
-CloseHandle:
+assp_os_close:
     push rdi
     mov rdi, rcx
     mov eax, SYS_CLOSE
@@ -217,7 +110,7 @@ CloseHandle:
     ret
 
 ; rcx = fd, rdx = out i64 size. eax = nonzero on success.
-GetFileSizeEx:
+assp_os_file_size:
     push rsi
     push rdi
 
@@ -253,7 +146,7 @@ GetFileSizeEx:
     ret
 
 ; rcx = fd, rdx = buffer, r8 = len, r9 = out u32 bytes read.
-ReadFile:
+assp_os_read:
     push rbx
     push rsi
     push rdi
@@ -308,7 +201,7 @@ ReadFile:
     ret
 
 ; rcx = fd, rdx = buffer, r8 = len, r9 = out u32 bytes written.
-WriteFile:
+assp_os_write:
     push rbx
     push rsi
     push rdi
@@ -362,14 +255,14 @@ WriteFile:
     ret
 
 ; rcx = out frequency. eax = nonzero on success.
-QueryPerformanceFrequency:
+assp_os_counter_frequency:
     mov rax, 1000000000
     mov [rcx], rax
     mov eax, 1
     ret
 
 ; rcx = out counter. eax = nonzero on success.
-QueryPerformanceCounter:
+assp_os_counter:
     push rsi
     push rdi
     sub rsp, 16
@@ -400,9 +293,8 @@ QueryPerformanceCounter:
 
 section .bss
 
-linux_initial_rsp resq 1
-linux_cmdline_ready resb 1
-linux_cmdline resb LINUX_CMDLINE_CAP
+assp_os_argc resq 1
+assp_os_argv resq 1
 linux_path_buffer resb LINUX_PATH_CAP
 
 %endif

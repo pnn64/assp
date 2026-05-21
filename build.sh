@@ -16,7 +16,7 @@ Options:
   --phase-profile, -PhaseProfile
                               define ASSP_PHASE_PROFILE
   --startup-trace, -StartupTrace
-                              define ASSP_STARTUP_TRACE for platform shim logs
+                              define ASSP_STARTUP_TRACE for platform logs
   --run-fixture, -RunFixture  run the built executable
   --fixture, -Fixture PATH    fixture path for --run-fixture
   --chart, -Chart N           chart index for --run-fixture (default: 0)
@@ -72,7 +72,7 @@ assemble_one() {
         asm=$1
         obj=$2
 
-        set -- -f elf64 "-I$include/" -DASSP_STANDALONE_EXE "$target_define"
+        set -- -f elf64 "-I$include/" -DASSP_STANDALONE_EXE -DASSP_UNIX "$target_define"
         if [ "$profile_symbols" -eq 1 ]; then
             set -- "$@" -g -F dwarf
         fi

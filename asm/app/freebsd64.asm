@@ -3,16 +3,17 @@ default rel
 %ifdef ASSP_FREEBSD
 
 global _start
-global CloseHandle
-global CreateFileA
-global ExitProcess
-global GetCommandLineA
-global GetFileSizeEx
-global GetStdHandle
-global QueryPerformanceCounter
-global QueryPerformanceFrequency
-global ReadFile
-global WriteFile
+global assp_os_argc
+global assp_os_argv
+global assp_os_close
+global assp_os_counter
+global assp_os_counter_frequency
+global assp_os_exit
+global assp_os_file_size
+global assp_os_open_readonly
+global assp_os_read
+global assp_os_stdout
+global assp_os_write
 
 extern start
 
@@ -29,7 +30,6 @@ extern start
 %define SEEK_SET 0
 %define SEEK_END 2
 %define FREEBSD_ARGV_SCAN_CAP 64
-%define FREEBSD_CMDLINE_CAP 65536
 %define FREEBSD_PATH_CAP 4096
 
 %macro FREEBSD_TRACE 2
@@ -59,43 +59,38 @@ extern start
 section .text
 
 _start:
-    mov [freebsd_entry_rsp], rsp
-    mov [freebsd_entry_rdi], rdi
-    mov [freebsd_entry_rsi], rsi
     FREEBSD_TRACE freebsd_trace_start, freebsd_trace_start_end - freebsd_trace_start
 
-    ; FreeBSD kernel entry passes the argc/argv stack pointer in rdi. If a
-    ; loader calls us instead, rdi/rsi may already be argc/argv.
+    ; FreeBSD usually passes the initial argc block pointer in rdi. Some
+    ; loaders call the entrypoint with rdi=argc and rsi=argv, so accept both.
     cmp rdi, 4096
-    ja .check_stack_ptr
+    ja .stack_block
     test rsi, rsi
-    jz .check_stack_ptr
-    mov [freebsd_argc], rdi
-    mov [freebsd_argv], rsi
+    jz .stack_block
+    mov [assp_os_argc], rdi
+    mov [assp_os_argv], rsi
     FREEBSD_TRACE freebsd_trace_abi_args, freebsd_trace_abi_args_end - freebsd_trace_abi_args
     jmp .call_start
 
-.check_stack_ptr:
+.stack_block:
     mov r10, rdi
     test r10, r10
     jnz .load_stack_args
-
-.use_rsp:
     mov r10, rsp
 
 .load_stack_args:
     mov rax, [r10]
     cmp rax, FREEBSD_ARGV_SCAN_CAP
     ja .load_argv_vector
-    mov [freebsd_argc], rax
+    mov [assp_os_argc], rax
     lea rax, [r10 + 8]
-    mov [freebsd_argv], rax
+    mov [assp_os_argv], rax
     mov rsp, r10
     FREEBSD_TRACE freebsd_trace_argc_block, freebsd_trace_argc_block_end - freebsd_trace_argc_block
     jmp .call_start
 
 .load_argv_vector:
-    mov [freebsd_argv], r10
+    mov [assp_os_argv], r10
     xor eax, eax
 .count_argv_loop:
     cmp rax, FREEBSD_ARGV_SCAN_CAP
@@ -106,7 +101,7 @@ _start:
     inc rax
     jmp .count_argv_loop
 .count_argv_done:
-    mov [freebsd_argc], rax
+    mov [assp_os_argc], rax
     lea rsp, [r10 - 8]
     FREEBSD_TRACE freebsd_trace_argv_vector, freebsd_trace_argv_vector_end - freebsd_trace_argv_vector
 
@@ -119,149 +114,18 @@ _start:
     syscall
 
 ; rcx = exit code.
-ExitProcess:
+assp_os_exit:
     mov rdi, rcx
     mov eax, SYS_EXIT
     syscall
 
-; rcx = STD_OUTPUT_HANDLE. Returns stdout fd.
-GetStdHandle:
+; Returns stdout fd.
+assp_os_stdout:
     mov eax, 1
     ret
 
-; Returns a writable Windows-style command line built from FreeBSD argv.
-GetCommandLineA:
-    push rbx
-    push rsi
-    push rdi
-    push r12
-    push r13
-    push r14
-    push r15
-
-    cmp byte [freebsd_cmdline_ready], 0
-    jne .return_buffer
-    FREEBSD_TRACE freebsd_trace_cmdline, freebsd_trace_cmdline_end - freebsd_trace_cmdline
-
-    lea rdi, [freebsd_cmdline]
-    mov r15d, FREEBSD_CMDLINE_CAP - 1
-    mov byte [rdi], 'a'
-    inc rdi
-    dec r15
-    mov byte [rdi], 's'
-    inc rdi
-    dec r15
-    mov byte [rdi], 's'
-    inc rdi
-    dec r15
-    mov byte [rdi], 'p'
-    inc rdi
-    dec r15
-    FREEBSD_TRACE freebsd_trace_cmdline_synthetic, freebsd_trace_cmdline_synthetic_end - freebsd_trace_cmdline_synthetic
-
-    mov r12, [freebsd_argc]
-    mov r13, [freebsd_argv]
-    test r13, r13
-    jz .finish
-    cmp r12, 1
-    jbe .finish
-    mov r14d, 1
-
-.arg_loop:
-    cmp r14, r12
-    jae .finish
-    cmp r14, FREEBSD_ARGV_SCAN_CAP
-    jae .finish
-    mov rsi, [r13 + r14 * 8]
-    test rsi, rsi
-    jz .finish
-    cmp rsi, 4096
-    jb .finish
-    FREEBSD_TRACE freebsd_trace_cmdline_arg, freebsd_trace_cmdline_arg_end - freebsd_trace_cmdline_arg
-
-    test r14, r14
-    jz .scan_quote
-    test r15, r15
-    jz .finish
-    mov byte [rdi], ' '
-    inc rdi
-    dec r15
-
-.scan_quote:
-    mov rbx, rsi
-    xor eax, eax
-.scan_loop:
-    mov dl, [rbx]
-    test dl, dl
-    jz .copy_arg
-    cmp dl, ' '
-    ja .scan_next
-    mov eax, 1
-.scan_next:
-    inc rbx
-    jmp .scan_loop
-
-.copy_arg:
-    test eax, eax
-    jnz .quote_arg
-    xor ebx, ebx
-    jmp .copy_loop
-
-.quote_arg:
-    test r15, r15
-    jz .finish
-    mov byte [rdi], '"'
-    inc rdi
-    dec r15
-    mov ebx, 1
-
-.copy_loop:
-    mov al, [rsi]
-    test al, al
-    jz .copy_done
-    test r15, r15
-    jz .finish
-    mov [rdi], al
-    inc rsi
-    inc rdi
-    dec r15
-    jmp .copy_loop
-
-.copy_done:
-    cmp ebx, 1
-    jne .next_arg
-    test r15, r15
-    jz .finish
-    mov byte [rdi], '"'
-    inc rdi
-    dec r15
-
-.next_arg:
-    inc r14
-    jmp .arg_loop
-
-.finish:
-    lea rax, [freebsd_cmdline]
-    mov byte [rdi], 0
-    mov byte [freebsd_cmdline_ready], 1
-    FREEBSD_TRACE freebsd_trace_cmdline_done, freebsd_trace_cmdline_done_end - freebsd_trace_cmdline_done
-    jmp .done
-
-.return_buffer:
-    lea rax, [freebsd_cmdline]
-
-.done:
-    pop r15
-    pop r14
-    pop r13
-    pop r12
-    pop rdi
-    pop rsi
-    pop rbx
-    ret
-
-; rcx = path. Returns FreeBSD fd or INVALID_HANDLE_VALUE.
-CreateFileA:
+; rcx = path. Returns FreeBSD fd or -1.
+assp_os_open_readonly:
     push rsi
     push rdi
 
@@ -302,7 +166,7 @@ CreateFileA:
     ret
 
 ; rcx = fd. eax = nonzero on success.
-CloseHandle:
+assp_os_close:
     push rdi
     mov rdi, rcx
     mov eax, SYS_CLOSE
@@ -313,7 +177,7 @@ CloseHandle:
     ret
 
 ; rcx = fd, rdx = out i64 size. eax = nonzero on success.
-GetFileSizeEx:
+assp_os_file_size:
     push rsi
     push rdi
 
@@ -347,7 +211,7 @@ GetFileSizeEx:
     ret
 
 ; rcx = fd, rdx = buffer, r8 = len, r9 = out u32 bytes read.
-ReadFile:
+assp_os_read:
     push rbx
     push rsi
     push rdi
@@ -405,7 +269,7 @@ ReadFile:
     ret
 
 ; rcx = fd, rdx = buffer, r8 = len, r9 = out u32 bytes written.
-WriteFile:
+assp_os_write:
     push rbx
     push rsi
     push rdi
@@ -463,14 +327,14 @@ WriteFile:
     ret
 
 ; rcx = out frequency. eax = nonzero on success.
-QueryPerformanceFrequency:
+assp_os_counter_frequency:
     mov rax, 1000000000
     mov [rcx], rax
     mov eax, 1
     ret
 
 ; rcx = out counter. eax = nonzero on success.
-QueryPerformanceCounter:
+assp_os_counter:
     push rsi
     push rdi
     sub rsp, 16
@@ -510,24 +374,11 @@ freebsd_trace_argv_vector db "assp freebsd: argv from vector", 10
 freebsd_trace_argv_vector_end:
 freebsd_trace_call_start db "assp freebsd: call start", 10
 freebsd_trace_call_start_end:
-freebsd_trace_cmdline db "assp freebsd: GetCommandLineA", 10
-freebsd_trace_cmdline_end:
-freebsd_trace_cmdline_synthetic db "assp freebsd: cmdline synthetic exe", 10
-freebsd_trace_cmdline_synthetic_end:
-freebsd_trace_cmdline_arg db "assp freebsd: cmdline arg", 10
-freebsd_trace_cmdline_arg_end:
-freebsd_trace_cmdline_done db "assp freebsd: cmdline done", 10
-freebsd_trace_cmdline_done_end:
 
 section .bss
 
-freebsd_entry_rsp resq 1
-freebsd_entry_rdi resq 1
-freebsd_entry_rsi resq 1
-freebsd_argc resq 1
-freebsd_argv resq 1
-freebsd_cmdline_ready resb 1
-freebsd_cmdline resb FREEBSD_CMDLINE_CAP
+assp_os_argc resq 1
+assp_os_argv resq 1
 freebsd_path_buffer resb FREEBSD_PATH_CAP
 
 %endif

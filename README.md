@@ -10,7 +10,9 @@ modes is requested.
 
 ## Layout
 
-- `asm/app/main.asm`: standalone executable entrypoint, file I/O, reports.
+- `asm/app/main.asm`: standalone app flow, argument parsing, reports.
+- `asm/app/linux64.asm`, `asm/app/freebsd64.asm`, `asm/app/win64.asm`:
+  native OS entrypoints and file/clock/stdout primitives.
 - `asm/core/`: parser, scanner, hashing, timing, density, pattern, and chart
   analysis routines.
 - `include/assp.inc`: NASM ABI constants, layouts, and shared macros.
@@ -74,9 +76,9 @@ sh build.sh --startup-trace
 sh build.sh --run-fixture
 ```
 
-`--target freebsd` selects the FreeBSD syscall shim. Build and run it on
-FreeBSD for an executable that can actually execute those syscalls.
-`--startup-trace` emits low-level platform-shim startup breadcrumbs on stderr.
+`--target freebsd` selects the native FreeBSD syscall platform file. Build and
+run it on FreeBSD for an executable that can actually execute those syscalls.
+`--startup-trace` emits low-level FreeBSD startup breadcrumbs on stderr.
 
 Useful build modes:
 
