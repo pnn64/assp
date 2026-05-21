@@ -157,6 +157,7 @@ GetCommandLineA:
     mov byte [rdi], 'p'
     inc rdi
     dec r15
+    FREEBSD_TRACE freebsd_trace_cmdline_synthetic, freebsd_trace_cmdline_synthetic_end - freebsd_trace_cmdline_synthetic
 
     mov r12, [freebsd_argc]
     mov r13, [freebsd_argv]
@@ -176,6 +177,7 @@ GetCommandLineA:
     jz .finish
     cmp rsi, 4096
     jb .finish
+    FREEBSD_TRACE freebsd_trace_cmdline_arg, freebsd_trace_cmdline_arg_end - freebsd_trace_cmdline_arg
 
     test r14, r14
     jz .scan_quote
@@ -242,6 +244,7 @@ GetCommandLineA:
     lea rax, [freebsd_cmdline]
     mov byte [rdi], 0
     mov byte [freebsd_cmdline_ready], 1
+    FREEBSD_TRACE freebsd_trace_cmdline_done, freebsd_trace_cmdline_done_end - freebsd_trace_cmdline_done
     jmp .done
 
 .return_buffer:
@@ -509,6 +512,12 @@ freebsd_trace_call_start db "assp freebsd: call start", 10
 freebsd_trace_call_start_end:
 freebsd_trace_cmdline db "assp freebsd: GetCommandLineA", 10
 freebsd_trace_cmdline_end:
+freebsd_trace_cmdline_synthetic db "assp freebsd: cmdline synthetic exe", 10
+freebsd_trace_cmdline_synthetic_end:
+freebsd_trace_cmdline_arg db "assp freebsd: cmdline arg", 10
+freebsd_trace_cmdline_arg_end:
+freebsd_trace_cmdline_done db "assp freebsd: cmdline done", 10
+freebsd_trace_cmdline_done_end:
 
 section .bss
 
