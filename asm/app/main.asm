@@ -187,6 +187,25 @@ global profile_step_dp_skip_count
     %endmacro
 %endif
 
+%macro json_z 1
+    lea rcx, [%1]
+    call print_z
+%endmacro
+
+%macro json_u64 2
+    lea rcx, [%1]
+    call print_z
+    mov rcx, %2
+    call print_u64
+%endmacro
+
+%macro json_u32 2
+    lea rcx, [%1]
+    call print_z
+    mov ecx, %2
+    call print_u64
+%endmacro
+
 section .text
 
 start:
@@ -220,6 +239,20 @@ start:
     jz fail_hash
     app_trace trace_app_hash_done
 
+    cmp qword [json_mode], 0
+    je .check_list
+    call print_json_all_charts
+    test eax, eax
+    jz fail_notes
+    cmp qword [profile_mode], 0
+    je .finish_json
+    call print_flush
+.finish_json:
+    profile_finish_call
+    xor ecx, ecx
+    call exit_app
+
+.check_list:
     cmp qword [list_mode], 0
     je .check_all
     call print_chart_list
@@ -846,6 +879,7 @@ parse_args:
     mov qword [list_mode], 0
     mov qword [all_mode], 1
     mov qword [quiet_mode], 0
+    mov qword [json_mode], 0
     mov qword [profile_mode], 0
     mov qword [usage_mode], 0
     mov qword [globals_prepared], 0
@@ -996,6 +1030,10 @@ parse_args:
     je .store_list
     cmp byte [rsi], 'L'
     je .store_list
+    cmp byte [rsi], 'j'
+    je .store_json
+    cmp byte [rsi], 'J'
+    je .store_json
     cmp byte [rsi], 'p'
     je .store_profile
     cmp byte [rsi], 'P'
@@ -1012,6 +1050,10 @@ parse_args:
     je .store_list
     cmp byte [rsi + 2], 'L'
     je .store_list
+    cmp byte [rsi + 2], 'j'
+    je .store_json
+    cmp byte [rsi + 2], 'J'
+    je .store_json
     cmp byte [rsi + 2], 'a'
     je .store_all
     cmp byte [rsi + 2], 'A'
@@ -1064,6 +1106,12 @@ parse_args:
 .store_quiet_all:
     mov qword [all_mode], 1
     mov qword [quiet_mode], 1
+    jmp .done
+
+.store_json:
+    mov qword [all_mode], 1
+    mov qword [quiet_mode], 1
+    mov qword [json_mode], 1
     jmp .done
 
 .store_profile:
@@ -1271,6 +1319,64 @@ print_all_charts:
     je .fail
 
 .success:
+    mov eax, ASSP_TRUE
+    jmp .done
+
+.fail:
+    xor eax, eax
+
+.done:
+    add rsp, 40
+    ret
+
+print_json_all_charts:
+    sub rsp, 40
+
+    mov qword [chart_index], 0
+    mov qword [chart_count], 0
+    mov qword [chart_cursor], 0
+
+.loop:
+    lea rcx, [file_buffer]
+    mov rdx, [file_len]
+    mov r8, [chart_cursor]
+    lea r9, [chart_info]
+    profile_begin_call
+    call assp_find_next_chart
+    profile_end_call profile_find_chart_ticks
+    test eax, eax
+    jz .done_loop
+
+    mov rax, [chart_index]
+    mov [chart_info + ASSP_CHART_INFO_INDEX], rax
+    call run_loaded_chart
+    test eax, eax
+    jz .fail
+
+    cmp qword [chart_count], 0
+    jne .print_comma
+    call print_json_root_start
+    jmp .print_chart
+
+.print_comma:
+    json_z comma
+
+.print_chart:
+    call print_json_chart
+
+    mov rax, [chart_info + ASSP_CHART_INFO_NOTES_PTR]
+    add rax, [chart_info + ASSP_CHART_INFO_NOTES_LEN]
+    lea rdx, [file_buffer]
+    sub rax, rdx
+    mov [chart_cursor], rax
+    inc qword [chart_index]
+    inc qword [chart_count]
+    jmp .loop
+
+.done_loop:
+    cmp qword [chart_count], 0
+    je .fail
+    json_z json_root_end
     mov eax, ASSP_TRUE
     jmp .done
 
@@ -5988,6 +6094,1171 @@ print_chart_line:
     add rsp, 40
     ret
 
+print_json_root_start:
+    sub rsp, 40
+
+    json_z json_root_open
+    lea rcx, [json_key_title]
+    mov rdx, [title_slice + ASSP_BYTE_SLICE_PTR]
+    mov r8, [title_slice + ASSP_BYTE_SLICE_LEN]
+    call print_json_unescaped_string_field
+    lea rcx, [json_key_subtitle]
+    mov rdx, [subtitle_slice + ASSP_BYTE_SLICE_PTR]
+    mov r8, [subtitle_slice + ASSP_BYTE_SLICE_LEN]
+    call print_json_unescaped_string_field
+    lea rcx, [json_key_artist]
+    mov rdx, [artist_slice + ASSP_BYTE_SLICE_PTR]
+    mov r8, [artist_slice + ASSP_BYTE_SLICE_LEN]
+    call print_json_unescaped_string_field
+    lea rcx, [json_key_title_trans]
+    mov rdx, [title_trans_slice + ASSP_BYTE_SLICE_PTR]
+    mov r8, [title_trans_slice + ASSP_BYTE_SLICE_LEN]
+    call print_json_unescaped_string_field
+    lea rcx, [json_key_subtitle_trans]
+    mov rdx, [subtitle_trans_slice + ASSP_BYTE_SLICE_PTR]
+    mov r8, [subtitle_trans_slice + ASSP_BYTE_SLICE_LEN]
+    call print_json_unescaped_string_field
+    lea rcx, [json_key_artist_trans]
+    mov rdx, [artist_trans_slice + ASSP_BYTE_SLICE_PTR]
+    mov r8, [artist_trans_slice + ASSP_BYTE_SLICE_LEN]
+    call print_json_unescaped_string_field
+    lea rcx, [json_key_length]
+    call print_z
+    call print_json_duration_string
+    lea rcx, [json_key_bpm]
+    call print_z
+    mov rcx, [min_bpm]
+    mov rdx, [max_bpm]
+    call print_json_bpm_value
+    lea rcx, [json_key_min_bpm]
+    mov rdx, [min_bpm]
+    call print_json_u64_field
+    lea rcx, [json_key_max_bpm]
+    mov rdx, [max_bpm]
+    call print_json_u64_field
+    lea rcx, [json_key_average_bpm]
+    mov rdx, [average_bpm_centi]
+    call print_json_fixed2_field
+    lea rcx, [json_key_median_bpm]
+    mov rdx, [median_bpm_centi]
+    call print_json_fixed2_field
+    lea rcx, [json_key_bpm_data]
+    lea rdx, [global_bpm_buffer]
+    mov r8, [global_bpms_len]
+    call print_json_string_field
+    lea rcx, [json_key_offset]
+    mov rdx, [offset_ms]
+    call print_json_fixed3_field
+    json_z json_key_charts
+
+    add rsp, 40
+    ret
+
+print_json_string_field:
+    sub rsp, 72
+    mov [rsp + 32], rdx
+    mov [rsp + 40], r8
+    call print_z
+    mov rdx, [rsp + 32]
+    mov r8, [rsp + 40]
+    call print_json_slice_value
+    add rsp, 72
+    ret
+
+print_json_unescaped_string_field:
+    sub rsp, 72
+    mov [rsp + 32], rdx
+    mov [rsp + 40], r8
+    call print_z
+    mov rdx, [rsp + 32]
+    mov r8, [rsp + 40]
+    call print_json_unescaped_slice_value
+    add rsp, 72
+    ret
+
+print_json_u64_field:
+    sub rsp, 56
+    mov [rsp + 32], rdx
+    call print_z
+    mov rcx, [rsp + 32]
+    call print_u64
+    add rsp, 56
+    ret
+
+print_json_u32_field:
+    sub rsp, 56
+    mov [rsp + 32], edx
+    call print_z
+    mov ecx, [rsp + 32]
+    call print_u64
+    add rsp, 56
+    ret
+
+print_json_fixed2_field:
+    sub rsp, 56
+    mov [rsp + 32], rdx
+    call print_z
+    mov rcx, [rsp + 32]
+    call print_fixed2_inline
+    add rsp, 56
+    ret
+
+print_json_fixed3_field:
+    sub rsp, 56
+    mov [rsp + 32], rdx
+    call print_z
+    mov rcx, [rsp + 32]
+    call print_fixed3_inline
+    add rsp, 56
+    ret
+
+print_json_slice_value:
+    sub rsp, 88
+    mov [rsp + 32], rdx
+    mov [rsp + 40], r8
+    mov qword [rsp + 48], 0
+    json_z quote
+
+.loop:
+    mov rax, [rsp + 48]
+    cmp rax, [rsp + 40]
+    jae .done_string
+    mov r10, [rsp + 32]
+    movzx eax, byte [r10 + rax]
+    call print_json_byte
+    inc qword [rsp + 48]
+    jmp .loop
+
+.done_string:
+    json_z quote
+    add rsp, 88
+    ret
+
+print_json_unescaped_slice_value:
+    sub rsp, 88
+    mov [rsp + 32], rdx
+    mov [rsp + 40], r8
+    mov qword [rsp + 48], 0
+    json_z quote
+
+.loop:
+    mov rax, [rsp + 48]
+    cmp rax, [rsp + 40]
+    jae .done_string
+    mov r10, [rsp + 32]
+    cmp byte [r10 + rax], '\'
+    jne .current
+    inc qword [rsp + 48]
+    mov rax, [rsp + 48]
+    cmp rax, [rsp + 40]
+    jae .done_string
+    mov r10, [rsp + 32]
+
+.current:
+    movzx eax, byte [r10 + rax]
+    call print_json_byte
+    inc qword [rsp + 48]
+    jmp .loop
+
+.done_string:
+    json_z quote
+    add rsp, 88
+    ret
+
+print_json_byte:
+    sub rsp, 56
+    mov [rsp + 32], al
+    cmp al, '"'
+    je .quote
+    cmp al, '\'
+    je .slash
+    cmp al, 10
+    je .line_feed
+    cmp al, 13
+    je .carriage_return
+    cmp al, 9
+    je .tab
+    cmp al, 8
+    je .backspace
+    cmp al, 12
+    je .form_feed
+    cmp al, 20h
+    jb .unicode
+    lea rcx, [rsp + 32]
+    mov edx, 1
+    call print_raw
+    jmp .done
+
+.quote:
+    json_z json_escape_quote
+    jmp .done
+.slash:
+    json_z json_escape_slash
+    jmp .done
+.line_feed:
+    json_z json_escape_lf
+    jmp .done
+.carriage_return:
+    json_z json_escape_cr
+    jmp .done
+.tab:
+    json_z json_escape_tab
+    jmp .done
+.backspace:
+    json_z json_escape_bs
+    jmp .done
+.form_feed:
+    json_z json_escape_ff
+    jmp .done
+.unicode:
+    json_z json_escape_u00
+    movzx eax, byte [rsp + 32]
+    shr al, 4
+    lea r10, [hex_digits]
+    mov al, [r10 + rax]
+    mov [rsp + 40], al
+    lea rcx, [rsp + 40]
+    mov edx, 1
+    call print_raw
+    movzx eax, byte [rsp + 32]
+    and al, 0fh
+    lea r10, [hex_digits]
+    mov al, [r10 + rax]
+    mov [rsp + 40], al
+    lea rcx, [rsp + 40]
+    mov edx, 1
+    call print_raw
+
+.done:
+    add rsp, 56
+    ret
+
+print_json_duration_string:
+    sub rsp, 56
+    json_z quote
+    mov rax, [duration_ms]
+    xor edx, edx
+    mov r9d, 1000
+    div r9
+    mov rcx, rax
+    call print_u64
+    json_z quote
+    add rsp, 56
+    ret
+
+print_json_bpm_value:
+    sub rsp, 56
+    mov [rsp + 32], rcx
+    mov [rsp + 40], rdx
+    cmp rcx, rdx
+    jne .range
+    call print_u64
+    jmp .done
+
+.range:
+    json_z quote
+    mov rcx, [rsp + 32]
+    call print_u64
+    json_z minus
+    mov rcx, [rsp + 40]
+    call print_u64
+    json_z quote
+
+.done:
+    add rsp, 56
+    ret
+
+print_json_display_bpm_value:
+    sub rsp, 56
+    json_z quote
+    mov rcx, [display_text_min_bpm]
+    call print_u64
+    cmp qword [display_bpm_range_flag], 0
+    je .close
+    json_z json_space_dash_space
+    mov rcx, [display_text_max_bpm]
+    call print_u64
+.close:
+    json_z quote
+    add rsp, 56
+    ret
+
+print_fixed2_inline:
+    sub rsp, 72
+    mov [rsp + 32], rcx
+
+    mov rax, [rsp + 32]
+    test rax, rax
+    jge .positive
+    neg rax
+    mov [rsp + 32], rax
+    json_z minus
+    mov rax, [rsp + 32]
+
+.positive:
+    xor edx, edx
+    mov r9d, 100
+    div r9
+    mov [rsp + 40], rdx
+    mov rcx, rax
+    call print_u64
+    json_z dot
+    mov rax, [rsp + 40]
+    cmp rax, 10
+    jae .fraction
+    json_z zero_digit
+
+.fraction:
+    mov rcx, [rsp + 40]
+    call print_u64
+    add rsp, 72
+    ret
+
+print_fixed3_inline:
+    sub rsp, 72
+    mov [rsp + 32], rcx
+
+    mov rax, [rsp + 32]
+    test rax, rax
+    jge .positive
+    neg rax
+    mov [rsp + 32], rax
+    json_z minus
+    mov rax, [rsp + 32]
+
+.positive:
+    xor edx, edx
+    mov r9d, 1000
+    div r9
+    mov [rsp + 40], rdx
+    mov rcx, rax
+    call print_u64
+    json_z dot
+    mov rax, [rsp + 40]
+    cmp rax, 100
+    jae .fraction
+    json_z zero_digit
+    mov rax, [rsp + 40]
+    cmp rax, 10
+    jae .fraction
+    json_z zero_digit
+
+.fraction:
+    mov rcx, [rsp + 40]
+    call print_u64
+    add rsp, 72
+    ret
+
+print_json_u32_array:
+    sub rsp, 88
+    mov [rsp + 32], rdx
+    mov [rsp + 40], r8
+    mov qword [rsp + 48], 0
+    json_z open_bracket
+
+.loop:
+    mov rax, [rsp + 48]
+    cmp rax, [rsp + 40]
+    jae .done_array
+    test rax, rax
+    jz .value
+    json_z comma
+
+.value:
+    mov rax, [rsp + 48]
+    mov r10, [rsp + 32]
+    mov ecx, [r10 + rax * 4]
+    call print_u64
+    inc qword [rsp + 48]
+    jmp .loop
+
+.done_array:
+    json_z close_bracket
+    add rsp, 88
+    ret
+
+print_json_milli3_array:
+    sub rsp, 88
+    mov [rsp + 32], rdx
+    mov [rsp + 40], r8
+    mov qword [rsp + 48], 0
+    json_z open_bracket
+
+.loop:
+    mov rax, [rsp + 48]
+    cmp rax, [rsp + 40]
+    jae .done_array
+    test rax, rax
+    jz .value
+    json_z comma
+
+.value:
+    mov rax, [rsp + 48]
+    mov r10, [rsp + 32]
+    mov ecx, [r10 + rax * 4]
+    call print_milli3_inline
+    inc qword [rsp + 48]
+    jmp .loop
+
+.done_array:
+    json_z close_bracket
+    add rsp, 88
+    ret
+
+print_json_bool_array:
+    sub rsp, 88
+    mov [rsp + 32], rdx
+    mov [rsp + 40], r8
+    mov qword [rsp + 48], 0
+    json_z open_bracket
+
+.loop:
+    mov rax, [rsp + 48]
+    cmp rax, [rsp + 40]
+    jae .done_array
+    test rax, rax
+    jz .value
+    json_z comma
+
+.value:
+    mov rax, [rsp + 48]
+    mov r10, [rsp + 32]
+    cmp byte [r10 + rax], 0
+    je .false
+    json_z true_text
+    jmp .next
+.false:
+    json_z false_text
+.next:
+    inc qword [rsp + 48]
+    jmp .loop
+
+.done_array:
+    json_z close_bracket
+    add rsp, 88
+    ret
+
+print_json_bpm_segments_array:
+    sub rsp, 88
+    mov [rsp + 32], rdx
+    mov [rsp + 40], r8
+    mov qword [rsp + 48], 0
+    json_z open_bracket
+
+.loop:
+    mov rax, [rsp + 48]
+    cmp rax, [rsp + 40]
+    jae .done_array
+    test rax, rax
+    jz .segment
+    json_z comma
+
+.segment:
+    mov r10, [rsp + 48]
+    imul r10, ASSP_BPM_SEGMENT_SIZE
+    add r10, [rsp + 32]
+    mov [rsp + 56], r10
+    json_z open_bracket
+    mov r10, [rsp + 56]
+    mov rcx, [r10 + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    call print_milli_as_row48_f32_6_inline
+    json_z comma
+    mov r10, [rsp + 56]
+    mov rcx, [r10 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    call print_milli_bpm_itg6_inline
+    json_z close_bracket
+    inc qword [rsp + 48]
+    jmp .loop
+
+.done_array:
+    json_z close_bracket
+    add rsp, 88
+    ret
+
+print_json_second_segments_array:
+    sub rsp, 88
+    mov [rsp + 32], rdx
+    mov [rsp + 40], r8
+    mov qword [rsp + 48], 0
+    json_z open_bracket
+
+.loop:
+    mov rax, [rsp + 48]
+    cmp rax, [rsp + 40]
+    jae .done_array
+    test rax, rax
+    jz .segment
+    json_z comma
+
+.segment:
+    mov r10, [rsp + 48]
+    imul r10, ASSP_BPM_SEGMENT_SIZE
+    add r10, [rsp + 32]
+    mov [rsp + 56], r10
+    json_z open_bracket
+    mov r10, [rsp + 56]
+    mov rcx, [r10 + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    call print_milli_as_row48_f32_6_inline
+    json_z comma
+    mov r10, [rsp + 56]
+    mov rcx, [r10 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    call print_microseconds_f32_6_inline
+    json_z close_bracket
+    inc qword [rsp + 48]
+    jmp .loop
+
+.done_array:
+    json_z close_bracket
+    add rsp, 88
+    ret
+
+print_json_row_segments_array:
+    sub rsp, 88
+    mov [rsp + 32], rdx
+    mov [rsp + 40], r8
+    mov qword [rsp + 48], 0
+    json_z open_bracket
+
+.loop:
+    mov rax, [rsp + 48]
+    cmp rax, [rsp + 40]
+    jae .done_array
+    test rax, rax
+    jz .segment
+    json_z comma
+
+.segment:
+    mov r10, [rsp + 48]
+    imul r10, ASSP_BPM_SEGMENT_SIZE
+    add r10, [rsp + 32]
+    mov [rsp + 56], r10
+    json_z open_bracket
+    mov r10, [rsp + 56]
+    mov rcx, [r10 + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    call print_milli_as_row48_f32_6_inline
+    json_z comma
+    mov r10, [rsp + 56]
+    mov rcx, [r10 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    call print_milli_as_row48_f32_6_inline
+    json_z close_bracket
+    inc qword [rsp + 48]
+    jmp .loop
+
+.done_array:
+    json_z close_bracket
+    add rsp, 88
+    ret
+
+print_json_bpm_segments_string:
+    sub rsp, 88
+    mov [rsp + 32], rdx
+    mov [rsp + 40], r8
+    mov qword [rsp + 48], 0
+    json_z quote
+
+.loop:
+    mov rax, [rsp + 48]
+    cmp rax, [rsp + 40]
+    jae .done_string
+    test rax, rax
+    jz .segment
+    json_z comma
+
+.segment:
+    mov r10, [rsp + 48]
+    imul r10, ASSP_BPM_SEGMENT_SIZE
+    add r10, [rsp + 32]
+    mov [rsp + 56], r10
+    mov rcx, [r10 + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    call print_milli_as_row48_f32_6_inline
+    json_z equals
+    mov r10, [rsp + 56]
+    mov rcx, [r10 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    call print_milli_bpm_itg6_inline
+    inc qword [rsp + 48]
+    jmp .loop
+
+.done_string:
+    json_z quote
+    add rsp, 88
+    ret
+
+print_json_stream_sequences:
+    sub rsp, 88
+    mov [rsp + 32], rdx
+    mov [rsp + 40], r8
+    mov qword [rsp + 48], 0
+    json_z open_bracket
+
+.loop:
+    mov rax, [rsp + 48]
+    cmp rax, [rsp + 40]
+    jae .done_array
+    test rax, rax
+    jz .sequence
+    json_z comma
+
+.sequence:
+    mov r10, [rsp + 48]
+    imul r10, ASSP_STREAM_SEGMENT_SIZE
+    add r10, [rsp + 32]
+    mov [rsp + 56], r10
+    json_z stream_sequence_start_key
+    mov r10, [rsp + 56]
+    mov rcx, [r10 + ASSP_STREAM_SEGMENT_START]
+    call print_u64
+    json_z stream_sequence_end_key
+    mov r10, [rsp + 56]
+    mov rcx, [r10 + ASSP_STREAM_SEGMENT_END]
+    call print_u64
+    json_z stream_sequence_break_key
+    mov r10, [rsp + 56]
+    cmp qword [r10 + ASSP_STREAM_SEGMENT_IS_BREAK], 0
+    je .false
+    json_z true_text
+    jmp .close
+.false:
+    json_z false_text
+.close:
+    json_z close_brace
+    inc qword [rsp + 48]
+    jmp .loop
+
+.done_array:
+    json_z close_bracket
+    add rsp, 88
+    ret
+
+print_json_token_breakdown_field:
+    sub rsp, 88
+    mov [rsp + 40], rcx
+    mov [rsp + 48], rdx
+    lea rcx, [stream_token_buffer]
+    mov rdx, [stream_token_count]
+    mov r8d, [rsp + 48]
+    lea r9, [text_buffer]
+    mov qword [rsp + 32], TEXT_BUFFER_CAP
+    call assp_format_stream_tokens
+    cmp rax, TEXT_BUFFER_CAP
+    ja .too_long
+    mov [rsp + 56], rax
+    mov rcx, [rsp + 40]
+    call print_z
+    lea rdx, [text_buffer]
+    mov r8, [rsp + 56]
+    call print_json_slice_value
+    jmp .done
+
+.too_long:
+    mov rcx, [rsp + 40]
+    call print_z
+    lea rdx, [msg_breakdown_too_long]
+    mov r8d, msg_breakdown_too_long_end - msg_breakdown_too_long - 1
+    call print_json_slice_value
+
+.done:
+    add rsp, 88
+    ret
+
+print_json_segment_breakdown_field:
+    sub rsp, 88
+    mov [rsp + 40], rcx
+    mov [rsp + 48], rdx
+    lea rcx, [stream_segment_buffer]
+    mov rdx, [stream_segment_count]
+    mov r8d, [rsp + 48]
+    lea r9, [text_buffer]
+    mov qword [rsp + 32], TEXT_BUFFER_CAP
+    call assp_format_stream_segments
+    cmp rax, TEXT_BUFFER_CAP
+    ja .too_long
+    mov [rsp + 56], rax
+    mov rcx, [rsp + 40]
+    call print_z
+    lea rdx, [text_buffer]
+    mov r8, [rsp + 56]
+    call print_json_slice_value
+    jmp .done
+
+.too_long:
+    mov rcx, [rsp + 40]
+    call print_z
+    lea rdx, [msg_breakdown_too_long]
+    mov r8d, msg_breakdown_too_long_end - msg_breakdown_too_long - 1
+    call print_json_slice_value
+
+.done:
+    add rsp, 88
+    ret
+
+print_json_chart:
+    sub rsp, 40
+
+    json_z json_chart_open
+    lea rcx, [json_key_step_type_first]
+    mov rdx, [chart_info + ASSP_CHART_INFO_STEP_TYPE_PTR]
+    mov r8, [chart_info + ASSP_CHART_INFO_STEP_TYPE_LEN]
+    call print_json_string_field
+    lea rcx, [json_key_difficulty]
+    lea rdx, [difficulty_label_buffer]
+    mov r8, [difficulty_label_len]
+    call print_json_string_field
+    lea rcx, [json_key_tier_bpm]
+    mov rdx, [tier_bpm_centi]
+    call print_json_fixed2_field
+    lea rcx, [json_key_rating]
+    mov rdx, [chart_info + ASSP_CHART_INFO_METER_PTR]
+    mov r8, [chart_info + ASSP_CHART_INFO_METER_LEN]
+    call print_json_string_field
+    lea rcx, [json_key_matrix_rating]
+    mov rdx, [matrix_rating_centi]
+    call print_json_fixed2_field
+    lea rcx, [json_key_step_artists]
+    mov rdx, [step_artist_slice + ASSP_BYTE_SLICE_PTR]
+    mov r8, [step_artist_slice + ASSP_BYTE_SLICE_LEN]
+    call print_json_string_field
+    lea rcx, [json_key_tech_notation]
+    lea rdx, [tech_notation_buffer]
+    mov r8, [tech_notation_len]
+    call print_json_string_field
+    lea rcx, [json_key_sha1]
+    lea rdx, [hash_pair]
+    mov r8d, 16
+    call print_json_string_field
+    lea rcx, [json_key_bpm_neutral_sha1]
+    lea rdx, [hash_pair + 16]
+    mov r8d, 16
+    call print_json_string_field
+
+    json_z json_chart_arrow_stats
+    json_u64 json_key_total_arrows_first, [note_stats + ASSP_NOTE_STATS_ARROWS]
+    json_u64 json_key_left_arrows, [note_stats + ASSP_NOTE_STATS_LEFT]
+    json_u64 json_key_down_arrows, [note_stats + ASSP_NOTE_STATS_DOWN]
+    json_u64 json_key_up_arrows, [note_stats + ASSP_NOTE_STATS_UP]
+    json_u64 json_key_right_arrows, [note_stats + ASSP_NOTE_STATS_RIGHT]
+    json_u64 json_key_total_steps, [note_stats + ASSP_NOTE_STATS_STEPS]
+    json_u64 json_key_jumps, [note_stats + ASSP_NOTE_STATS_JUMPS]
+    json_u64 json_key_hands, [note_stats + ASSP_NOTE_STATS_HANDS]
+    json_u64 json_key_holds, [note_stats + ASSP_NOTE_STATS_HOLDS]
+    json_u64 json_key_rolls, [note_stats + ASSP_NOTE_STATS_ROLLS]
+    json_u64 json_key_mines, [note_stats + ASSP_NOTE_STATS_MINES]
+
+    json_z json_chart_gimmicks
+    json_u64 json_key_lifts_first, [note_stats + ASSP_NOTE_STATS_LIFTS]
+    json_u64 json_key_fakes, [note_stats + ASSP_NOTE_STATS_FAKES]
+    json_u64 json_key_stops_freezes, [stop_report_count]
+    json_u64 json_key_speeds, [speed_report_count]
+    json_u64 json_key_scrolls, [scroll_report_count]
+    json_u64 json_key_delays, [delay_report_count]
+    json_u64 json_key_warps, [warp_report_count]
+
+    json_z json_chart_timing
+    lea rcx, [json_key_beat0_offset_seconds_first]
+    mov rdx, [offset_ms]
+    call print_json_fixed3_field
+    lea rcx, [json_key_beat0_group_offset_seconds]
+    xor edx, edx
+    call print_json_u64_field
+    lea rcx, [json_key_hash_bpms]
+    mov rdx, [hash_bpms_ptr]
+    mov r8, [normalized_bpms_len]
+    call print_json_string_field
+    lea rcx, [json_key_bpms_formatted]
+    call print_z
+    lea rdx, [bpm_segment_buffer]
+    mov r8, [bpm_segment_count]
+    call print_json_bpm_segments_string
+    json_u64 json_key_bpm_min, [min_bpm]
+    json_u64 json_key_bpm_max, [max_bpm]
+    json_z json_key_display_bpm
+    call print_json_display_bpm_value
+    json_u64 json_key_display_bpm_min, [display_min_bpm]
+    json_u64 json_key_display_bpm_max, [display_max_bpm]
+    json_z json_key_bpms
+    lea rdx, [bpm_segment_buffer]
+    mov r8, [bpm_segment_count]
+    call print_json_bpm_segments_array
+    json_z json_key_stops_array
+    lea rdx, [stop_segment_buffer]
+    mov r8, [stop_segment_count]
+    call print_json_second_segments_array
+    json_z json_key_delays_array
+    lea rdx, [delay_segment_buffer]
+    mov r8, [delay_segment_count]
+    call print_json_second_segments_array
+    json_z json_key_time_signatures
+    json_z json_default_time_signatures
+    json_z json_key_warps_array
+    lea rdx, [warp_segment_buffer]
+    mov r8, [warp_segment_count]
+    call print_json_row_segments_array
+    json_z json_key_labels
+    json_z json_default_labels
+    json_z json_key_tickcounts
+    json_z json_default_tickcounts
+    json_z json_key_combos
+    json_z json_default_combos
+    json_z json_key_speeds_array
+    json_z json_default_speeds
+    json_z json_key_scrolls_array
+    json_z json_default_scrolls
+    json_z json_key_fakes_array
+    lea rdx, [fake_segment_buffer]
+    mov r8, [fake_segment_count]
+    call print_json_row_segments_array
+    json_z json_key_duration_seconds
+    movss xmm0, [duration_seconds_f32]
+    call print_f32_dec6_inline
+
+    json_z json_chart_stream_info
+    lea rcx, [json_key_total_streams_first]
+    mov rdx, [stream_counts + ASSP_STREAM_COUNTS_RUN16]
+    add rdx, [stream_counts + ASSP_STREAM_COUNTS_RUN20]
+    add rdx, [stream_counts + ASSP_STREAM_COUNTS_RUN24]
+    add rdx, [stream_counts + ASSP_STREAM_COUNTS_RUN32]
+    call print_json_u64_field
+    json_u64 json_key_16th_streams, [stream_counts + ASSP_STREAM_COUNTS_RUN16]
+    json_u64 json_key_20th_streams, [stream_counts + ASSP_STREAM_COUNTS_RUN20]
+    json_u64 json_key_24th_streams, [stream_counts + ASSP_STREAM_COUNTS_RUN24]
+    json_u64 json_key_32nd_streams, [stream_counts + ASSP_STREAM_COUNTS_RUN32]
+    json_u64 json_key_total_breaks, [stream_counts + ASSP_STREAM_COUNTS_TOTAL_BREAKS]
+    json_u64 json_key_sn_breaks, [stream_counts + ASSP_STREAM_COUNTS_SN_BREAKS]
+    lea rcx, [json_key_stream_percent]
+    mov rdx, [stream_percent_centi]
+    call print_json_fixed2_field
+    lea rcx, [json_key_adj_stream_percent]
+    mov rdx, [adjusted_stream_percent_centi]
+    call print_json_fixed2_field
+    lea rcx, [json_key_break_percent]
+    mov rdx, [break_percent_centi]
+    call print_json_fixed2_field
+    json_z json_key_stream_sequences
+    lea rdx, [stream_segment_buffer]
+    mov r8, [stream_segment_count]
+    call print_json_stream_sequences
+
+    json_z json_chart_nps
+    lea rcx, [json_key_max_nps_first]
+    mov rdx, [max_nps_centi]
+    call print_json_fixed2_field
+    lea rcx, [json_key_median_nps]
+    mov rdx, [median_nps_centi]
+    call print_json_fixed2_field
+    json_z json_key_notes_per_measure
+    lea rdx, [density_buffer]
+    mov r8, [measure_count]
+    call print_json_u32_array
+    json_z json_key_nps_per_measure
+    lea rdx, [nps_buffer]
+    mov r8, [nps_count]
+    call print_json_milli3_array
+    json_z json_key_equally_spaced
+    lea rdx, [equally_spaced_buffer]
+    mov r8, [equally_spaced_count]
+    call print_json_bool_array
+
+    json_z json_chart_breakdown
+    lea rcx, [json_key_sn_detailed_first]
+    mov edx, ASSP_BREAKDOWN_DETAILED
+    call print_json_token_breakdown_field
+    lea rcx, [json_key_sn_partial]
+    mov edx, ASSP_BREAKDOWN_PARTIAL
+    call print_json_token_breakdown_field
+    lea rcx, [json_key_sn_simple]
+    mov edx, ASSP_BREAKDOWN_SIMPLIFIED
+    call print_json_token_breakdown_field
+
+    json_z json_chart_stream_breakdown
+    lea rcx, [json_key_detailed_breakdown_first]
+    mov edx, ASSP_STREAM_BREAKDOWN_DETAILED
+    call print_json_segment_breakdown_field
+    lea rcx, [json_key_partial_breakdown]
+    mov edx, ASSP_STREAM_BREAKDOWN_PARTIAL
+    call print_json_segment_breakdown_field
+    lea rcx, [json_key_simple_breakdown]
+    mov edx, ASSP_STREAM_BREAKDOWN_SIMPLE
+    call print_json_segment_breakdown_field
+
+    json_z json_chart_mono
+    lea rcx, [json_key_total_candles_first]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_CANDLE_LEFT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_CANDLE_RIGHT * 4]
+    call print_json_u32_field
+    json_u32 json_key_left_foot_candles, [default_pattern_counts + ASSP_PATTERN_CANDLE_LEFT * 4]
+    json_u32 json_key_right_foot_candles, [default_pattern_counts + ASSP_PATTERN_CANDLE_RIGHT * 4]
+    lea rcx, [json_key_candles_percent]
+    mov rdx, [candle_percent_centi]
+    call print_json_fixed2_field
+    lea rcx, [json_key_total_mono]
+    mov edx, [facing_counts + 0]
+    add edx, [facing_counts + 4]
+    call print_json_u32_field
+    json_u32 json_key_left_face_mono, [facing_counts + 0]
+    json_u32 json_key_right_face_mono, [facing_counts + 4]
+    lea rcx, [json_key_mono_percent]
+    mov rdx, [mono_percent_centi]
+    call print_json_fixed2_field
+
+    call print_json_pattern_counts
+
+    json_z json_chart_tech_counts
+    json_u32 json_key_crossovers_first, [tech_counts + ASSP_TECH_COUNTS_CROSSOVERS]
+    json_u32 json_key_footswitches, [tech_counts + ASSP_TECH_COUNTS_FOOTSWITCHES]
+    json_u32 json_key_up_footswitches, [tech_counts + ASSP_TECH_COUNTS_UP_FOOTSWITCHES]
+    json_u32 json_key_down_footswitches, [tech_counts + ASSP_TECH_COUNTS_DOWN_FOOTSWITCHES]
+    json_u32 json_key_sideswitches, [tech_counts + ASSP_TECH_COUNTS_SIDESWITCHES]
+    json_u32 json_key_jacks, [tech_counts + ASSP_TECH_COUNTS_JACKS]
+    json_u32 json_key_brackets, [tech_counts + ASSP_TECH_COUNTS_BRACKETS]
+    json_u32 json_key_doublesteps, [tech_counts + ASSP_TECH_COUNTS_DOUBLESTEPS]
+    json_z json_chart_close
+
+    add rsp, 40
+    ret
+
+print_json_pattern_counts:
+    sub rsp, 40
+
+    json_z json_chart_pattern_counts
+    lea rcx, [json_key_total_boxes_first]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_BOX_LR * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_BOX_UD * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_BOX_CORNER_LD * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_BOX_CORNER_LU * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_BOX_CORNER_RD * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_BOX_CORNER_RU * 4]
+    call print_json_u32_field
+    json_u32 json_key_lr_boxes, [default_pattern_counts + ASSP_PATTERN_BOX_LR * 4]
+    json_u32 json_key_ud_boxes, [default_pattern_counts + ASSP_PATTERN_BOX_UD * 4]
+    lea rcx, [json_key_corner_boxes]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_BOX_CORNER_LD * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_BOX_CORNER_LU * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_BOX_CORNER_RD * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_BOX_CORNER_RU * 4]
+    call print_json_u32_field
+    json_u32 json_key_ld_boxes, [default_pattern_counts + ASSP_PATTERN_BOX_CORNER_LD * 4]
+    json_u32 json_key_lu_boxes, [default_pattern_counts + ASSP_PATTERN_BOX_CORNER_LU * 4]
+    json_u32 json_key_rd_boxes, [default_pattern_counts + ASSP_PATTERN_BOX_CORNER_RD * 4]
+    json_u32 json_key_ru_boxes, [default_pattern_counts + ASSP_PATTERN_BOX_CORNER_RU * 4]
+
+    json_z json_pattern_anchors
+    lea rcx, [json_key_total_anchors_first]
+    mov edx, [anchor_counts + 0]
+    add edx, [anchor_counts + 4]
+    add edx, [anchor_counts + 8]
+    add edx, [anchor_counts + 12]
+    call print_json_u32_field
+    json_u32 json_key_left_anchors, [anchor_counts + 0]
+    json_u32 json_key_down_anchors, [anchor_counts + 4]
+    json_u32 json_key_up_anchors, [anchor_counts + 8]
+    json_u32 json_key_right_anchors, [anchor_counts + 12]
+
+    json_z json_pattern_towers
+    lea rcx, [json_key_total_towers_first]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_TOWER_LR * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_TOWER_UD * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_TOWER_CORNER_LD * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_TOWER_CORNER_LU * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_TOWER_CORNER_RD * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_TOWER_CORNER_RU * 4]
+    call print_json_u32_field
+    json_u32 json_key_lr_towers, [default_pattern_counts + ASSP_PATTERN_TOWER_LR * 4]
+    json_u32 json_key_ud_towers, [default_pattern_counts + ASSP_PATTERN_TOWER_UD * 4]
+    lea rcx, [json_key_corner_towers]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_TOWER_CORNER_LD * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_TOWER_CORNER_LU * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_TOWER_CORNER_RD * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_TOWER_CORNER_RU * 4]
+    call print_json_u32_field
+    json_u32 json_key_ld_towers, [default_pattern_counts + ASSP_PATTERN_TOWER_CORNER_LD * 4]
+    json_u32 json_key_lu_towers, [default_pattern_counts + ASSP_PATTERN_TOWER_CORNER_LU * 4]
+    json_u32 json_key_rd_towers, [default_pattern_counts + ASSP_PATTERN_TOWER_CORNER_RD * 4]
+    json_u32 json_key_ru_towers, [default_pattern_counts + ASSP_PATTERN_TOWER_CORNER_RU * 4]
+
+    json_z json_pattern_triangles
+    lea rcx, [json_key_total_triangles_first]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_TRIANGLE_LDL * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_TRIANGLE_LUL * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_TRIANGLE_RDR * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_TRIANGLE_RUR * 4]
+    call print_json_u32_field
+    json_u32 json_key_ldl_triangles, [default_pattern_counts + ASSP_PATTERN_TRIANGLE_LDL * 4]
+    json_u32 json_key_lul_triangles, [default_pattern_counts + ASSP_PATTERN_TRIANGLE_LUL * 4]
+    json_u32 json_key_rdr_triangles, [default_pattern_counts + ASSP_PATTERN_TRIANGLE_RDR * 4]
+    json_u32 json_key_rur_triangles, [default_pattern_counts + ASSP_PATTERN_TRIANGLE_RUR * 4]
+
+    json_z json_pattern_staircases
+    lea rcx, [json_key_total_staircases_first]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_STAIRCASE_LEFT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_STAIRCASE_RIGHT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_STAIRCASE_INV_LEFT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_STAIRCASE_INV_RIGHT * 4]
+    call print_json_u32_field
+    json_u32 json_key_left_staircases, [default_pattern_counts + ASSP_PATTERN_STAIRCASE_LEFT * 4]
+    json_u32 json_key_right_staircases, [default_pattern_counts + ASSP_PATTERN_STAIRCASE_RIGHT * 4]
+    json_u32 json_key_left_inv_staircases, [default_pattern_counts + ASSP_PATTERN_STAIRCASE_INV_LEFT * 4]
+    json_u32 json_key_right_inv_staircases, [default_pattern_counts + ASSP_PATTERN_STAIRCASE_INV_RIGHT * 4]
+    lea rcx, [json_key_total_alt_staircases]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_ALT_STAIRCASES_LEFT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_ALT_STAIRCASES_RIGHT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_ALT_STAIRCASES_INV_LEFT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_ALT_STAIRCASES_INV_RIGHT * 4]
+    call print_json_u32_field
+    json_u32 json_key_left_alt_staircases, [default_pattern_counts + ASSP_PATTERN_ALT_STAIRCASES_LEFT * 4]
+    json_u32 json_key_right_alt_staircases, [default_pattern_counts + ASSP_PATTERN_ALT_STAIRCASES_RIGHT * 4]
+    json_u32 json_key_left_inv_alt_staircases, [default_pattern_counts + ASSP_PATTERN_ALT_STAIRCASES_INV_LEFT * 4]
+    json_u32 json_key_right_inv_alt_staircases, [default_pattern_counts + ASSP_PATTERN_ALT_STAIRCASES_INV_RIGHT * 4]
+    lea rcx, [json_key_total_double_staircases]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_D_STAIRCASE_LEFT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_D_STAIRCASE_RIGHT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_D_STAIRCASE_INV_LEFT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_D_STAIRCASE_INV_RIGHT * 4]
+    call print_json_u32_field
+    json_u32 json_key_left_double_staircases, [default_pattern_counts + ASSP_PATTERN_D_STAIRCASE_LEFT * 4]
+    json_u32 json_key_right_double_staircases, [default_pattern_counts + ASSP_PATTERN_D_STAIRCASE_RIGHT * 4]
+    json_u32 json_key_left_inv_double_staircases, [default_pattern_counts + ASSP_PATTERN_D_STAIRCASE_INV_LEFT * 4]
+    json_u32 json_key_right_inv_double_staircases, [default_pattern_counts + ASSP_PATTERN_D_STAIRCASE_INV_RIGHT * 4]
+
+    json_z json_pattern_sweeps
+    call print_json_quad_sweeps
+    json_z json_pattern_candle_sweeps
+    call print_json_quad_candle_sweeps
+    json_z json_pattern_copters
+    call print_json_quad_copters
+    json_z json_pattern_spirals
+    call print_json_quad_spirals
+    json_z json_pattern_turbo_candles
+    call print_json_quad_turbo_candles
+    json_z json_pattern_hip_breakers
+    call print_json_quad_hip_breakers
+    json_z json_pattern_doritos
+    call print_json_quad_doritos
+    json_z json_pattern_luchis
+    call print_json_quad_luchis
+    json_z close_brace
+
+    add rsp, 40
+    ret
+
+print_json_quad_sweeps:
+    sub rsp, 40
+    lea rcx, [json_key_total_sweeps_first]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_SWEEP_LEFT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_SWEEP_RIGHT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_SWEEP_INV_LEFT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_SWEEP_INV_RIGHT * 4]
+    call print_json_u32_field
+    json_u32 json_key_left_sweeps, [default_pattern_counts + ASSP_PATTERN_SWEEP_LEFT * 4]
+    json_u32 json_key_right_sweeps, [default_pattern_counts + ASSP_PATTERN_SWEEP_RIGHT * 4]
+    json_u32 json_key_left_inv_sweeps, [default_pattern_counts + ASSP_PATTERN_SWEEP_INV_LEFT * 4]
+    json_u32 json_key_right_inv_sweeps, [default_pattern_counts + ASSP_PATTERN_SWEEP_INV_RIGHT * 4]
+    add rsp, 40
+    ret
+
+print_json_quad_candle_sweeps:
+    sub rsp, 40
+    lea rcx, [json_key_total_candle_sweeps_first]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_SWEEP_CANDLE_LEFT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_SWEEP_CANDLE_RIGHT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_SWEEP_CANDLE_INV_LEFT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_SWEEP_CANDLE_INV_RIGHT * 4]
+    call print_json_u32_field
+    json_u32 json_key_left_candle_sweeps, [default_pattern_counts + ASSP_PATTERN_SWEEP_CANDLE_LEFT * 4]
+    json_u32 json_key_right_candle_sweeps, [default_pattern_counts + ASSP_PATTERN_SWEEP_CANDLE_RIGHT * 4]
+    json_u32 json_key_left_inv_candle_sweeps, [default_pattern_counts + ASSP_PATTERN_SWEEP_CANDLE_INV_LEFT * 4]
+    json_u32 json_key_right_inv_candle_sweeps, [default_pattern_counts + ASSP_PATTERN_SWEEP_CANDLE_INV_RIGHT * 4]
+    add rsp, 40
+    ret
+
+print_json_quad_copters:
+    sub rsp, 40
+    lea rcx, [json_key_total_copters_first]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_COPTER_LEFT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_COPTER_RIGHT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_COPTER_INV_LEFT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_COPTER_INV_RIGHT * 4]
+    call print_json_u32_field
+    json_u32 json_key_left_copters, [default_pattern_counts + ASSP_PATTERN_COPTER_LEFT * 4]
+    json_u32 json_key_right_copters, [default_pattern_counts + ASSP_PATTERN_COPTER_RIGHT * 4]
+    json_u32 json_key_left_inv_copters, [default_pattern_counts + ASSP_PATTERN_COPTER_INV_LEFT * 4]
+    json_u32 json_key_right_inv_copters, [default_pattern_counts + ASSP_PATTERN_COPTER_INV_RIGHT * 4]
+    add rsp, 40
+    ret
+
+print_json_quad_spirals:
+    sub rsp, 40
+    lea rcx, [json_key_total_spirals_first]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_SPIRAL_LEFT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_SPIRAL_RIGHT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_SPIRAL_INV_LEFT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_SPIRAL_INV_RIGHT * 4]
+    call print_json_u32_field
+    json_u32 json_key_left_spirals, [default_pattern_counts + ASSP_PATTERN_SPIRAL_LEFT * 4]
+    json_u32 json_key_right_spirals, [default_pattern_counts + ASSP_PATTERN_SPIRAL_RIGHT * 4]
+    json_u32 json_key_left_inv_spirals, [default_pattern_counts + ASSP_PATTERN_SPIRAL_INV_LEFT * 4]
+    json_u32 json_key_right_inv_spirals, [default_pattern_counts + ASSP_PATTERN_SPIRAL_INV_RIGHT * 4]
+    add rsp, 40
+    ret
+
+print_json_quad_turbo_candles:
+    sub rsp, 40
+    lea rcx, [json_key_total_turbo_candles_first]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_TURBO_CANDLE_LEFT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_TURBO_CANDLE_RIGHT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_TURBO_CANDLE_INV_LEFT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_TURBO_CANDLE_INV_RIGHT * 4]
+    call print_json_u32_field
+    json_u32 json_key_left_turbo_candles, [default_pattern_counts + ASSP_PATTERN_TURBO_CANDLE_LEFT * 4]
+    json_u32 json_key_right_turbo_candles, [default_pattern_counts + ASSP_PATTERN_TURBO_CANDLE_RIGHT * 4]
+    json_u32 json_key_left_inv_turbo_candles, [default_pattern_counts + ASSP_PATTERN_TURBO_CANDLE_INV_LEFT * 4]
+    json_u32 json_key_right_inv_turbo_candles, [default_pattern_counts + ASSP_PATTERN_TURBO_CANDLE_INV_RIGHT * 4]
+    add rsp, 40
+    ret
+
+print_json_quad_hip_breakers:
+    sub rsp, 40
+    lea rcx, [json_key_total_hip_breakers_first]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_HIP_BREAKER_LEFT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_HIP_BREAKER_RIGHT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_HIP_BREAKER_INV_LEFT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_HIP_BREAKER_INV_RIGHT * 4]
+    call print_json_u32_field
+    json_u32 json_key_left_hip_breakers, [default_pattern_counts + ASSP_PATTERN_HIP_BREAKER_LEFT * 4]
+    json_u32 json_key_right_hip_breakers, [default_pattern_counts + ASSP_PATTERN_HIP_BREAKER_RIGHT * 4]
+    json_u32 json_key_left_inv_hip_breakers, [default_pattern_counts + ASSP_PATTERN_HIP_BREAKER_INV_LEFT * 4]
+    json_u32 json_key_right_inv_hip_breakers, [default_pattern_counts + ASSP_PATTERN_HIP_BREAKER_INV_RIGHT * 4]
+    add rsp, 40
+    ret
+
+print_json_quad_doritos:
+    sub rsp, 40
+    lea rcx, [json_key_total_doritos_first]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_DORITO_LEFT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_DORITO_RIGHT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_DORITO_INV_LEFT * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_DORITO_INV_RIGHT * 4]
+    call print_json_u32_field
+    json_u32 json_key_left_doritos, [default_pattern_counts + ASSP_PATTERN_DORITO_LEFT * 4]
+    json_u32 json_key_right_doritos, [default_pattern_counts + ASSP_PATTERN_DORITO_RIGHT * 4]
+    json_u32 json_key_left_inv_doritos, [default_pattern_counts + ASSP_PATTERN_DORITO_INV_LEFT * 4]
+    json_u32 json_key_right_inv_doritos, [default_pattern_counts + ASSP_PATTERN_DORITO_INV_RIGHT * 4]
+    add rsp, 40
+    ret
+
+print_json_quad_luchis:
+    sub rsp, 40
+    lea rcx, [json_key_total_luchis_first]
+    mov edx, [default_pattern_counts + ASSP_PATTERN_LUCHI_LEFT_DU * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_LUCHI_LEFT_UD * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_LUCHI_RIGHT_DU * 4]
+    add edx, [default_pattern_counts + ASSP_PATTERN_LUCHI_RIGHT_UD * 4]
+    call print_json_u32_field
+    json_u32 json_key_left_du_luchis, [default_pattern_counts + ASSP_PATTERN_LUCHI_LEFT_DU * 4]
+    json_u32 json_key_left_ud_luchis, [default_pattern_counts + ASSP_PATTERN_LUCHI_LEFT_UD * 4]
+    json_u32 json_key_right_du_luchis, [default_pattern_counts + ASSP_PATTERN_LUCHI_RIGHT_DU * 4]
+    json_u32 json_key_right_ud_luchis, [default_pattern_counts + ASSP_PATTERN_LUCHI_RIGHT_UD * 4]
+    add rsp, 40
+    ret
+
 print_field:
     sub rsp, 56
     mov [rsp + 32], rdx
@@ -7152,6 +8423,7 @@ tag_credit db "#CREDIT:"
 tag_credit_end:
 msg_header db "assp standalone", 13, 10, 0
 msg_usage db "Usage: assp <simfile_path> [chart_index|all|list|quiet|bench|profile]", 13, 10
+          db "       assp <simfile_path> --json", 13, 10
           db "       assp --help", 13, 10
           db "Default: analyze every chart in the file.", 13, 10, 0
 msg_read_fail db "failed to read input file", 13, 10, 0
@@ -7165,6 +8437,7 @@ msg_nps_fail db "assembly nps pipeline failed", 13, 10, 0
 msg_duration_fail db "assembly duration pipeline failed", 13, 10, 0
 msg_tech_fail db "assembly tech parser/analyzer failed", 13, 10, 0
 msg_breakdown_too_long db "breakdown output exceeded text buffer", 13, 10, 0
+msg_breakdown_too_long_end:
 unknown_artist db "Unknown artist"
 unknown_artist_end:
 label_file db "file: ", 0
@@ -7604,6 +8877,231 @@ minute_suffix db "m ", 0
 second_suffix db "s", 0
 true_text db "true", 0
 false_text db "false", 0
+quote db '"', 0
+json_root_open db "{", 0
+json_root_end db "]}", 13, 10, 0
+json_key_title db '"title":', 0
+json_key_subtitle db ',"subtitle":', 0
+json_key_artist db ',"artist":', 0
+json_key_title_trans db ',"title_trans":', 0
+json_key_subtitle_trans db ',"subtitle_trans":', 0
+json_key_artist_trans db ',"artist_trans":', 0
+json_key_length db ',"length":', 0
+json_key_bpm db ',"bpm":', 0
+json_key_min_bpm db ',"min_bpm":', 0
+json_key_max_bpm db ',"max_bpm":', 0
+json_key_average_bpm db ',"average_bpm":', 0
+json_key_median_bpm db ',"median_bpm":', 0
+json_key_bpm_data db ',"bpm_data":', 0
+json_key_offset db ',"offset":', 0
+json_key_charts db ',"charts":[', 0
+json_escape_quote db '\"', 0
+json_escape_slash db '\\', 0
+json_escape_lf db '\n', 0
+json_escape_cr db '\r', 0
+json_escape_tab db '\t', 0
+json_escape_bs db '\b', 0
+json_escape_ff db '\f', 0
+json_escape_u00 db '\u00', 0
+json_space_dash_space db " - ", 0
+hex_digits db "0123456789abcdef"
+json_chart_open db '{"chart_info":{', 0
+json_key_step_type_first db '"step_type":', 0
+json_key_difficulty db ',"difficulty":', 0
+json_key_tier_bpm db ',"tier_bpm":', 0
+json_key_rating db ',"rating":', 0
+json_key_matrix_rating db ',"matrix_rating":', 0
+json_key_step_artists db ',"step_artists":', 0
+json_key_tech_notation db ',"tech_notation":', 0
+json_key_sha1 db ',"sha1":', 0
+json_key_bpm_neutral_sha1 db ',"bpm_neutral_sha1":', 0
+json_chart_arrow_stats db '},"arrow_stats":{', 0
+json_key_total_arrows_first db '"total_arrows":', 0
+json_key_left_arrows db ',"left_arrows":', 0
+json_key_down_arrows db ',"down_arrows":', 0
+json_key_up_arrows db ',"up_arrows":', 0
+json_key_right_arrows db ',"right_arrows":', 0
+json_key_total_steps db ',"total_steps":', 0
+json_key_jumps db ',"jumps":', 0
+json_key_hands db ',"hands":', 0
+json_key_holds db ',"holds":', 0
+json_key_rolls db ',"rolls":', 0
+json_key_mines db ',"mines":', 0
+json_chart_gimmicks db '},"gimmicks":{', 0
+json_key_lifts_first db '"lifts":', 0
+json_key_fakes db ',"fakes":', 0
+json_key_stops_freezes db ',"stops_freezes":', 0
+json_key_speeds db ',"speeds":', 0
+json_key_scrolls db ',"scrolls":', 0
+json_key_delays db ',"delays":', 0
+json_key_warps db ',"warps":', 0
+json_chart_timing db '},"timing":{', 0
+json_key_beat0_offset_seconds_first db '"beat0_offset_seconds":', 0
+json_key_beat0_group_offset_seconds db ',"beat0_group_offset_seconds":', 0
+json_key_hash_bpms db ',"hash_bpms":', 0
+json_key_bpms_formatted db ',"bpms_formatted":', 0
+json_key_bpm_min db ',"bpm_min":', 0
+json_key_bpm_max db ',"bpm_max":', 0
+json_key_display_bpm db ',"display_bpm":', 0
+json_key_display_bpm_min db ',"display_bpm_min":', 0
+json_key_display_bpm_max db ',"display_bpm_max":', 0
+json_key_bpms db ',"bpms":', 0
+json_key_stops_array db ',"stops":', 0
+json_key_delays_array db ',"delays":', 0
+json_key_time_signatures db ',"time_signatures":', 0
+json_default_time_signatures db '[[0,4,4]]', 0
+json_key_warps_array db ',"warps":', 0
+json_key_labels db ',"labels":', 0
+json_default_labels db '[[0,"Song Start"]]', 0
+json_key_tickcounts db ',"tickcounts":', 0
+json_default_tickcounts db '[[0,4]]', 0
+json_key_combos db ',"combos":', 0
+json_default_combos db '[[0,1,1]]', 0
+json_key_speeds_array db ',"speeds":', 0
+json_default_speeds db '[[0,1,0,0]]', 0
+json_key_scrolls_array db ',"scrolls":', 0
+json_default_scrolls db '[[0,1]]', 0
+json_key_fakes_array db ',"fakes":', 0
+json_key_duration_seconds db ',"duration_seconds":', 0
+json_chart_stream_info db '},"stream_info":{', 0
+json_key_total_streams_first db '"total_streams":', 0
+json_key_16th_streams db ',"16th_streams":', 0
+json_key_20th_streams db ',"20th_streams":', 0
+json_key_24th_streams db ',"24th_streams":', 0
+json_key_32nd_streams db ',"32nd_streams":', 0
+json_key_total_breaks db ',"total_breaks":', 0
+json_key_sn_breaks db ',"sn_breaks":', 0
+json_key_stream_percent db ',"stream_percent":', 0
+json_key_adj_stream_percent db ',"adj_stream_percent":', 0
+json_key_break_percent db ',"break_percent":', 0
+json_key_stream_sequences db ',"stream_sequences":', 0
+json_chart_nps db '},"nps":{', 0
+json_key_max_nps_first db '"max_nps":', 0
+json_key_median_nps db ',"median_nps":', 0
+json_key_notes_per_measure db ',"notes_per_measure":', 0
+json_key_nps_per_measure db ',"nps_per_measure":', 0
+json_key_equally_spaced db ',"equally_spaced_per_measure":', 0
+json_chart_breakdown db '},"breakdown":{', 0
+json_key_sn_detailed_first db '"sn_detailed_breakdown":', 0
+json_key_sn_partial db ',"sn_partial_breakdown":', 0
+json_key_sn_simple db ',"sn_simple_breakdown":', 0
+json_chart_stream_breakdown db '},"stream_breakdown":{', 0
+json_key_detailed_breakdown_first db '"detailed_breakdown":', 0
+json_key_partial_breakdown db ',"partial_breakdown":', 0
+json_key_simple_breakdown db ',"simple_breakdown":', 0
+json_chart_mono db '},"mono_candle_stats":{', 0
+json_key_total_candles_first db '"total_candles":', 0
+json_key_left_foot_candles db ',"left_foot_candles":', 0
+json_key_right_foot_candles db ',"right_foot_candles":', 0
+json_key_candles_percent db ',"candles_percent":', 0
+json_key_total_mono db ',"total_mono":', 0
+json_key_left_face_mono db ',"left_face_mono":', 0
+json_key_right_face_mono db ',"right_face_mono":', 0
+json_key_mono_percent db ',"mono_percent":', 0
+json_chart_pattern_counts db '},"pattern_counts":{"boxes":{', 0
+json_key_total_boxes_first db '"total_boxes":', 0
+json_key_lr_boxes db ',"lr_boxes":', 0
+json_key_ud_boxes db ',"ud_boxes":', 0
+json_key_corner_boxes db ',"corner_boxes":', 0
+json_key_ld_boxes db ',"ld_boxes":', 0
+json_key_lu_boxes db ',"lu_boxes":', 0
+json_key_rd_boxes db ',"rd_boxes":', 0
+json_key_ru_boxes db ',"ru_boxes":', 0
+json_pattern_anchors db '},"anchors":{', 0
+json_key_total_anchors_first db '"total_anchors":', 0
+json_key_left_anchors db ',"left_anchors":', 0
+json_key_down_anchors db ',"down_anchors":', 0
+json_key_up_anchors db ',"up_anchors":', 0
+json_key_right_anchors db ',"right_anchors":', 0
+json_pattern_towers db '},"towers":{', 0
+json_key_total_towers_first db '"total_towers":', 0
+json_key_lr_towers db ',"lr_towers":', 0
+json_key_ud_towers db ',"ud_towers":', 0
+json_key_corner_towers db ',"corner_towers":', 0
+json_key_ld_towers db ',"ld_towers":', 0
+json_key_lu_towers db ',"lu_towers":', 0
+json_key_rd_towers db ',"rd_towers":', 0
+json_key_ru_towers db ',"ru_towers":', 0
+json_pattern_triangles db '},"triangles":{', 0
+json_key_total_triangles_first db '"total_triangles":', 0
+json_key_ldl_triangles db ',"ldl_triangles":', 0
+json_key_lul_triangles db ',"lul_triangles":', 0
+json_key_rdr_triangles db ',"rdr_triangles":', 0
+json_key_rur_triangles db ',"rur_triangles":', 0
+json_pattern_staircases db '},"staircases":{', 0
+json_key_total_staircases_first db '"total_staircases":', 0
+json_key_left_staircases db ',"left_staircases":', 0
+json_key_right_staircases db ',"right_staircases":', 0
+json_key_left_inv_staircases db ',"left_inv_staircases":', 0
+json_key_right_inv_staircases db ',"right_inv_staircases":', 0
+json_key_total_alt_staircases db ',"total_alt_staircases":', 0
+json_key_left_alt_staircases db ',"left_alt_staircases":', 0
+json_key_right_alt_staircases db ',"right_alt_staircases":', 0
+json_key_left_inv_alt_staircases db ',"left_inv_alt_staircases":', 0
+json_key_right_inv_alt_staircases db ',"right_inv_alt_staircases":', 0
+json_key_total_double_staircases db ',"total_double_staircases":', 0
+json_key_left_double_staircases db ',"left_double_staircases":', 0
+json_key_right_double_staircases db ',"right_double_staircases":', 0
+json_key_left_inv_double_staircases db ',"left_inv_double_staircases":', 0
+json_key_right_inv_double_staircases db ',"right_inv_double_staircases":', 0
+json_pattern_sweeps db '},"sweeps":{', 0
+json_key_total_sweeps_first db '"total_sweeps":', 0
+json_key_left_sweeps db ',"left_sweeps":', 0
+json_key_right_sweeps db ',"right_sweeps":', 0
+json_key_left_inv_sweeps db ',"left_inv_sweeps":', 0
+json_key_right_inv_sweeps db ',"right_inv_sweeps":', 0
+json_pattern_candle_sweeps db '},"candle_sweeps":{', 0
+json_key_total_candle_sweeps_first db '"total_candle_sweeps":', 0
+json_key_left_candle_sweeps db ',"left_candle_sweeps":', 0
+json_key_right_candle_sweeps db ',"right_candle_sweeps":', 0
+json_key_left_inv_candle_sweeps db ',"left_inv_candle_sweeps":', 0
+json_key_right_inv_candle_sweeps db ',"right_inv_candle_sweeps":', 0
+json_pattern_copters db '},"copters":{', 0
+json_key_total_copters_first db '"total_copters":', 0
+json_key_left_copters db ',"left_copters":', 0
+json_key_right_copters db ',"right_copters":', 0
+json_key_left_inv_copters db ',"left_inv_copters":', 0
+json_key_right_inv_copters db ',"right_inv_copters":', 0
+json_pattern_spirals db '},"spirals":{', 0
+json_key_total_spirals_first db '"total_spirals":', 0
+json_key_left_spirals db ',"left_spirals":', 0
+json_key_right_spirals db ',"right_spirals":', 0
+json_key_left_inv_spirals db ',"left_inv_spirals":', 0
+json_key_right_inv_spirals db ',"right_inv_spirals":', 0
+json_pattern_turbo_candles db '},"turbo_candles":{', 0
+json_key_total_turbo_candles_first db '"total_turbo_candles":', 0
+json_key_left_turbo_candles db ',"left_turbo_candles":', 0
+json_key_right_turbo_candles db ',"right_turbo_candles":', 0
+json_key_left_inv_turbo_candles db ',"left_inv_turbo_candles":', 0
+json_key_right_inv_turbo_candles db ',"right_inv_turbo_candles":', 0
+json_pattern_hip_breakers db '},"hip_breakers":{', 0
+json_key_total_hip_breakers_first db '"total_hip_breakers":', 0
+json_key_left_hip_breakers db ',"left_hip_breakers":', 0
+json_key_right_hip_breakers db ',"right_hip_breakers":', 0
+json_key_left_inv_hip_breakers db ',"left_inv_hip_breakers":', 0
+json_key_right_inv_hip_breakers db ',"right_inv_hip_breakers":', 0
+json_pattern_doritos db '},"doritos":{', 0
+json_key_total_doritos_first db '"total_doritos":', 0
+json_key_left_doritos db ',"left_doritos":', 0
+json_key_right_doritos db ',"right_doritos":', 0
+json_key_left_inv_doritos db ',"left_inv_doritos":', 0
+json_key_right_inv_doritos db ',"right_inv_doritos":', 0
+json_pattern_luchis db '},"luchis":{', 0
+json_key_total_luchis_first db '"total_luchis":', 0
+json_key_left_du_luchis db ',"left_du_luchis":', 0
+json_key_left_ud_luchis db ',"left_ud_luchis":', 0
+json_key_right_du_luchis db ',"right_du_luchis":', 0
+json_key_right_ud_luchis db ',"right_ud_luchis":', 0
+json_chart_tech_counts db '},"tech_counts":{', 0
+json_key_crossovers_first db '"crossovers":', 0
+json_key_footswitches db ',"footswitches":', 0
+json_key_up_footswitches db ',"up_footswitches":', 0
+json_key_down_footswitches db ',"down_footswitches":', 0
+json_key_sideswitches db ',"sideswitches":', 0
+json_key_jacks db ',"jacks":', 0
+json_key_brackets db ',"brackets":', 0
+json_key_doublesteps db ',"doublesteps":', 0
+json_chart_close db '}}', 0
 newline db 13, 10, 0
 
 section .bss
@@ -7617,6 +9115,7 @@ chart_lanes resq 1
 list_mode resq 1
 all_mode resq 1
 quiet_mode resq 1
+json_mode resq 1
 profile_mode resq 1
 usage_mode resq 1
 globals_prepared resq 1

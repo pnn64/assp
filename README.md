@@ -129,8 +129,12 @@ Quiet all-chart modes:
 
 `quiet` and `bench` process every chart without printing chart reports. `bench`
 is intended for timing the parser/report computation without console output.
-Unsupported RSSP output flags such as `--json` currently fail with usage instead
-of silently selecting chart 0.
+
+Emit RSSP-shaped JSON for every chart:
+
+```powershell
+.\target\assp.exe .\fixtures\camellia_mix.ssc --json
+```
 
 ## RSSP Parity
 
