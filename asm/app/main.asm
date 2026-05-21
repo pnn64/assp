@@ -10,6 +10,9 @@ extern assp_os_open_readonly
 extern assp_os_read
 extern assp_os_stdout
 extern assp_os_write
+%ifdef ASSP_STARTUP_TRACE
+extern assp_os_trace
+%endif
 %ifdef ASSP_UNIX
 extern assp_os_argc
 extern assp_os_argv
@@ -127,6 +130,7 @@ global profile_step_dp_skip_count
 %define PARITY_ROW_CAP 262144
 %define PARITY_FAST_STATE_CAP 64
 %define PARITY_STATE_CAP 512
+%define PARITY_FAST_BACKTRACK_CAP (PARITY_ROW_CAP * PARITY_FAST_STATE_CAP)
 %define PARITY_BACKTRACK_CAP (PARITY_ROW_CAP * PARITY_STATE_CAP)
 %define MONO_THRESHOLD 6
 %define ASSP_OS_INVALID_HANDLE -1
@@ -156,26 +160,59 @@ global profile_step_dp_skip_count
     %endmacro
 %endif
 
+%ifdef ASSP_STARTUP_TRACE
+    %macro app_trace 1
+        push rax
+        push rcx
+        push rdx
+        push r8
+        push r9
+        push r10
+        push r11
+        sub rsp, 40
+        lea rcx, [%1]
+        mov edx, %1_end - %1
+        call assp_os_trace
+        add rsp, 40
+        pop r11
+        pop r10
+        pop r9
+        pop r8
+        pop rdx
+        pop rcx
+        pop rax
+    %endmacro
+%else
+    %macro app_trace 1
+    %endmacro
+%endif
+
 section .text
 
 start:
     sub rsp, 40
+    app_trace trace_app_start
 
     call init_stdout
     call parse_args
+    app_trace trace_app_args
     profile_init_call
 
+    app_trace trace_app_read
     profile_begin_call
     call read_file
     profile_end_call profile_read_file_ticks
     test eax, eax
     jz fail_read
+    app_trace trace_app_read_done
 
+    app_trace trace_app_hash
     profile_begin_call
     call prepare_file_md5
     profile_end_call profile_file_md5_ticks
     test eax, eax
     jz fail_hash
+    app_trace trace_app_hash_done
 
     cmp qword [list_mode], 0
     je .check_all
@@ -198,6 +235,7 @@ start:
     call exit_app
 
 .single_chart:
+    app_trace trace_app_single_chart
     call run_selected_chart
     test eax, eax
     jz fail_notes
@@ -3410,6 +3448,7 @@ prepare_step_parity_rows_4:
     cmp rax, PARITY_ROW_CAP
     ja .fail
     mov [parity_prepared_row_count], rax
+    app_trace trace_app_parity_prepared
 
     lea rdx, [parity_prepared_rows]
     lea rax, [parity_note_counts]
@@ -3451,21 +3490,27 @@ prepare_step_parity_rows_4:
     mov [rdx + ASSP_STEP_PARITY_WORKSPACE4_HITS], rax
     lea rax, [parity_keys]
     mov [rdx + ASSP_STEP_PARITY_WORKSPACE4_KEYS], rax
-    lea rax, [parity_backtrack_placements]
+    lea rax, [parity_fast_backtrack_placements]
     mov [rdx + ASSP_STEP_PARITY_WORKSPACE4_BACKTRACK_PLACEMENTS], rax
-    lea rax, [parity_backtrack_predecessors]
+    lea rax, [parity_fast_backtrack_predecessors]
     mov [rdx + ASSP_STEP_PARITY_WORKSPACE4_BACKTRACK_PREDECESSORS], rax
     mov qword [rdx + ASSP_STEP_PARITY_WORKSPACE4_STATE_CAP], PARITY_FAST_STATE_CAP
 
     lea rcx, [parity_prepared_rows]
     lea rdx, [parity_workspace]
     lea r8, [tech_counts]
+    app_trace trace_app_parity_fast
     profile_begin_call
     call assp_step_parity_count_prepared_rows_4
     profile_end_call profile_step_dp_fast_ticks
     test eax, eax
     jnz .success
 
+    app_trace trace_app_parity_full
+    lea rax, [parity_backtrack_placements]
+    mov [parity_workspace + ASSP_STEP_PARITY_WORKSPACE4_BACKTRACK_PLACEMENTS], rax
+    lea rax, [parity_backtrack_predecessors]
+    mov [parity_workspace + ASSP_STEP_PARITY_WORKSPACE4_BACKTRACK_PREDECESSORS], rax
     mov qword [parity_workspace + ASSP_STEP_PARITY_WORKSPACE4_STATE_CAP], PARITY_STATE_CAP
     lea rcx, [parity_prepared_rows]
     lea rdx, [parity_workspace]
@@ -6938,6 +6983,27 @@ print_write_direct:
 
 section .data
 
+trace_app_start db "assp app: start", 10
+trace_app_start_end:
+trace_app_args db "assp app: args parsed", 10
+trace_app_args_end:
+trace_app_read db "assp app: read file", 10
+trace_app_read_end:
+trace_app_read_done db "assp app: read done", 10
+trace_app_read_done_end:
+trace_app_hash db "assp app: md5", 10
+trace_app_hash_end:
+trace_app_hash_done db "assp app: md5 done", 10
+trace_app_hash_done_end:
+trace_app_single_chart db "assp app: single chart", 10
+trace_app_single_chart_end:
+trace_app_parity_prepared db "assp app: parity prepared", 10
+trace_app_parity_prepared_end:
+trace_app_parity_fast db "assp app: parity fast", 10
+trace_app_parity_fast_end:
+trace_app_parity_full db "assp app: parity full", 10
+trace_app_parity_full_end:
+
 app_const_thousand_f32 dd 1000.0
 app_const_48_f32 dd 48.0
 app_const_60_f32 dd 60.0
@@ -7711,6 +7777,9 @@ stream_token_buffer resb DENSITY_CAP * ASSP_STREAM_TOKEN_SIZE
 text_buffer resb TEXT_BUFFER_CAP
 file_buffer resb FILE_BUFFER_CAP
 print_buffer resb PRINT_BUFFER_CAP
+alignb 16
+parity_fast_backtrack_placements resb PARITY_FAST_BACKTRACK_CAP * 4
+parity_fast_backtrack_predecessors resd PARITY_FAST_BACKTRACK_CAP
 alignb 16
 parity_backtrack_placements resb PARITY_BACKTRACK_CAP * 4
 parity_backtrack_predecessors resd PARITY_BACKTRACK_CAP

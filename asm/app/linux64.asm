@@ -13,6 +13,7 @@ global assp_os_file_size
 global assp_os_open_readonly
 global assp_os_read
 global assp_os_stdout
+global assp_os_trace
 global assp_os_write
 
 extern start
@@ -53,6 +54,18 @@ assp_os_exit:
 ; Returns stdout fd.
 assp_os_stdout:
     mov eax, 1
+    ret
+
+; rcx = bytes, rdx = len. Writes to stderr.
+assp_os_trace:
+    push rsi
+    push rdi
+    mov rsi, rcx
+    mov eax, SYS_WRITE
+    mov edi, 2
+    syscall
+    pop rdi
+    pop rsi
     ret
 
 ; rcx = path. Returns Linux fd or -1.

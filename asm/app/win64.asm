@@ -12,6 +12,7 @@ global assp_os_file_size
 global assp_os_open_readonly
 global assp_os_read
 global assp_os_stdout
+global assp_os_trace
 global assp_os_write
 
 extern CloseHandle
@@ -44,6 +45,10 @@ assp_os_command_line:
     sub rsp, 40
     call GetCommandLineA
     add rsp, 40
+    ret
+
+; rcx = bytes, rdx = len. Startup tracing is Unix-focused for now.
+assp_os_trace:
     ret
 
 ; rcx = path. Returns handle or INVALID_HANDLE_VALUE.
