@@ -189,11 +189,13 @@ assp_os_close:
 
 ; rcx = fd, rdx = out i64 size. eax = nonzero on success.
 assp_os_file_size:
+    push rbx
     push rsi
     push rdi
+    push r12
 
-    mov r8, rdx
-    mov r9, rcx
+    mov rbx, rdx
+    mov r12, rcx
 
     mov eax, SYS_LSEEK
     mov rdi, rcx
@@ -201,10 +203,10 @@ assp_os_file_size:
     mov edx, SEEK_END
     syscall
     jc .fail
-    mov [r8], rax
+    mov [rbx], rax
 
     mov eax, SYS_LSEEK
-    mov rdi, r9
+    mov rdi, r12
     xor esi, esi
     mov edx, SEEK_SET
     syscall
@@ -217,8 +219,10 @@ assp_os_file_size:
     xor eax, eax
 
 .done:
+    pop r12
     pop rdi
     pop rsi
+    pop rbx
     ret
 
 ; rcx = fd, rdx = buffer, r8 = len, r9 = out u32 bytes read.
