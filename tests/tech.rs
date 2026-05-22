@@ -2,19 +2,19 @@ use assp::{
     StepParityActionCosts4, StepParityActionFlags4, StepParityBasicCosts4,
     StepParityBracketTapCosts4, StepParityDistanceCosts4, StepParityElapsedCosts4,
     StepParityOrientationCosts4, StepParityState4, StepParitySwitchCosts4, TechCounts,
-    calculate_step_tech_counts_from_placements_4, count_step_tech_brackets_minimized_4,
-    count_step_tech_brackets_minimized_8, find_bpms_for_chart, find_chart_by_index,
-    find_global_tag, minimize_chart_4, parse_offset_ms, parse_tech_notation,
-    step_parity_action_cost_4, step_parity_action_flags_4, step_parity_basic_action_costs_4,
-    step_parity_bpm_row_times_4, step_parity_bracket_tap_action_costs_4,
-    step_parity_count_hold_rows_4, step_parity_count_prepared_rows_4,
-    step_parity_distance_action_costs_4, step_parity_elapsed_action_costs_4,
-    step_parity_hold_head_ends_4, step_parity_orientation_action_costs_4,
-    step_parity_permutations_4, step_parity_place_rows_4, step_parity_prepare_hold_rows_4,
-    step_parity_prepare_tap_rows_4, step_parity_result_state_holds_4,
-    step_parity_result_state_no_holds_4, step_parity_row_best_candidates_4,
-    step_parity_row_key_candidates_4, step_parity_row_transitions_4,
-    step_parity_switch_action_costs_4,
+    calculate_step_tech_counts_from_placements_4, calculate_step_tech_counts_from_placements_8,
+    count_step_tech_brackets_minimized_4, count_step_tech_brackets_minimized_8,
+    find_bpms_for_chart, find_chart_by_index, find_global_tag, minimize_chart_4, parse_offset_ms,
+    parse_tech_notation, step_parity_action_cost_4, step_parity_action_flags_4,
+    step_parity_basic_action_costs_4, step_parity_bpm_row_times_4,
+    step_parity_bracket_tap_action_costs_4, step_parity_count_hold_rows_4,
+    step_parity_count_prepared_rows_4, step_parity_distance_action_costs_4,
+    step_parity_elapsed_action_costs_4, step_parity_hold_head_ends_4,
+    step_parity_orientation_action_costs_4, step_parity_permutations_4, step_parity_permutations_8,
+    step_parity_place_rows_4, step_parity_prepare_hold_rows_4, step_parity_prepare_tap_rows_4,
+    step_parity_result_state_holds_4, step_parity_result_state_no_holds_4,
+    step_parity_row_best_candidates_4, step_parity_row_key_candidates_4,
+    step_parity_row_transitions_4, step_parity_switch_action_costs_4,
 };
 use std::collections::HashSet;
 
@@ -296,6 +296,17 @@ fn placement_counts(
         .unwrap()
 }
 
+fn placement_counts_8(
+    tech_masks: &[u8],
+    note_counts: &[u8],
+    row_ms: &[i32],
+    placements: &[[u8; 8]],
+) -> TechCounts {
+    let placements: Vec<u8> = placements.iter().flatten().copied().collect();
+    calculate_step_tech_counts_from_placements_8(tech_masks, note_counts, row_ms, &placements)
+        .unwrap()
+}
+
 fn expected_timing_rows_counts(
     notes: &[u8],
     timing: &rssp_core::timing::TimingData,
@@ -361,6 +372,72 @@ fn valid_placement(placement: &[u8; 4]) -> bool {
         return false;
     }
     true
+}
+
+fn expected_permutations_8(mask: u8) -> Vec<[u8; 8]> {
+    fn rec(mask: u8, col: usize, used: u8, placement: &mut [u8; 8], out: &mut Vec<[u8; 8]>) {
+        if col == 8 {
+            if valid_placement_8(placement) {
+                out.push(*placement);
+            }
+            return;
+        }
+
+        if mask & (1 << col) == 0 {
+            placement[col] = 0;
+            rec(mask, col + 1, used, placement, out);
+            return;
+        }
+
+        for foot in 1..=4 {
+            let foot_mask = 1 << (foot - 1);
+            if used & foot_mask != 0 {
+                continue;
+            }
+            placement[col] = foot;
+            rec(mask, col + 1, used | foot_mask, placement, out);
+            placement[col] = 0;
+        }
+    }
+
+    let mut out = Vec::new();
+    rec(mask, 0, 0, &mut [0; 8], &mut out);
+    out
+}
+
+fn valid_placement_8(placement: &[u8; 8]) -> bool {
+    let mut pos = [u8::MAX; 5];
+    for (col, &foot) in placement.iter().enumerate() {
+        if foot != 0 {
+            pos[foot as usize] = col as u8;
+        }
+    }
+
+    if (pos[1] == u8::MAX && pos[2] != u8::MAX) || (pos[3] == u8::MAX && pos[4] != u8::MAX) {
+        return false;
+    }
+    bracket_ok_8(pos[1], pos[2]) && bracket_ok_8(pos[3], pos[4])
+}
+
+fn bracket_ok_8(a: u8, b: u8) -> bool {
+    if a == u8::MAX || b == u8::MAX {
+        return true;
+    }
+    const POINTS: [(i32, i32); 8] = [
+        (0, 1),
+        (1, 0),
+        (1, 2),
+        (2, 1),
+        (3, 1),
+        (4, 0),
+        (4, 2),
+        (5, 1),
+    ];
+    let (ax, ay) = POINTS[a as usize];
+    let (bx, by) = POINTS[b as usize];
+    let dx = ax - bx;
+    let dy = ay - by;
+    dx * dx + dy * dy <= 2
 }
 
 fn expected_result_state(
@@ -1074,6 +1151,17 @@ fn enumerates_step_parity_permutations_like_rssp_row_rules() {
             step_parity_permutations_4(mask),
             expected_permutations_4(mask),
             "mask {mask:04b}"
+        );
+    }
+}
+
+#[test]
+fn enumerates_double_step_parity_permutations_like_rssp_row_rules() {
+    for mask in 0..=u8::MAX {
+        assert_eq!(
+            step_parity_permutations_8(mask),
+            expected_permutations_8(mask),
+            "mask {mask:08b}"
         );
     }
 }
@@ -2315,6 +2403,108 @@ fn calculates_brackets_and_crossovers_from_parity_placements() {
 
     assert_eq!(
         placement_counts(&[8, 1], &[1, 1], &[0, 125], &[[0, 0, 0, 1], [3, 0, 0, 0]]),
+        TechCounts {
+            crossovers: 1,
+            ..TechCounts::default()
+        }
+    );
+}
+
+#[test]
+fn calculates_double_jacks_and_doublesteps_from_parity_placements() {
+    assert_eq!(
+        placement_counts_8(
+            &[32, 32],
+            &[1, 1],
+            &[0, 125],
+            &[[0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, 0, 0, 1, 0, 0]],
+        ),
+        TechCounts {
+            jacks: 1,
+            ..TechCounts::default()
+        }
+    );
+
+    assert_eq!(
+        placement_counts_8(
+            &[32, 64],
+            &[1, 1],
+            &[0, 125],
+            &[[0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, 0, 0, 0, 1, 0]],
+        ),
+        TechCounts {
+            doublesteps: 1,
+            ..TechCounts::default()
+        }
+    );
+}
+
+#[test]
+fn calculates_double_switches_from_parity_placements() {
+    assert_eq!(
+        placement_counts_8(
+            &[32, 32],
+            &[1, 1],
+            &[0, 125],
+            &[[0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, 0, 0, 3, 0, 0]],
+        ),
+        TechCounts {
+            footswitches: 1,
+            down_footswitches: 1,
+            ..TechCounts::default()
+        }
+    );
+
+    assert_eq!(
+        placement_counts_8(
+            &[64, 64],
+            &[1, 1],
+            &[0, 125],
+            &[[0, 0, 0, 0, 0, 0, 1, 0], [0, 0, 0, 0, 0, 0, 3, 0]],
+        ),
+        TechCounts {
+            footswitches: 1,
+            up_footswitches: 1,
+            ..TechCounts::default()
+        }
+    );
+
+    assert_eq!(
+        placement_counts_8(
+            &[128, 128],
+            &[1, 1],
+            &[0, 125],
+            &[[0, 0, 0, 0, 0, 0, 0, 1], [0, 0, 0, 0, 0, 0, 0, 3]],
+        ),
+        TechCounts {
+            sideswitches: 1,
+            ..TechCounts::default()
+        }
+    );
+}
+
+#[test]
+fn calculates_double_brackets_and_crossovers_from_parity_placements() {
+    assert_eq!(
+        placement_counts_8(
+            &[0, 195],
+            &[0, 4],
+            &[0, 125],
+            &[[0; 8], [1, 2, 0, 0, 0, 0, 3, 4]],
+        ),
+        TechCounts {
+            brackets: 2,
+            ..TechCounts::default()
+        }
+    );
+
+    assert_eq!(
+        placement_counts_8(
+            &[16, 4],
+            &[1, 1],
+            &[0, 125],
+            &[[0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 3, 0, 0, 0, 0, 0]],
+        ),
         TechCounts {
             crossovers: 1,
             ..TechCounts::default()

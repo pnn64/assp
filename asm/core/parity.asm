@@ -5,6 +5,7 @@ extern assp_calculate_step_tech_counts_from_placements_4
 extern assp_calculate_step_tech_counts_from_placements_seconds_4
 
 global assp_step_parity_permutations_4
+global assp_step_parity_permutations_8
 global assp_step_parity_result_state_no_holds_4
 global assp_step_parity_result_state_holds_4
 global assp_step_parity_row_transitions_4
@@ -100,6 +101,227 @@ assp_step_parity_permutations_4:
     jmp .copy_loop
 
 .done:
+    ret
+
+; ecx = 8-panel active column mask, rdx = optional output placements,
+; r8 = output capacity in placements. Each placement is 8 bytes of Foot ids:
+; 0 none, 1 left heel, 2 left toe, 3 right heel, 4 right toe.
+; rax = total valid placement count. Writes up to out_cap placements.
+assp_step_parity_permutations_8:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+    push rbp
+    sub rsp, 32
+
+    mov rbp, rsp
+    mov r14, rdx
+    mov r15, r8
+    xor ebx, ebx
+    mov qword [rbp], 0
+    mov dword [rbp + 8], 0
+    and ecx, 0ffh
+
+    xor r8d, r8d
+    xor edi, edi
+.collect_loop:
+    bt ecx, r8d
+    jnc .next_collect
+    cmp edi, 4
+    jae .done
+    mov [rbp + 8 + rdi], r8b
+    inc edi
+.next_collect:
+    inc r8d
+    cmp r8d, 8
+    jb .collect_loop
+
+    mov r12, rbp
+    lea r13, [rbp + 8]
+
+    test edi, edi
+    jz .emit_zero
+
+    mov r8d, 1
+.f0_loop:
+    cmp r8d, 4
+    ja .done
+    movzx eax, byte [r13]
+    mov [r12 + rax], r8b
+    cmp edi, 1
+    je .emit_f0
+
+    mov r9d, 1
+.f1_loop:
+    cmp r9d, 4
+    ja .next_f0
+    cmp r9d, r8d
+    je .next_f1
+    movzx eax, byte [r13 + 1]
+    mov [r12 + rax], r9b
+    cmp edi, 2
+    je .emit_f1
+
+    mov r10d, 1
+.f2_loop:
+    cmp r10d, 4
+    ja .next_f1
+    cmp r10d, r8d
+    je .next_f2
+    cmp r10d, r9d
+    je .next_f2
+    movzx eax, byte [r13 + 2]
+    mov [r12 + rax], r10b
+    cmp edi, 3
+    je .emit_f2
+
+    mov r11d, 1
+.f3_loop:
+    cmp r11d, 4
+    ja .next_f2
+    cmp r11d, r8d
+    je .next_f3
+    cmp r11d, r9d
+    je .next_f3
+    cmp r11d, r10d
+    je .next_f3
+    movzx eax, byte [r13 + 3]
+    mov [r12 + rax], r11b
+    call step_parity_emit_perm8
+.next_f3:
+    inc r11d
+    jmp .f3_loop
+
+.emit_f2:
+    call step_parity_emit_perm8
+.next_f2:
+    inc r10d
+    jmp .f2_loop
+
+.emit_f1:
+    call step_parity_emit_perm8
+.next_f1:
+    inc r9d
+    jmp .f1_loop
+
+.emit_f0:
+    call step_parity_emit_perm8
+.next_f0:
+    inc r8d
+    jmp .f0_loop
+
+.emit_zero:
+    call step_parity_emit_perm8
+
+.done:
+    mov rax, rbx
+    add rsp, 32
+    pop rbp
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
+; r12 = placement[8], r14 = optional out, r15 = out capacity, rbx = count.
+step_parity_emit_perm8:
+    push r8
+    push r9
+    push r10
+    push r11
+
+    mov r8d, 0ffh
+    mov r9d, 0ffh
+    mov r10d, 0ffh
+    mov r11d, 0ffh
+    xor ecx, ecx
+
+.scan_loop:
+    movzx eax, byte [r12 + rcx]
+    cmp al, 1
+    je .left_heel
+    cmp al, 2
+    je .left_toe
+    cmp al, 3
+    je .right_heel
+    cmp al, 4
+    je .right_toe
+    jmp .next_scan
+
+.left_heel:
+    mov r8d, ecx
+    jmp .next_scan
+.left_toe:
+    mov r9d, ecx
+    jmp .next_scan
+.right_heel:
+    mov r10d, ecx
+    jmp .next_scan
+.right_toe:
+    mov r11d, ecx
+
+.next_scan:
+    inc ecx
+    cmp ecx, 8
+    jb .scan_loop
+
+    cmp r8b, 0ffh
+    jne .check_right_toe
+    cmp r9b, 0ffh
+    jne .invalid
+.check_right_toe:
+    cmp r10b, 0ffh
+    jne .check_left_bracket
+    cmp r11b, 0ffh
+    jne .invalid
+
+.check_left_bracket:
+    cmp r8b, 0ffh
+    je .check_right_bracket
+    cmp r9b, 0ffh
+    je .check_right_bracket
+    lea rsi, [rel step_parity_bracket_ok_8]
+    mov eax, r8d
+    shl eax, 3
+    add eax, r9d
+    cmp byte [rsi + rax], 0
+    je .invalid
+
+.check_right_bracket:
+    cmp r10b, 0ffh
+    je .valid
+    cmp r11b, 0ffh
+    je .valid
+    lea rsi, [rel step_parity_bracket_ok_8]
+    mov eax, r10d
+    shl eax, 3
+    add eax, r11d
+    cmp byte [rsi + rax], 0
+    je .invalid
+
+.valid:
+    test r14, r14
+    jz .count
+    cmp rbx, r15
+    jae .count
+    mov rax, [r12]
+    mov [r14 + rbx * 8], rax
+
+.count:
+    inc rbx
+
+.invalid:
+    pop r11
+    pop r10
+    pop r9
+    pop r8
     ret
 
 ; rcx = initial assp_step_parity_state4, rdx = placement[4],
@@ -5112,6 +5334,15 @@ const_thousand_f64 dq 1000.0
 const_default_bpm_f64 dq 60.0
 rows_per_beat_f32 dd 48.0
 hold_end_none dd -1.0
+step_parity_bracket_ok_8:
+    db 1, 1, 1, 0, 0, 0, 0, 0
+    db 1, 1, 0, 1, 0, 0, 0, 0
+    db 1, 0, 1, 1, 0, 0, 0, 0
+    db 0, 1, 1, 1, 1, 0, 0, 0
+    db 0, 0, 0, 1, 1, 1, 1, 0
+    db 0, 0, 0, 0, 1, 1, 0, 1
+    db 0, 0, 0, 0, 1, 0, 1, 1
+    db 0, 0, 0, 0, 0, 1, 1, 1
 step_parity_perm4_counts:
     db 1, 2, 2, 6, 2, 6, 2, 8, 2, 2, 6, 8, 6, 8, 8, 16
 step_parity_perm4_offsets:

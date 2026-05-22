@@ -425,7 +425,16 @@ unsafe extern "C" {
         row_count: usize,
         out: *mut TechCounts,
     ) -> c_int;
+    fn assp_calculate_step_tech_counts_from_placements_8(
+        tech_masks: *const u8,
+        note_counts: *const u8,
+        row_ms: *const i32,
+        placements: *const u8,
+        row_count: usize,
+        out: *mut TechCounts,
+    ) -> c_int;
     fn assp_step_parity_permutations_4(mask: u32, out: *mut u8, out_cap: usize) -> usize;
+    fn assp_step_parity_permutations_8(mask: u32, out: *mut u8, out_cap: usize) -> usize;
     fn assp_step_parity_result_state_no_holds_4(
         initial: *const StepParityState4,
         placement: *const u8,
@@ -1280,6 +1289,35 @@ pub fn calculate_step_tech_counts_from_placements_4(
 }
 
 #[must_use]
+pub fn calculate_step_tech_counts_from_placements_8(
+    tech_masks: &[u8],
+    note_counts: &[u8],
+    row_ms: &[i32],
+    placements: &[u8],
+) -> Option<TechCounts> {
+    let row_count = tech_masks.len();
+    if note_counts.len() != row_count
+        || row_ms.len() != row_count
+        || placements.len() != row_count.saturating_mul(8)
+    {
+        return None;
+    }
+
+    let mut counts = TechCounts::default();
+    let ok = unsafe {
+        assp_calculate_step_tech_counts_from_placements_8(
+            tech_masks.as_ptr(),
+            note_counts.as_ptr(),
+            row_ms.as_ptr(),
+            placements.as_ptr(),
+            row_count,
+            &mut counts,
+        )
+    };
+    (ok != 0).then_some(counts)
+}
+
+#[must_use]
 pub fn step_parity_permutations_4(mask: u8) -> Vec<[u8; 4]> {
     let count =
         unsafe { assp_step_parity_permutations_4(u32::from(mask), std::ptr::null_mut(), 0) };
@@ -1292,6 +1330,26 @@ pub fn step_parity_permutations_4(mask: u8) -> Vec<[u8; 4]> {
     bytes
         .chunks_exact(4)
         .map(|chunk| [chunk[0], chunk[1], chunk[2], chunk[3]])
+        .collect()
+}
+
+#[must_use]
+pub fn step_parity_permutations_8(mask: u8) -> Vec<[u8; 8]> {
+    let count =
+        unsafe { assp_step_parity_permutations_8(u32::from(mask), std::ptr::null_mut(), 0) };
+    let mut bytes = vec![0u8; count.saturating_mul(8)];
+    if count != 0 {
+        unsafe {
+            assp_step_parity_permutations_8(u32::from(mask), bytes.as_mut_ptr(), count);
+        }
+    }
+    bytes
+        .chunks_exact(8)
+        .map(|chunk| {
+            [
+                chunk[0], chunk[1], chunk[2], chunk[3], chunk[4], chunk[5], chunk[6], chunk[7],
+            ]
+        })
         .collect()
 }
 
