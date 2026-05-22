@@ -120,6 +120,32 @@ The explicit all-chart mode remains available:
 .\target\assp.exe .\fixtures\camellia_mix.ssc all
 ```
 
+## RSSP All-Parity Harness
+
+The full golden parity data and `all_parity` test live in the `rssp` tree, but
+you can launch that harness from this directory and point it at the built ASSP
+executable:
+
+```powershell
+.\all-parity.ps1 -Quiet
+```
+
+By default the script expects `assp` and `rssp` to be sibling directories. If
+they are not, pass the RSSP repository root:
+
+```powershell
+.\all-parity.ps1 -RsspPath C:\path\to\rssp -Quiet
+```
+
+Use `-Filter` and `-Exact` for one file:
+
+```powershell
+.\all-parity.ps1 -NoBuild -Exact -Filter "Hard-Boiled Eggs 2\Reallywanna\reallywanna.ssc.zst"
+```
+
+Extra `all_parity` harness arguments can still be passed after `--` when
+needed.
+
 Quiet all-chart modes:
 
 ```powershell
