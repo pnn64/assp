@@ -8,14 +8,16 @@ use assp::{
     find_global_tag, minimize_chart_4, parse_offset_ms, parse_tech_notation,
     step_parity_action_cost_4, step_parity_action_cost_8, step_parity_action_flags_4,
     step_parity_action_flags_8, step_parity_basic_action_costs_4, step_parity_basic_action_costs_8,
-    step_parity_bpm_row_times_4, step_parity_bracket_tap_action_costs_4,
-    step_parity_bracket_tap_action_costs_8, step_parity_count_hold_rows_4,
+    step_parity_bpm_row_times_4, step_parity_bpm_row_times_8,
+    step_parity_bracket_tap_action_costs_4, step_parity_bracket_tap_action_costs_8,
+    step_parity_count_hold_rows_4, step_parity_count_hold_rows_8,
     step_parity_count_prepared_rows_4, step_parity_count_prepared_rows_8,
     step_parity_distance_action_costs_4, step_parity_distance_action_costs_8,
     step_parity_elapsed_action_costs_4, step_parity_elapsed_action_costs_8,
-    step_parity_hold_head_ends_4, step_parity_orientation_action_costs_4,
-    step_parity_orientation_action_costs_8, step_parity_permutations_4, step_parity_permutations_8,
-    step_parity_place_rows_4, step_parity_place_rows_8, step_parity_prepare_hold_rows_4,
+    step_parity_hold_head_ends_4, step_parity_hold_head_ends_8,
+    step_parity_orientation_action_costs_4, step_parity_orientation_action_costs_8,
+    step_parity_permutations_4, step_parity_permutations_8, step_parity_place_rows_4,
+    step_parity_place_rows_8, step_parity_prepare_hold_rows_4, step_parity_prepare_hold_rows_8,
     step_parity_prepare_tap_rows_4, step_parity_result_state_holds_4,
     step_parity_result_state_holds_8, step_parity_result_state_no_holds_4,
     step_parity_result_state_no_holds_8, step_parity_row_best_candidates_4,
@@ -125,12 +127,20 @@ fn trim_ws(mut bytes: &[u8]) -> &[u8] {
 }
 
 fn nonzero_row_beats_4(minimized: &[u8]) -> Vec<f32> {
+    nonzero_row_beats(minimized, 4)
+}
+
+fn nonzero_row_beats_8(minimized: &[u8]) -> Vec<f32> {
+    nonzero_row_beats(minimized, 8)
+}
+
+fn nonzero_row_beats(minimized: &[u8], lanes: usize) -> Vec<f32> {
     let mut beats = Vec::new();
     for (measure_idx, measure) in minimized.split(|&b| b == b',').enumerate() {
         let lines: Vec<_> = measure
             .split(|&b| b == b'\n')
             .map(trim_ws)
-            .filter(|line| line.len() >= 4)
+            .filter(|line| line.len() >= lanes)
             .collect();
         if lines.is_empty() {
             continue;
@@ -139,7 +149,7 @@ fn nonzero_row_beats_4(minimized: &[u8]) -> Vec<f32> {
         let start = measure_idx as f32 * 4.0;
         let step = 4.0 / lines.len() as f32;
         for (row_idx, line) in lines.iter().enumerate() {
-            if line[..4].iter().all(|&b| b == b'0') {
+            if line[..lanes].iter().all(|&b| b == b'0') {
                 continue;
             }
             let beat = (row_idx as f32).mul_add(step, start);
@@ -246,6 +256,24 @@ fn assert_bpm_only_fixture_step_parity(data: &[u8], chart_idx: usize) {
     let expected = expected_timing_rows_counts(notes, &timing);
 
     assert_eq!(actual, step_counts_subset(expected), "chart {chart_idx}");
+}
+
+#[test]
+fn computes_double_bpm_row_times_for_right_pad_rows() {
+    let data = b"00001000\n00000000\n10000000\n,\n00000001\n;\n";
+    let row_beats = nonzero_row_beats_8(data);
+    let bpms = [(0.0, 120.0)];
+    let (row_seconds, row_ms) = bpm_row_times(&row_beats, &bpms, 0.0);
+    let asm_bpms = assp::parse_bpm_map(b"0.000=120.000").unwrap();
+    let (asm_row_seconds, asm_row_ms, asm_row_beats) =
+        step_parity_bpm_row_times_8(data, &asm_bpms, 0).unwrap();
+
+    assert_eq!(asm_row_beats, row_beats);
+    assert_eq!(asm_row_ms, row_ms);
+    assert_eq!(asm_row_seconds.len(), row_seconds.len());
+    for (actual, expected) in asm_row_seconds.iter().zip(row_seconds.iter()) {
+        assert!((actual - expected).abs() <= 0.00001);
+    }
 }
 
 fn assert_timing_step_parity_counts(
@@ -2410,6 +2438,33 @@ fn cancels_pending_hold_heads_like_rssp_prepass() {
 }
 
 #[test]
+fn computes_double_hold_head_end_beats_for_step_parity_rows() {
+    let hold_ends = step_parity_hold_head_ends_8(
+        b"20000000\n00000000\n00001000\n30000000\n;\n",
+        &[0.0, 1.0, 1.5],
+    )
+    .unwrap();
+
+    assert_eq!(
+        hold_ends,
+        [
+            [1.5, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0],
+            [-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0],
+            [-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0],
+        ]
+    );
+
+    let hold_ends = step_parity_hold_head_ends_8(b"20000000\n30000000\n;\n", &[0.0, 0.5]).unwrap();
+    assert_eq!(
+        hold_ends,
+        [
+            [0.5, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0],
+            [-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0],
+        ]
+    );
+}
+
+#[test]
 fn prepares_hold_rows_with_live_hold_masks() {
     let rows = step_parity_prepare_hold_rows_4(
         b"2000\n0100\n3100\n1000\n;\n",
@@ -2423,6 +2478,32 @@ fn prepares_hold_rows_with_live_hold_masks() {
     assert_eq!(rows.tech_masks, [0b0001, 0b0010, 0b0010, 0b0001]);
     assert_eq!(rows.note_masks, [0b0001, 0b0010, 0b0010, 0b0001]);
     assert_eq!(rows.hold_masks, [0, 0b0001, 0b0001, 0]);
+    assert_eq!(rows.mine_masks, [0, 0, 0, 0]);
+    assert_eq!(rows.prev_row_live_holds, [0, 0, 1, 0]);
+    assert_eq!(rows.row_seconds, [0.0, 0.5, 1.0, 1.5]);
+    assert_eq!(rows.row_ms, [0, 500, 1000, 1500]);
+}
+
+#[test]
+fn prepares_double_hold_rows_with_live_hold_masks() {
+    let rows = step_parity_prepare_hold_rows_8(
+        b"20000000\n00001000\n30001000\n10000000\n;\n",
+        &[0.0, 0.5, 1.0, 1.5],
+        &[0, 500, 1000, 1500],
+        &[0.0, 0.5, 1.0, 1.5],
+    )
+    .unwrap();
+
+    assert_eq!(rows.note_counts, [1, 1, 1, 1]);
+    assert_eq!(
+        rows.tech_masks,
+        [0b0000_0001, 0b0001_0000, 0b0001_0000, 0b0000_0001]
+    );
+    assert_eq!(
+        rows.note_masks,
+        [0b0000_0001, 0b0001_0000, 0b0001_0000, 0b0000_0001]
+    );
+    assert_eq!(rows.hold_masks, [0, 0b0000_0001, 0b0000_0001, 0]);
     assert_eq!(rows.mine_masks, [0, 0, 0, 0]);
     assert_eq!(rows.prev_row_live_holds, [0, 0, 1, 0]);
     assert_eq!(rows.row_seconds, [0.0, 0.5, 1.0, 1.5]);
@@ -2561,6 +2642,32 @@ fn counts_hold_rows_through_prepare_and_backtrack_wrapper() {
 
     assert_eq!(
         step_parity_count_hold_rows_4(data, &seconds, &row_ms, &beats, 256),
+        Some(expected)
+    );
+}
+
+#[test]
+fn counts_double_hold_rows_through_prepare_and_backtrack_wrapper() {
+    let data = b"20000000\n00001000\n30001000\n10000000\n;\n";
+    let seconds = [0.0, 0.5, 1.0, 1.5];
+    let row_ms = [0, 500, 1000, 1500];
+    let beats = [0.0, 0.5, 1.0, 1.5];
+    let rows = step_parity_prepare_hold_rows_8(data, &seconds, &row_ms, &beats).unwrap();
+    let expected = step_parity_count_prepared_rows_8(
+        &rows.note_counts,
+        &rows.tech_masks,
+        &rows.note_masks,
+        &rows.hold_masks,
+        &rows.mine_masks,
+        &rows.prev_row_live_holds,
+        &rows.row_seconds,
+        &rows.row_ms,
+        256,
+    )
+    .unwrap();
+
+    assert_eq!(
+        step_parity_count_hold_rows_8(data, &seconds, &row_ms, &beats, 256),
         Some(expected)
     );
 }
