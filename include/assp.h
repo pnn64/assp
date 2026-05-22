@@ -120,6 +120,14 @@ typedef struct assp_step_parity_state4 {
     uint8_t holding_mask;
 } assp_step_parity_state4;
 
+typedef struct assp_step_parity_state8 {
+    uint8_t combined_columns[8];
+    int8_t where_feet_are[5];
+    uint8_t occupied_mask;
+    uint8_t moved_mask;
+    uint8_t holding_mask;
+} assp_step_parity_state8;
+
 typedef struct assp_step_parity_action_flags4 {
     uint8_t moved_left;
     uint8_t moved_right;
@@ -477,12 +485,39 @@ int32_t assp_step_parity_result_state_holds_4(
     int8_t *out_hit,
     uint32_t *out_key
 );
+int32_t assp_step_parity_result_state_no_holds_8(
+    const assp_step_parity_state8 *initial,
+    const uint8_t *placement,
+    uint32_t active_mask,
+    assp_step_parity_state8 *out_state,
+    int8_t *out_hit,
+    uint32_t *out_key
+);
+int32_t assp_step_parity_result_state_holds_8(
+    const assp_step_parity_state8 *initial,
+    const uint8_t *placement,
+    uint32_t active_mask,
+    uint32_t hold_mask,
+    assp_step_parity_state8 *out_state,
+    int8_t *out_hit,
+    uint32_t *out_key
+);
 size_t assp_step_parity_row_transitions_4(
     const assp_step_parity_state4 *initial,
     uint32_t note_mask,
     uint32_t hold_mask,
     uint8_t *out_placements,
     assp_step_parity_state4 *out_states,
+    int8_t *out_hits,
+    uint32_t *out_keys,
+    size_t out_cap
+);
+size_t assp_step_parity_row_transitions_8(
+    const assp_step_parity_state8 *initial,
+    uint32_t note_mask,
+    uint32_t hold_mask,
+    uint8_t *out_placements,
+    assp_step_parity_state8 *out_states,
     int8_t *out_hits,
     uint32_t *out_keys,
     size_t out_cap
@@ -495,6 +530,18 @@ size_t assp_step_parity_row_key_candidates_4(
     uint32_t *out_predecessors,
     uint8_t *out_placements,
     assp_step_parity_state4 *out_states,
+    int8_t *out_hits,
+    uint32_t *out_keys,
+    size_t out_cap
+);
+size_t assp_step_parity_row_key_candidates_8(
+    const assp_step_parity_state8 *initial_states,
+    size_t initial_state_count,
+    uint32_t note_mask,
+    uint32_t hold_mask,
+    uint32_t *out_predecessors,
+    uint8_t *out_placements,
+    assp_step_parity_state8 *out_states,
     int8_t *out_hits,
     uint32_t *out_keys,
     size_t out_cap

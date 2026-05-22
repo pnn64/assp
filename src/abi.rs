@@ -60,6 +60,16 @@ pub struct StepParityState4 {
 
 #[repr(C)]
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct StepParityState8 {
+    pub combined_columns: [u8; 8],
+    pub where_feet_are: [i8; 5],
+    pub occupied_mask: u8,
+    pub moved_mask: u8,
+    pub holding_mask: u8,
+}
+
+#[repr(C)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct StepParityActionFlags4 {
     pub moved_left: u8,
     pub moved_right: u8,
@@ -194,9 +204,23 @@ pub struct StepParityTransition4 {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StepParityTransition8 {
+    pub placement: [u8; 8],
+    pub state: StepParityState8,
+    pub hit: [i8; 5],
+    pub key: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct StepParityRowCandidate4 {
     pub predecessor: u32,
     pub transition: StepParityTransition4,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StepParityRowCandidate8 {
+    pub predecessor: u32,
+    pub transition: StepParityTransition8,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -452,12 +476,39 @@ unsafe extern "C" {
         out_hit: *mut i8,
         out_key: *mut u32,
     ) -> c_int;
+    fn assp_step_parity_result_state_no_holds_8(
+        initial: *const StepParityState8,
+        placement: *const u8,
+        active_mask: u32,
+        out_state: *mut StepParityState8,
+        out_hit: *mut i8,
+        out_key: *mut u32,
+    ) -> c_int;
+    fn assp_step_parity_result_state_holds_8(
+        initial: *const StepParityState8,
+        placement: *const u8,
+        active_mask: u32,
+        hold_mask: u32,
+        out_state: *mut StepParityState8,
+        out_hit: *mut i8,
+        out_key: *mut u32,
+    ) -> c_int;
     fn assp_step_parity_row_transitions_4(
         initial: *const StepParityState4,
         note_mask: u32,
         hold_mask: u32,
         out_placements: *mut u8,
         out_states: *mut StepParityState4,
+        out_hits: *mut i8,
+        out_keys: *mut u32,
+        out_cap: usize,
+    ) -> usize;
+    fn assp_step_parity_row_transitions_8(
+        initial: *const StepParityState8,
+        note_mask: u32,
+        hold_mask: u32,
+        out_placements: *mut u8,
+        out_states: *mut StepParityState8,
         out_hits: *mut i8,
         out_keys: *mut u32,
         out_cap: usize,
@@ -470,6 +521,18 @@ unsafe extern "C" {
         out_predecessors: *mut u32,
         out_placements: *mut u8,
         out_states: *mut StepParityState4,
+        out_hits: *mut i8,
+        out_keys: *mut u32,
+        out_cap: usize,
+    ) -> usize;
+    fn assp_step_parity_row_key_candidates_8(
+        initial_states: *const StepParityState8,
+        initial_state_count: usize,
+        note_mask: u32,
+        hold_mask: u32,
+        out_predecessors: *mut u32,
+        out_placements: *mut u8,
+        out_states: *mut StepParityState8,
         out_hits: *mut i8,
         out_keys: *mut u32,
         out_cap: usize,
@@ -1400,6 +1463,52 @@ pub fn step_parity_result_state_holds_4(
 }
 
 #[must_use]
+pub fn step_parity_result_state_no_holds_8(
+    initial: &StepParityState8,
+    placement: &[u8; 8],
+    active_mask: u8,
+) -> Option<(StepParityState8, [i8; 5], u32)> {
+    let mut state = StepParityState8::default();
+    let mut hit = [-1; 5];
+    let mut key = 0;
+    let ok = unsafe {
+        assp_step_parity_result_state_no_holds_8(
+            initial,
+            placement.as_ptr(),
+            u32::from(active_mask),
+            &mut state,
+            hit.as_mut_ptr(),
+            &mut key,
+        )
+    };
+    (ok != 0).then_some((state, hit, key))
+}
+
+#[must_use]
+pub fn step_parity_result_state_holds_8(
+    initial: &StepParityState8,
+    placement: &[u8; 8],
+    active_mask: u8,
+    hold_mask: u8,
+) -> Option<(StepParityState8, [i8; 5], u32)> {
+    let mut state = StepParityState8::default();
+    let mut hit = [-1; 5];
+    let mut key = 0;
+    let ok = unsafe {
+        assp_step_parity_result_state_holds_8(
+            initial,
+            placement.as_ptr(),
+            u32::from(active_mask),
+            u32::from(hold_mask),
+            &mut state,
+            hit.as_mut_ptr(),
+            &mut key,
+        )
+    };
+    (ok != 0).then_some((state, hit, key))
+}
+
+#[must_use]
 pub fn step_parity_row_transitions_4(
     initial: &StepParityState4,
     note_mask: u8,
@@ -1459,6 +1568,69 @@ pub fn step_parity_row_transitions_4(
 }
 
 #[must_use]
+pub fn step_parity_row_transitions_8(
+    initial: &StepParityState8,
+    note_mask: u8,
+    hold_mask: u8,
+) -> Vec<StepParityTransition8> {
+    let count = unsafe {
+        assp_step_parity_row_transitions_8(
+            initial,
+            u32::from(note_mask),
+            u32::from(hold_mask),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            0,
+        )
+    };
+
+    let mut placements = vec![0u8; count.saturating_mul(8)];
+    let mut states = vec![StepParityState8::default(); count];
+    let mut hits = vec![0i8; count.saturating_mul(5)];
+    let mut keys = vec![0u32; count];
+    if count != 0 {
+        unsafe {
+            assp_step_parity_row_transitions_8(
+                initial,
+                u32::from(note_mask),
+                u32::from(hold_mask),
+                placements.as_mut_ptr(),
+                states.as_mut_ptr(),
+                hits.as_mut_ptr(),
+                keys.as_mut_ptr(),
+                count,
+            );
+        }
+    }
+
+    (0..count)
+        .map(|i| StepParityTransition8 {
+            placement: [
+                placements[i * 8],
+                placements[i * 8 + 1],
+                placements[i * 8 + 2],
+                placements[i * 8 + 3],
+                placements[i * 8 + 4],
+                placements[i * 8 + 5],
+                placements[i * 8 + 6],
+                placements[i * 8 + 7],
+            ],
+            state: states[i],
+            hit: [
+                hits[i * 5],
+                hits[i * 5 + 1],
+                hits[i * 5 + 2],
+                hits[i * 5 + 3],
+                hits[i * 5 + 4],
+            ],
+            key: keys[i],
+        })
+        .collect()
+}
+
+#[must_use]
 pub fn step_parity_row_key_candidates_4(
     initial_states: &[StepParityState4],
     note_mask: u8,
@@ -1498,6 +1670,66 @@ pub fn step_parity_row_key_candidates_4(
                         placements[i * 4 + 1],
                         placements[i * 4 + 2],
                         placements[i * 4 + 3],
+                    ],
+                    state: states[i],
+                    hit: [
+                        hits[i * 5],
+                        hits[i * 5 + 1],
+                        hits[i * 5 + 2],
+                        hits[i * 5 + 3],
+                        hits[i * 5 + 4],
+                    ],
+                    key: keys[i],
+                },
+            })
+            .collect(),
+    )
+}
+
+#[must_use]
+pub fn step_parity_row_key_candidates_8(
+    initial_states: &[StepParityState8],
+    note_mask: u8,
+    hold_mask: u8,
+) -> Option<Vec<StepParityRowCandidate8>> {
+    let cap = initial_states.len().saturating_mul(24);
+    let mut predecessors = vec![0u32; cap];
+    let mut placements = vec![0u8; cap.saturating_mul(8)];
+    let mut states = vec![StepParityState8::default(); cap];
+    let mut hits = vec![0i8; cap.saturating_mul(5)];
+    let mut keys = vec![0u32; cap];
+    let count = unsafe {
+        assp_step_parity_row_key_candidates_8(
+            initial_states.as_ptr(),
+            initial_states.len(),
+            u32::from(note_mask),
+            u32::from(hold_mask),
+            predecessors.as_mut_ptr(),
+            placements.as_mut_ptr(),
+            states.as_mut_ptr(),
+            hits.as_mut_ptr(),
+            keys.as_mut_ptr(),
+            cap,
+        )
+    };
+    if count == NOT_FOUND {
+        return None;
+    }
+
+    Some(
+        (0..count)
+            .map(|i| StepParityRowCandidate8 {
+                predecessor: predecessors[i],
+                transition: StepParityTransition8 {
+                    placement: [
+                        placements[i * 8],
+                        placements[i * 8 + 1],
+                        placements[i * 8 + 2],
+                        placements[i * 8 + 3],
+                        placements[i * 8 + 4],
+                        placements[i * 8 + 5],
+                        placements[i * 8 + 6],
+                        placements[i * 8 + 7],
                     ],
                     state: states[i],
                     hit: [
@@ -3017,7 +3249,8 @@ mod tests {
         NoteStats, StepParityActionCosts4, StepParityActionFlags4, StepParityBasicCosts4,
         StepParityBracketTapCosts4, StepParityDistanceCosts4, StepParityElapsedCosts4,
         StepParityOrientationCosts4, StepParityPreparedRows4, StepParityRowCostCtx4,
-        StepParityState4, StepParitySwitchCosts4, StepParityWorkspace4, TechCounts,
+        StepParityState4, StepParityState8, StepParitySwitchCosts4, StepParityWorkspace4,
+        TechCounts,
     };
 
     #[test]
@@ -3036,6 +3269,12 @@ mod tests {
     fn step_parity_state4_layout_is_c_abi() {
         assert_eq!(std::mem::size_of::<StepParityState4>(), 12);
         assert_eq!(std::mem::align_of::<StepParityState4>(), 1);
+    }
+
+    #[test]
+    fn step_parity_state8_layout_is_c_abi() {
+        assert_eq!(std::mem::size_of::<StepParityState8>(), 16);
+        assert_eq!(std::mem::align_of::<StepParityState8>(), 1);
     }
 
     #[test]

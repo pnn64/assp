@@ -1,20 +1,23 @@
 use assp::{
     StepParityActionCosts4, StepParityActionFlags4, StepParityBasicCosts4,
     StepParityBracketTapCosts4, StepParityDistanceCosts4, StepParityElapsedCosts4,
-    StepParityOrientationCosts4, StepParityState4, StepParitySwitchCosts4, TechCounts,
-    calculate_step_tech_counts_from_placements_4, calculate_step_tech_counts_from_placements_8,
-    count_step_tech_brackets_minimized_4, count_step_tech_brackets_minimized_8,
-    find_bpms_for_chart, find_chart_by_index, find_global_tag, minimize_chart_4, parse_offset_ms,
-    parse_tech_notation, step_parity_action_cost_4, step_parity_action_flags_4,
-    step_parity_basic_action_costs_4, step_parity_bpm_row_times_4,
-    step_parity_bracket_tap_action_costs_4, step_parity_count_hold_rows_4,
-    step_parity_count_prepared_rows_4, step_parity_distance_action_costs_4,
-    step_parity_elapsed_action_costs_4, step_parity_hold_head_ends_4,
-    step_parity_orientation_action_costs_4, step_parity_permutations_4, step_parity_permutations_8,
-    step_parity_place_rows_4, step_parity_prepare_hold_rows_4, step_parity_prepare_tap_rows_4,
-    step_parity_result_state_holds_4, step_parity_result_state_no_holds_4,
+    StepParityOrientationCosts4, StepParityState4, StepParityState8, StepParitySwitchCosts4,
+    TechCounts, calculate_step_tech_counts_from_placements_4,
+    calculate_step_tech_counts_from_placements_8, count_step_tech_brackets_minimized_4,
+    count_step_tech_brackets_minimized_8, find_bpms_for_chart, find_chart_by_index,
+    find_global_tag, minimize_chart_4, parse_offset_ms, parse_tech_notation,
+    step_parity_action_cost_4, step_parity_action_flags_4, step_parity_basic_action_costs_4,
+    step_parity_bpm_row_times_4, step_parity_bracket_tap_action_costs_4,
+    step_parity_count_hold_rows_4, step_parity_count_prepared_rows_4,
+    step_parity_distance_action_costs_4, step_parity_elapsed_action_costs_4,
+    step_parity_hold_head_ends_4, step_parity_orientation_action_costs_4,
+    step_parity_permutations_4, step_parity_permutations_8, step_parity_place_rows_4,
+    step_parity_prepare_hold_rows_4, step_parity_prepare_tap_rows_4,
+    step_parity_result_state_holds_4, step_parity_result_state_holds_8,
+    step_parity_result_state_no_holds_4, step_parity_result_state_no_holds_8,
     step_parity_row_best_candidates_4, step_parity_row_key_candidates_4,
-    step_parity_row_transitions_4, step_parity_switch_action_costs_4,
+    step_parity_row_key_candidates_8, step_parity_row_transitions_4, step_parity_row_transitions_8,
+    step_parity_switch_action_costs_4,
 };
 use std::collections::HashSet;
 
@@ -500,6 +503,77 @@ fn expected_result_state(
     key |= u32::from(holding_mask) << 28;
     (
         StepParityState4 {
+            combined_columns: combined,
+            where_feet_are,
+            occupied_mask,
+            moved_mask,
+            holding_mask,
+        },
+        hit,
+        key,
+    )
+}
+
+fn expected_result_state_8(
+    initial: StepParityState8,
+    placement: [u8; 8],
+    active_mask: u8,
+    hold_mask: u8,
+) -> (StepParityState8, [i8; 5], u32) {
+    let mut combined = [0; 8];
+    let mut hit = [-1; 5];
+    let mut moved_mask = 0u8;
+    let mut holding_mask = 0u8;
+
+    for col in 0..8 {
+        if active_mask & (1 << col) == 0 {
+            continue;
+        }
+        let foot = placement[col];
+        if !(1..=4).contains(&foot) {
+            continue;
+        }
+        combined[col] = foot;
+        hit[foot as usize] = col as i8;
+        let foot_mask = 1 << (foot - 1);
+        let bit = 1 << col;
+        if hold_mask & bit != 0 {
+            holding_mask |= foot_mask;
+        }
+        if hold_mask & bit == 0 || initial.combined_columns[col] != foot {
+            moved_mask |= foot_mask;
+        }
+    }
+
+    let moved_left = moved_mask & 0b0011 != 0;
+    let moved_right = moved_mask & 0b1100 != 0;
+    let mut where_feet_are = [-1; 5];
+    let mut occupied_mask = 0u8;
+    let mut key = 0u32;
+
+    for col in 0..8 {
+        let mut foot = combined[col];
+        if foot == 0 {
+            let prev = initial.combined_columns[col];
+            foot = match prev {
+                1 | 3 if moved_mask & (1 << (prev - 1)) == 0 => prev,
+                2 if !moved_left => prev,
+                4 if !moved_right => prev,
+                _ => 0,
+            };
+        }
+        combined[col] = foot;
+        key |= u32::from(foot) << (col * 3);
+        if foot != 0 {
+            where_feet_are[foot as usize] = col as i8;
+            occupied_mask |= 1 << col;
+        }
+    }
+
+    key |= u32::from(moved_mask) << 24;
+    key |= u32::from(holding_mask) << 28;
+    (
+        StepParityState8 {
             combined_columns: combined,
             where_feet_are,
             occupied_mask,
@@ -1218,6 +1292,107 @@ fn calculates_hold_result_state_like_rssp_core() {
 }
 
 #[test]
+fn calculates_double_no_hold_result_state_like_rssp_core() {
+    let start = StepParityState8::default();
+    let cases = [
+        (start, [1, 0, 0, 0, 0, 0, 0, 0], 0b0000_0001),
+        (
+            StepParityState8 {
+                combined_columns: [1, 2, 0, 0, 0, 0, 0, 0],
+                ..StepParityState8::default()
+            },
+            [0, 0, 0, 0, 3, 0, 0, 0],
+            0b0001_0000,
+        ),
+        (
+            StepParityState8 {
+                combined_columns: [0, 0, 0, 0, 0, 0, 3, 4],
+                ..StepParityState8::default()
+            },
+            [0, 0, 1, 0, 0, 0, 0, 0],
+            0b0000_0100,
+        ),
+    ];
+
+    for (initial, placement, active_mask) in cases {
+        assert_eq!(
+            step_parity_result_state_no_holds_8(&initial, &placement, active_mask).unwrap(),
+            expected_result_state_8(initial, placement, active_mask, 0)
+        );
+    }
+}
+
+#[test]
+fn calculates_double_hold_result_state_like_rssp_core() {
+    let initial = StepParityState8 {
+        combined_columns: [1, 0, 0, 0, 0, 0, 3, 0],
+        ..StepParityState8::default()
+    };
+    let cases = [
+        ([1, 0, 0, 0, 0, 0, 0, 0], 0b0000_0001, 0b0000_0001),
+        ([0, 2, 0, 0, 0, 0, 3, 0], 0b0100_0010, 0b0100_0000),
+        ([0, 0, 0, 0, 0, 0, 0, 4], 0b1000_0000, 0b1000_0000),
+    ];
+
+    for (placement, active_mask, hold_mask) in cases {
+        assert_eq!(
+            step_parity_result_state_holds_8(&initial, &placement, active_mask, hold_mask).unwrap(),
+            expected_result_state_8(initial, placement, active_mask, hold_mask)
+        );
+    }
+}
+
+#[test]
+fn enumerates_double_row_transitions_from_parity_states_like_rssp_core() {
+    let initial_states = [
+        StepParityState8::default(),
+        StepParityState8 {
+            combined_columns: [1, 2, 0, 0, 0, 0, 0, 0],
+            where_feet_are: [-1, 0, 1, -1, -1],
+            occupied_mask: 0b0000_0011,
+            ..StepParityState8::default()
+        },
+        StepParityState8 {
+            combined_columns: [0, 0, 0, 0, 0, 0, 3, 4],
+            where_feet_are: [-1, -1, -1, 6, 7],
+            occupied_mask: 0b1100_0000,
+            ..StepParityState8::default()
+        },
+    ];
+
+    for initial in initial_states {
+        for active_mask in 0..=u8::MAX {
+            let hold_masks = [
+                0,
+                active_mask & 0b0000_0011,
+                active_mask & 0b1100_0000,
+                active_mask,
+            ];
+            for hold_mask in hold_masks {
+                let note_mask = active_mask & !hold_mask;
+                let actual = step_parity_row_transitions_8(&initial, note_mask, hold_mask);
+                let expected: Vec<_> = expected_permutations_8(active_mask)
+                    .into_iter()
+                    .map(|placement| {
+                        let (state, hit, key) =
+                            expected_result_state_8(initial, placement, active_mask, hold_mask);
+                        (placement, state, hit, key)
+                    })
+                    .collect();
+                let actual: Vec<_> = actual
+                    .into_iter()
+                    .map(|t| (t.placement, t.state, t.hit, t.key))
+                    .collect();
+                assert_eq!(
+                    actual, expected,
+                    "active={active_mask:08b} hold={hold_mask:08b}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn enumerates_row_transitions_from_parity_states_like_rssp_core() {
     let initial_states = [
         StepParityState4::default(),
@@ -1308,6 +1483,57 @@ fn dedupes_row_candidates_by_state_key_like_rssp_row_map() {
         .collect();
 
     assert!(expected.len() < initial_states.len() * expected_permutations_4(note_mask).len());
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn dedupes_double_row_candidates_by_state_key_like_rssp_row_map() {
+    let initial_states = [
+        StepParityState8::default(),
+        StepParityState8 {
+            combined_columns: [1, 0, 0, 0, 0, 0, 0, 0],
+            where_feet_are: [-1, 0, -1, -1, -1],
+            occupied_mask: 0b0000_0001,
+            ..StepParityState8::default()
+        },
+        StepParityState8 {
+            combined_columns: [0, 0, 0, 0, 0, 0, 3, 0],
+            where_feet_are: [-1, -1, -1, 6, -1],
+            occupied_mask: 0b0100_0000,
+            ..StepParityState8::default()
+        },
+    ];
+
+    let note_mask = 0b0001_0101u8;
+    let hold_mask = 0b0100_0000u8;
+    let active_mask = note_mask | hold_mask;
+    let mut seen = HashSet::new();
+    let mut expected = Vec::new();
+    for (pred, initial) in initial_states.iter().copied().enumerate() {
+        for placement in expected_permutations_8(active_mask) {
+            let (state, hit, key) =
+                expected_result_state_8(initial, placement, active_mask, hold_mask);
+            if seen.insert(key) {
+                expected.push((pred as u32, placement, state, hit, key));
+            }
+        }
+    }
+
+    let actual: Vec<_> = step_parity_row_key_candidates_8(&initial_states, note_mask, hold_mask)
+        .unwrap()
+        .into_iter()
+        .map(|c| {
+            (
+                c.predecessor,
+                c.transition.placement,
+                c.transition.state,
+                c.transition.hit,
+                c.transition.key,
+            )
+        })
+        .collect();
+
+    assert!(expected.len() < initial_states.len() * expected_permutations_8(active_mask).len());
     assert_eq!(actual, expected);
 }
 
