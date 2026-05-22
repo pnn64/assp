@@ -4,6 +4,7 @@ default rel
 global assp_count_step_tech_brackets_minimized_4
 global assp_count_step_tech_brackets_minimized_8
 global assp_parse_tech_notation
+global assp_split_double_chart_half_4
 
 section .text
 
@@ -222,6 +223,148 @@ count_brackets_8:
     count_bracket_pair 4, 6
     count_bracket_pair 5, 7
     count_bracket_pair 6, 7
+    ret
+
+; rcx = 8-panel note-data bytes, rdx = byte length, r8d = source half offset
+; (0 for left pad, 4 for right pad), r9 = output 4-panel note-data bytes,
+; stack arg 5 = output capacity. rax = output length, or ASSP_NOT_FOUND.
+assp_split_double_chart_half_4:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+
+    test rdx, rdx
+    jz .empty
+    test rcx, rcx
+    jz .fail
+    test r9, r9
+    jz .fail
+    cmp r8d, 0
+    je .offset_ok
+    cmp r8d, 4
+    jne .fail
+
+.offset_ok:
+    mov rsi, rcx
+    lea r12, [rcx + rdx]
+    mov r13d, r8d
+    mov rdi, r9
+    mov r15, [rsp + 96]
+    xor ebx, ebx
+
+.line_loop:
+    cmp rsi, r12
+    jae .success
+
+.trim_left:
+    cmp rsi, r12
+    jae .success
+    mov al, [rsi]
+    cmp al, ' '
+    je .trim_advance
+    cmp al, 9
+    jb .line_start
+    cmp al, 13
+    jbe .trim_advance
+    jmp .line_start
+
+.trim_advance:
+    inc rsi
+    jmp .trim_left
+
+.line_start:
+    mov al, [rsi]
+    cmp al, '/'
+    je .skip_to_next_line
+    cmp al, ','
+    je .copy_separator
+    cmp al, ';'
+    je .copy_final_separator
+
+    mov r10, rsi
+.find_row_end:
+    cmp r10, r12
+    jae .row_end_found
+    mov al, [r10]
+    cmp al, 10
+    je .row_end_found
+    cmp al, 13
+    je .row_end_found
+    inc r10
+    jmp .find_row_end
+
+.row_end_found:
+    mov rax, r10
+    sub rax, rsi
+    cmp rax, 8
+    jb .skip_to_next_line
+
+    mov rax, rbx
+    add rax, 5
+    jc .fail
+    cmp rax, r15
+    ja .fail
+
+    lea r11, [rsi + r13]
+    mov eax, [r11]
+    mov [rdi + rbx], eax
+    mov byte [rdi + rbx + 4], 10
+    add rbx, 5
+    mov rsi, r10
+    jmp .skip_to_next_line
+
+.copy_separator:
+    mov dl, ','
+    jmp .copy_separator_byte
+
+.copy_final_separator:
+    mov dl, ';'
+
+.copy_separator_byte:
+    mov rax, rbx
+    add rax, 2
+    jc .fail
+    cmp rax, r15
+    ja .fail
+    mov [rdi + rbx], dl
+    mov byte [rdi + rbx + 1], 10
+    add rbx, 2
+    cmp dl, ';'
+    je .success
+    jmp .skip_to_next_line
+
+.skip_to_next_line:
+    cmp rsi, r12
+    jae .success
+    mov al, [rsi]
+    inc rsi
+    cmp al, 10
+    je .line_loop
+    jmp .skip_to_next_line
+
+.empty:
+    xor eax, eax
+    jmp .done
+
+.success:
+    mov rax, rbx
+    jmp .done
+
+.fail:
+    mov rax, ASSP_NOT_FOUND
+
+.done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
     ret
 
 ; rcx = credit bytes, rdx = credit len, r8 = description bytes, r9 = description len,

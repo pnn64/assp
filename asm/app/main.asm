@@ -85,6 +85,7 @@ extern assp_parse_offset_us
 extern assp_parse_tech_notation
 extern assp_count_step_tech_brackets_minimized_4
 extern assp_count_step_tech_brackets_minimized_8
+extern assp_split_double_chart_half_4
 extern assp_step_parity_bpm_row_times_4
 extern assp_step_parity_hold_head_ends_4
 extern assp_step_parity_prepare_hold_rows_4
@@ -3797,6 +3798,13 @@ prepare_tech_counts:
     jmp .done
 
 .count_8:
+    cmp qword [fake_segment_count], 0
+    jne .count_8_brackets
+    call prepare_split_step_parity_8
+    test eax, eax
+    jnz .done
+
+.count_8_brackets:
     lea rcx, [minimized_buffer]
     mov rdx, [minimized_chart_len]
     lea r8, [tech_counts]
@@ -3806,6 +3814,132 @@ prepare_tech_counts:
 
 .done:
     add rsp, 40
+    ret
+
+; Interim double tech path: run the proven 4-panel parity solver on each pad
+; independently and keep the native 8-panel bracket pass for cross-pad brackets.
+prepare_split_step_parity_8:
+    sub rsp, 104
+
+    cmp qword [fake_segment_count], 0
+    jne .fail_no_restore
+
+    mov rax, [chart_info + ASSP_CHART_INFO_NOTES_PTR]
+    mov [rsp + 64], rax
+    mov rax, [chart_info + ASSP_CHART_INFO_NOTES_LEN]
+    mov [rsp + 72], rax
+
+    lea r8, [split_accum_counts]
+    xor eax, eax
+    mov [r8], rax
+    mov [r8 + 8], rax
+    mov [r8 + 16], rax
+    mov [r8 + 24], rax
+
+    lea rcx, [minimized_buffer]
+    mov rdx, [minimized_chart_len]
+    lea r8, [tech_counts]
+    call assp_count_step_tech_brackets_minimized_8
+    test eax, eax
+    jz .fail_restore
+    mov eax, [tech_counts + ASSP_TECH_COUNTS_BRACKETS]
+    mov [split_accum_counts + ASSP_TECH_COUNTS_BRACKETS], eax
+
+    xor r8d, r8d
+    call prepare_split_step_parity_half_8
+    test eax, eax
+    jz .fail_restore
+    call add_split_half_counts
+
+    mov rax, [rsp + 64]
+    mov [chart_info + ASSP_CHART_INFO_NOTES_PTR], rax
+    mov rax, [rsp + 72]
+    mov [chart_info + ASSP_CHART_INFO_NOTES_LEN], rax
+    mov r8d, 4
+    call prepare_split_step_parity_half_8
+    test eax, eax
+    jz .fail_restore
+    call add_split_half_counts
+
+    mov rax, [split_accum_counts]
+    mov [tech_counts], rax
+    mov rax, [split_accum_counts + 8]
+    mov [tech_counts + 8], rax
+    mov rax, [split_accum_counts + 16]
+    mov [tech_counts + 16], rax
+    mov rax, [split_accum_counts + 24]
+    mov [tech_counts + 24], rax
+
+    mov rax, [rsp + 64]
+    mov [chart_info + ASSP_CHART_INFO_NOTES_PTR], rax
+    mov rax, [rsp + 72]
+    mov [chart_info + ASSP_CHART_INFO_NOTES_LEN], rax
+    mov eax, ASSP_TRUE
+    jmp .done
+
+.fail_restore:
+    mov rax, [rsp + 64]
+    mov [chart_info + ASSP_CHART_INFO_NOTES_PTR], rax
+    mov rax, [rsp + 72]
+    mov [chart_info + ASSP_CHART_INFO_NOTES_LEN], rax
+
+.fail_no_restore:
+    xor eax, eax
+
+.done:
+    add rsp, 104
+    ret
+
+; r8d = source half offset, 0 for columns 0..3 or 4 for columns 4..7.
+prepare_split_step_parity_half_8:
+    sub rsp, 40
+
+    mov rcx, [chart_info + ASSP_CHART_INFO_NOTES_PTR]
+    mov rdx, [chart_info + ASSP_CHART_INFO_NOTES_LEN]
+    lea r9, [parity_split_buffer]
+    mov qword [rsp + 32], MINIMIZED_BUFFER_CAP
+    call assp_split_double_chart_half_4
+    cmp rax, ASSP_NOT_FOUND
+    je .fail
+
+    lea rcx, [parity_split_buffer]
+    mov [chart_info + ASSP_CHART_INFO_NOTES_PTR], rcx
+    mov [chart_info + ASSP_CHART_INFO_NOTES_LEN], rax
+
+    mov rax, [stop_segment_count]
+    or rax, [delay_segment_count]
+    or rax, [warp_segment_count]
+    jz .bpm_only
+
+    call prepare_step_parity_events_4
+    jmp .done
+
+.bpm_only:
+    call prepare_step_parity_bpm_4
+    jmp .done
+
+.fail:
+    xor eax, eax
+
+.done:
+    add rsp, 40
+    ret
+
+add_split_half_counts:
+    mov eax, [tech_counts + ASSP_TECH_COUNTS_CROSSOVERS]
+    add [split_accum_counts + ASSP_TECH_COUNTS_CROSSOVERS], eax
+    mov eax, [tech_counts + ASSP_TECH_COUNTS_FOOTSWITCHES]
+    add [split_accum_counts + ASSP_TECH_COUNTS_FOOTSWITCHES], eax
+    mov eax, [tech_counts + ASSP_TECH_COUNTS_UP_FOOTSWITCHES]
+    add [split_accum_counts + ASSP_TECH_COUNTS_UP_FOOTSWITCHES], eax
+    mov eax, [tech_counts + ASSP_TECH_COUNTS_DOWN_FOOTSWITCHES]
+    add [split_accum_counts + ASSP_TECH_COUNTS_DOWN_FOOTSWITCHES], eax
+    mov eax, [tech_counts + ASSP_TECH_COUNTS_SIDESWITCHES]
+    add [split_accum_counts + ASSP_TECH_COUNTS_SIDESWITCHES], eax
+    mov eax, [tech_counts + ASSP_TECH_COUNTS_JACKS]
+    add [split_accum_counts + ASSP_TECH_COUNTS_JACKS], eax
+    mov eax, [tech_counts + ASSP_TECH_COUNTS_DOUBLESTEPS]
+    add [split_accum_counts + ASSP_TECH_COUNTS_DOUBLESTEPS], eax
     ret
 
 prepare_offset:
@@ -9399,6 +9533,7 @@ global_timing_tags resb ASSP_TIMING_TAGS_SIZE
 chart_timing_tags resb ASSP_TIMING_TAGS_SIZE
 note_stats resb ASSP_NOTE_STATS_SIZE
 tech_counts resb ASSP_TECH_COUNTS_SIZE
+split_accum_counts resb ASSP_TECH_COUNTS_SIZE
 stream_counts resb ASSP_STREAM_COUNTS_SIZE
 num_buffer resb 32
 raw_total_steps resq 1
@@ -9546,6 +9681,7 @@ parity_placements resb PARITY_STATE_CAP * 4
 parity_hits resb PARITY_STATE_CAP * 5
 parity_keys resd PARITY_STATE_CAP
 row_scratch resq ROW_SCRATCH_CAP
+parity_split_buffer resb MINIMIZED_BUFFER_CAP
 minimized_buffer resb MINIMIZED_BUFFER_CAP
 density_buffer resd DENSITY_CAP
 stream_segment_buffer resb DENSITY_CAP * ASSP_STREAM_SEGMENT_SIZE

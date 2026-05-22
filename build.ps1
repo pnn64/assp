@@ -584,8 +584,8 @@ if ($CompareRssp -or $CompareAllCharts -or $CompareFixtures) {
             Compare-IntField "min_bpm" "bpm_min" ([int64]$chartJson.timing.bpm_min)
             Compare-IntField "max_bpm" "bpm_max" ([int64]$chartJson.timing.bpm_max)
             Compare-Text "display_bpm" ([string]$chartJson.timing.display_bpm)
-            Compare-Int "display_bpm_min" ([int64]$chartJson.timing.display_bpm_min)
-            Compare-Int "display_bpm_max" ([int64]$chartJson.timing.display_bpm_max)
+            Compare-Float "display_bpm_min" ([double]$chartJson.timing.display_bpm_min) 0.001
+            Compare-Float "display_bpm_max" ([double]$chartJson.timing.display_bpm_max) 0.001
             Compare-FloatItg "duration_seconds" ([double]$chartJson.timing.duration_seconds)
 
             Compare-Text "sn_detailed_breakdown" ([string]$chartJson.breakdown.sn_detailed_breakdown)
