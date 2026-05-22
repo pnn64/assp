@@ -6,18 +6,22 @@ use assp::{
     calculate_step_tech_counts_from_placements_8, count_step_tech_brackets_minimized_4,
     count_step_tech_brackets_minimized_8, find_bpms_for_chart, find_chart_by_index,
     find_global_tag, minimize_chart_4, parse_offset_ms, parse_tech_notation,
-    step_parity_action_cost_4, step_parity_action_flags_4, step_parity_basic_action_costs_4,
+    step_parity_action_cost_4, step_parity_action_cost_8, step_parity_action_flags_4,
+    step_parity_action_flags_8, step_parity_basic_action_costs_4, step_parity_basic_action_costs_8,
     step_parity_bpm_row_times_4, step_parity_bracket_tap_action_costs_4,
-    step_parity_count_hold_rows_4, step_parity_count_prepared_rows_4,
-    step_parity_distance_action_costs_4, step_parity_elapsed_action_costs_4,
+    step_parity_bracket_tap_action_costs_8, step_parity_count_hold_rows_4,
+    step_parity_count_prepared_rows_4, step_parity_count_prepared_rows_8,
+    step_parity_distance_action_costs_4, step_parity_distance_action_costs_8,
+    step_parity_elapsed_action_costs_4, step_parity_elapsed_action_costs_8,
     step_parity_hold_head_ends_4, step_parity_orientation_action_costs_4,
-    step_parity_permutations_4, step_parity_permutations_8, step_parity_place_rows_4,
-    step_parity_prepare_hold_rows_4, step_parity_prepare_tap_rows_4,
-    step_parity_result_state_holds_4, step_parity_result_state_holds_8,
-    step_parity_result_state_no_holds_4, step_parity_result_state_no_holds_8,
-    step_parity_row_best_candidates_4, step_parity_row_key_candidates_4,
+    step_parity_orientation_action_costs_8, step_parity_permutations_4, step_parity_permutations_8,
+    step_parity_place_rows_4, step_parity_place_rows_8, step_parity_prepare_hold_rows_4,
+    step_parity_prepare_tap_rows_4, step_parity_result_state_holds_4,
+    step_parity_result_state_holds_8, step_parity_result_state_no_holds_4,
+    step_parity_result_state_no_holds_8, step_parity_row_best_candidates_4,
+    step_parity_row_best_candidates_8, step_parity_row_key_candidates_4,
     step_parity_row_key_candidates_8, step_parity_row_transitions_4, step_parity_row_transitions_8,
-    step_parity_switch_action_costs_4,
+    step_parity_switch_action_costs_4, step_parity_switch_action_costs_8,
 };
 use std::collections::HashSet;
 
@@ -619,8 +623,99 @@ fn expected_action_flags(
     }
 }
 
+fn expected_action_flags_8(
+    initial: StepParityState8,
+    result: StepParityState8,
+    hit: [i8; 5],
+) -> StepParityActionFlags4 {
+    let left_moved_not_holding = initial.moved_mask & !initial.holding_mask & 0b0011 != 0;
+    let right_moved_not_holding = initial.moved_mask & !initial.holding_mask & 0b1100 != 0;
+    let moved_left = result.moved_mask & 0b0011 != 0;
+    let moved_right = result.moved_mask & 0b1100 != 0;
+    let did_jump = left_moved_not_holding && right_moved_not_holding;
+
+    let did_jack = |heel: u8, toe: u8, moved: bool, moved_not_holding: bool| {
+        if did_jump || !moved || !moved_not_holding {
+            return false;
+        }
+        [heel, toe].into_iter().any(|foot| {
+            let col = hit[foot as usize];
+            col >= 0
+                && initial.combined_columns[col as usize] == foot
+                && result.holding_mask & (1 << (foot - 1)) == 0
+        })
+    };
+
+    StepParityActionFlags4 {
+        moved_left: u8::from(moved_left),
+        moved_right: u8::from(moved_right),
+        did_jump: u8::from(did_jump),
+        jacked_left: u8::from(did_jack(1, 2, moved_left, left_moved_not_holding)),
+        jacked_right: u8::from(did_jack(3, 4, moved_right, right_moved_not_holding)),
+        left_moved_not_holding: u8::from(left_moved_not_holding),
+        right_moved_not_holding: u8::from(right_moved_not_holding),
+    }
+}
+
 fn expected_basic_costs(
     result: StepParityState4,
+    flags: StepParityActionFlags4,
+    multi_active: bool,
+    mine_mask: u8,
+    prev_row_has_live_hold: bool,
+) -> StepParityBasicCosts4 {
+    let mine = if mine_mask & result.occupied_mask != 0 {
+        10000.0
+    } else {
+        0.0
+    };
+
+    let bracket_jack = if multi_active
+        && result.holding_mask == 0
+        && flags.did_jump == 0
+        && flags.moved_left != flags.moved_right
+    {
+        let left = flags.jacked_left != 0 && result.moved_mask & 0b0011 == 0b0011;
+        let right = flags.jacked_right != 0 && result.moved_mask & 0b1100 == 0b1100;
+        20.0 * f32::from(left as u8 + right as u8)
+    } else {
+        0.0
+    };
+
+    let did_double_step =
+        (flags.moved_left != 0 && flags.jacked_left == 0 && flags.left_moved_not_holding != 0)
+            || (flags.moved_right != 0
+                && flags.jacked_right == 0
+                && flags.right_moved_not_holding != 0);
+    let doublestep = if flags.moved_left != flags.moved_right
+        && flags.did_jump == 0
+        && result.holding_mask == 0
+        && did_double_step
+        && !prev_row_has_live_hold
+    {
+        850.0
+    } else {
+        0.0
+    };
+
+    let missed_footswitch = if mine_mask != 0 && (flags.jacked_left != 0 || flags.jacked_right != 0)
+    {
+        500.0
+    } else {
+        0.0
+    };
+
+    StepParityBasicCosts4 {
+        mine,
+        bracket_jack,
+        doublestep,
+        missed_footswitch,
+        total: mine + bracket_jack + doublestep + missed_footswitch,
+    }
+}
+
+fn expected_basic_costs_8(
+    result: StepParityState8,
     flags: StepParityActionFlags4,
     multi_active: bool,
     mine_mask: u8,
@@ -771,8 +866,104 @@ fn expected_switch_costs(
     }
 }
 
+fn expected_switch_costs_8(
+    initial: StepParityState8,
+    result: StepParityState8,
+    placement: [u8; 8],
+    active_mask: u8,
+    side_mask: u8,
+    mine_mask: u8,
+    elapsed: f32,
+) -> StepParitySwitchCosts4 {
+    let footswitch = if mine_mask == 0 && (0.2f32..0.4f32).contains(&elapsed) {
+        let mut cost = 0.0;
+        for col in 0..8 {
+            if active_mask & (1 << col) == 0 {
+                continue;
+            }
+            let res = placement[col];
+            let init = initial.combined_columns[col];
+            if init == 0 || res == 0 {
+                continue;
+            }
+            let other_part = match res {
+                1 => 2,
+                2 => 1,
+                3 => 4,
+                4 => 3,
+                _ => 0,
+            };
+            if init != res && init != other_part {
+                let time_scaled = elapsed - 0.2f32;
+                cost = (time_scaled / (0.2f32 + time_scaled)) * 325.0f32;
+                break;
+            }
+        }
+        cost
+    } else {
+        0.0
+    };
+
+    let mut sideswitch = 0.0;
+    for col in 0..8 {
+        if side_mask & (1 << col) == 0 {
+            continue;
+        }
+        let res = placement[col];
+        let init = initial.combined_columns[col];
+        if init != res
+            && res != 0
+            && init != 0
+            && init <= 4
+            && result.moved_mask & (1 << (init - 1)) == 0
+        {
+            sideswitch += 130.0;
+        }
+    }
+
+    StepParitySwitchCosts4 {
+        footswitch,
+        sideswitch,
+        total: footswitch + sideswitch,
+    }
+}
+
 fn expected_bracket_tap_costs(
     initial: StepParityState4,
+    hit: [i8; 5],
+    hold_mask: u8,
+    elapsed: f32,
+) -> StepParityBracketTapCosts4 {
+    let pair_cost = |heel: i8, toe: i8, moved_mask: u8| -> f32 {
+        if heel < 0 || toe < 0 {
+            return 0.0;
+        }
+        let heel = heel as usize;
+        let toe = toe as usize;
+        let hm = hold_mask & (1 << heel) != 0;
+        let tm = hold_mask & (1 << toe) != 0;
+        if hm == tm {
+            return 0.0;
+        }
+        let jack_penalty = if initial.moved_mask & moved_mask != 0 {
+            1.0f32 / elapsed
+        } else {
+            1.0
+        };
+        400.0 * jack_penalty
+    };
+
+    let left = pair_cost(hit[1], hit[2], 0b0011);
+    let right = pair_cost(hit[3], hit[4], 0b1100);
+    StepParityBracketTapCosts4 {
+        left,
+        right,
+        total: left + right,
+    }
+}
+
+fn expected_bracket_tap_costs_8(
+    initial: StepParityState8,
     hit: [i8; 5],
     hold_mask: u8,
     elapsed: f32,
@@ -819,6 +1010,82 @@ fn expected_distance_costs(
             [SQRT2, 0.0, 2.0, SQRT2],
             [SQRT2, 2.0, 0.0, SQRT2],
             [2.0, SQRT2, SQRT2, 0.0],
+        ];
+        DIST[a][b]
+    }
+
+    let mut hold_switch = 0.0;
+    let mut mask = hold_mask & result.occupied_mask;
+    while mask != 0 {
+        let col = mask.trailing_zeros() as usize;
+        mask &= mask - 1;
+        let foot = result.combined_columns[col];
+        let init = initial.combined_columns[col];
+        let switched = matches!(foot, 1 | 2) && !matches!(init, 1 | 2)
+            || matches!(foot, 3 | 4) && !matches!(init, 3 | 4);
+        if switched {
+            let prev = initial.where_feet_are[foot as usize];
+            hold_switch += if prev < 0 {
+                55.0
+            } else {
+                dist(col, prev as usize) * 55.0
+            };
+        }
+    }
+
+    const OTHER: [usize; 5] = [0, 2, 1, 4, 3];
+    let mut big_movement = 0.0;
+    for foot in 1..=4 {
+        if result.moved_mask & (1 << (foot - 1)) == 0 {
+            continue;
+        }
+        let init_pos = initial.where_feet_are[foot];
+        if init_pos < 0 {
+            continue;
+        }
+        let res_pos = hit[foot];
+        if res_pos < 0 {
+            continue;
+        }
+        let mut cost = (dist(init_pos as usize, res_pos as usize) * 6.0) / elapsed;
+        let other_pos = hit[OTHER[foot]];
+        if other_pos >= 0 {
+            if other_pos == init_pos {
+                continue;
+            }
+            cost *= 0.2;
+        }
+        big_movement += cost;
+    }
+
+    StepParityDistanceCosts4 {
+        hold_switch,
+        big_movement,
+        total: hold_switch + big_movement,
+    }
+}
+
+fn expected_distance_costs_8(
+    initial: StepParityState8,
+    result: StepParityState8,
+    hit: [i8; 5],
+    hold_mask: u8,
+    elapsed: f32,
+) -> StepParityDistanceCosts4 {
+    fn dist(a: usize, b: usize) -> f32 {
+        const SQRT2: f32 = 1.4142135623731;
+        const SQRT5: f32 = 2.23606797749979;
+        const SQRT13: f32 = 3.60555127546399;
+        const SQRT17: f32 = 4.12310562561766;
+        const DIST: [[f32; 8]; 8] = [
+            [0.0, SQRT2, SQRT2, 2.0, 3.0, SQRT17, SQRT17, 5.0],
+            [SQRT2, 0.0, 2.0, SQRT2, SQRT5, 3.0, SQRT13, SQRT17],
+            [SQRT2, 2.0, 0.0, SQRT2, SQRT5, SQRT13, 3.0, SQRT17],
+            [2.0, SQRT2, SQRT2, 0.0, 1.0, SQRT5, SQRT5, 3.0],
+            [3.0, SQRT5, SQRT5, 1.0, 0.0, SQRT2, SQRT2, 2.0],
+            [SQRT17, 3.0, SQRT13, SQRT5, SQRT2, 0.0, 2.0, SQRT2],
+            [SQRT17, SQRT13, 3.0, SQRT5, SQRT2, 2.0, 0.0, SQRT2],
+            [5.0, SQRT17, SQRT17, 3.0, 2.0, SQRT2, SQRT2, 0.0],
         ];
         DIST[a][b]
     }
@@ -987,6 +1254,124 @@ fn expected_orientation_costs(
     }
 }
 
+fn expected_orientation_costs_8(
+    initial: StepParityState8,
+    result: StepParityState8,
+    hit: [i8; 5],
+) -> StepParityOrientationCosts4 {
+    #[derive(Clone, Copy, Default)]
+    struct Point {
+        x: f32,
+        y: f32,
+    }
+
+    const COLS: [Point; 8] = [
+        Point { x: 0.0, y: 1.0 },
+        Point { x: 1.0, y: 0.0 },
+        Point { x: 1.0, y: 2.0 },
+        Point { x: 2.0, y: 1.0 },
+        Point { x: 3.0, y: 1.0 },
+        Point { x: 4.0, y: 0.0 },
+        Point { x: 4.0, y: 2.0 },
+        Point { x: 5.0, y: 1.0 },
+    ];
+
+    let valid = |c: i8| c >= 0 && (c as usize) < COLS.len();
+    let avg_point = |a: i8, b: i8| -> Point {
+        match (valid(a), valid(b)) {
+            (false, false) => Point::default(),
+            (false, true) => COLS[b as usize],
+            (true, false) => COLS[a as usize],
+            (true, true) => {
+                let a = COLS[a as usize];
+                let b = COLS[b as usize];
+                Point {
+                    x: (a.x + b.x) / 2.0,
+                    y: (a.y + b.y) / 2.0,
+                }
+            }
+        }
+    };
+
+    let facing_penalty = |v: f32| -> f32 {
+        let base = -(v.min(0.0));
+        if base > 0.0 {
+            ((base as f64).powf(1.8) * 100.0) as f32
+        } else {
+            0.0
+        }
+    };
+
+    let facing = |a: i8, b: i8, x_axis: bool| -> f32 {
+        if !valid(a) || !valid(b) || a == b {
+            return 0.0;
+        }
+        let a = COLS[a as usize];
+        let b = COLS[b as usize];
+        let dx = b.x - a.x;
+        let dy = b.y - a.y;
+        let dist = (dx * dx + dy * dy).sqrt();
+        if dist == 0.0 {
+            return 0.0;
+        }
+        let n = if x_axis { dx / dist } else { dy / dist };
+        let mut m = (n as f64).powf(4.0) as f32;
+        if n <= 0.0 {
+            m = -m;
+        }
+        facing_penalty(m)
+    };
+
+    let left_pos = avg_point(hit[1], hit[2]);
+    let right_pos = avg_point(hit[3], hit[4]);
+    let crossed = right_pos.x < left_pos.x;
+    let backward = |heel: i8, toe: i8| -> bool {
+        valid(heel) && valid(toe) && COLS[toe as usize].y < COLS[heel as usize].y
+    };
+    let twisted_foot = if !crossed && (backward(hit[3], hit[4]) || backward(hit[1], hit[2])) {
+        100_000.0
+    } else {
+        0.0
+    };
+
+    let lh = result.where_feet_are[1];
+    let mut lt = result.where_feet_are[2];
+    let rh = result.where_feet_are[3];
+    let mut rt = result.where_feet_are[4];
+    if lt < 0 {
+        lt = lh;
+    }
+    if rt < 0 {
+        rt = rh;
+    }
+    let facing_cost = (facing(lh, rh, true)
+        + facing(lt, rt, true)
+        + facing(lh, lt, false)
+        + facing(rh, rt, false))
+        * 2.0;
+
+    let prev_left = avg_point(initial.where_feet_are[1], initial.where_feet_are[2]);
+    let prev_right = avg_point(initial.where_feet_are[3], initial.where_feet_are[4]);
+    let left = avg_point(lh, lt);
+    let right = avg_point(rh, rt);
+    let spin = if right.x < left.x
+        && prev_right.x < prev_left.x
+        && ((right.y < left.y && prev_right.y > prev_left.y)
+            || (right.y > left.y && prev_right.y < prev_left.y))
+    {
+        1000.0
+    } else {
+        0.0
+    };
+
+    StepParityOrientationCosts4 {
+        twisted_foot,
+        facing: facing_cost,
+        spin,
+        total: twisted_foot + facing_cost + spin,
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn expected_action_costs(
     initial: StepParityState4,
@@ -1022,6 +1407,81 @@ fn expected_action_costs(
     let bracket_tap = expected_bracket_tap_costs(initial, hit, hold_mask, elapsed);
     let distance = expected_distance_costs(initial, result, hit, hold_mask, elapsed);
     let orientation = expected_orientation_costs(initial, result, hit);
+    let twisted_foot = if active_mask.count_ones() > 1 {
+        orientation.twisted_foot
+    } else {
+        0.0
+    };
+
+    let mut out = StepParityActionCosts4 {
+        mine: basic.mine,
+        hold_switch: distance.hold_switch,
+        bracket_tap: bracket_tap.total,
+        bracket_jack: basic.bracket_jack,
+        doublestep: basic.doublestep,
+        slow_bracket: elapsed_costs.slow_bracket,
+        twisted_foot,
+        facing: orientation.facing,
+        spin: orientation.spin,
+        footswitch: switch.footswitch,
+        sideswitch: switch.sideswitch,
+        missed_footswitch: basic.missed_footswitch,
+        jack: elapsed_costs.jack,
+        big_movement: distance.big_movement,
+        total: 0.0,
+    };
+    out.total = out.mine
+        + out.hold_switch
+        + out.bracket_tap
+        + out.bracket_jack
+        + out.doublestep
+        + out.slow_bracket
+        + out.twisted_foot
+        + out.facing
+        + out.spin
+        + out.footswitch
+        + out.sideswitch
+        + out.missed_footswitch
+        + out.jack
+        + out.big_movement;
+    out
+}
+
+#[allow(clippy::too_many_arguments)]
+fn expected_action_costs_8(
+    initial: StepParityState8,
+    result: StepParityState8,
+    placement: [u8; 8],
+    hit: [i8; 5],
+    note_count: u8,
+    active_mask: u8,
+    hold_mask: u8,
+    mine_mask: u8,
+    side_mask: u8,
+    prev_row_has_live_hold: bool,
+    elapsed: f32,
+) -> StepParityActionCosts4 {
+    let flags = expected_action_flags_8(initial, result, hit);
+    let basic = expected_basic_costs_8(
+        result,
+        flags,
+        active_mask.count_ones() > 1,
+        mine_mask,
+        prev_row_has_live_hold,
+    );
+    let elapsed_costs = expected_elapsed_costs(flags, note_count, elapsed);
+    let switch = expected_switch_costs_8(
+        initial,
+        result,
+        placement,
+        active_mask,
+        side_mask,
+        mine_mask,
+        elapsed,
+    );
+    let bracket_tap = expected_bracket_tap_costs_8(initial, hit, hold_mask, elapsed);
+    let distance = expected_distance_costs_8(initial, result, hit, hold_mask, elapsed);
+    let orientation = expected_orientation_costs_8(initial, result, hit);
     let twisted_foot = if active_mask.count_ones() > 1 {
         orientation.twisted_foot
     } else {
@@ -1106,6 +1566,50 @@ fn expected_best_row_candidates(
     out
 }
 
+#[allow(clippy::too_many_arguments)]
+fn expected_best_row_candidates_8(
+    initial_states: &[StepParityState8],
+    initial_costs: &[f32],
+    note_count: u8,
+    note_mask: u8,
+    hold_mask: u8,
+    mine_mask: u8,
+    side_mask: u8,
+    prev_row_has_live_hold: bool,
+    elapsed: f32,
+) -> Vec<(u32, [u8; 8], StepParityState8, [i8; 5], u32, f32)> {
+    let active_mask = note_mask | hold_mask;
+    let mut out: Vec<(u32, [u8; 8], StepParityState8, [i8; 5], u32, f32)> = Vec::new();
+    for (pred, initial) in initial_states.iter().copied().enumerate() {
+        for placement in expected_permutations_8(active_mask) {
+            let (state, hit, key) =
+                expected_result_state_8(initial, placement, active_mask, hold_mask);
+            let action = expected_action_costs_8(
+                initial,
+                state,
+                placement,
+                hit,
+                note_count,
+                active_mask,
+                hold_mask,
+                mine_mask,
+                side_mask,
+                prev_row_has_live_hold,
+                elapsed,
+            );
+            let cost = initial_costs[pred] + action.total;
+            if let Some(existing) = out.iter_mut().find(|candidate| candidate.4 == key) {
+                if cost < existing.5 {
+                    *existing = (pred as u32, placement, state, hit, key, cost);
+                }
+            } else {
+                out.push((pred as u32, placement, state, hit, key, cost));
+            }
+        }
+    }
+    out
+}
+
 fn expected_place_rows(
     note_counts: &[u8],
     note_masks: &[u8],
@@ -1125,6 +1629,65 @@ fn expected_place_rows(
     .into_iter()
     .map(|state| state.combined_columns)
     .collect()
+}
+
+fn expected_place_rows_8(
+    note_counts: &[u8],
+    note_masks: &[u8],
+    hold_masks: &[u8],
+    mine_masks: &[u8],
+    prev_row_live_holds: &[u8],
+    row_seconds: &[f32],
+) -> Vec<[u8; 8]> {
+    let mut states = vec![StepParityState8::default()];
+    let mut costs = vec![0.0f32];
+    let mut prev_second = row_seconds[0] - 1.0;
+    let mut backtrack: Vec<Vec<(usize, StepParityState8)>> = Vec::new();
+
+    for i in 0..note_counts.len() {
+        let elapsed = row_seconds[i] - prev_second;
+        prev_second = row_seconds[i];
+        let active_mask = note_masks[i] | hold_masks[i];
+        let candidates = expected_best_row_candidates_8(
+            &states,
+            &costs,
+            note_counts[i],
+            note_masks[i],
+            hold_masks[i],
+            mine_masks[i],
+            active_mask & 0b1001_1001,
+            prev_row_live_holds[i] != 0,
+            elapsed,
+        );
+
+        states = candidates
+            .iter()
+            .map(|(_, _, state, _, _, _)| *state)
+            .collect();
+        costs = candidates.iter().map(|candidate| candidate.5).collect();
+        backtrack.push(
+            candidates
+                .iter()
+                .map(|(pred, _, state, _, _, _)| (*pred as usize, *state))
+                .collect(),
+        );
+    }
+
+    let mut idx = costs
+        .iter()
+        .enumerate()
+        .min_by(|(_, a), (_, b)| a.total_cmp(b))
+        .map(|(idx, _)| idx)
+        .unwrap();
+
+    let mut out = Vec::with_capacity(note_counts.len());
+    for row in backtrack.iter().rev() {
+        let (pred, state) = row[idx];
+        out.push(state.combined_columns);
+        idx = pred;
+    }
+    out.reverse();
+    out
 }
 
 fn expected_place_states(
@@ -1589,10 +2152,75 @@ fn selects_best_row_candidates_by_state_key_like_rssp_dp() {
 }
 
 #[test]
+fn selects_best_double_row_candidates_by_state_key_like_rssp_dp() {
+    let initial_states = [StepParityState8::default(), StepParityState8::default()];
+    let initial_costs = [50.0f32, 1.0];
+    let note_mask = 0b0101_0000u8;
+    let hold_mask = 0;
+    let note_count = note_mask.count_ones() as u8;
+    let mine_mask = 0;
+    let side_mask = note_mask & 0b1001_1001;
+    let elapsed = 0.25f32;
+    let expected = expected_best_row_candidates_8(
+        &initial_states,
+        &initial_costs,
+        note_count,
+        note_mask,
+        hold_mask,
+        mine_mask,
+        side_mask,
+        false,
+        elapsed,
+    );
+
+    let actual: Vec<_> = step_parity_row_best_candidates_8(
+        &initial_states,
+        &initial_costs,
+        note_count,
+        note_mask,
+        hold_mask,
+        mine_mask,
+        side_mask,
+        false,
+        elapsed,
+    )
+    .unwrap()
+    .into_iter()
+    .map(|c| {
+        (
+            c.predecessor,
+            c.transition.placement,
+            c.transition.state,
+            c.transition.hit,
+            c.transition.key,
+            c.cost,
+        )
+    })
+    .collect();
+
+    assert!(actual.iter().all(|candidate| candidate.0 == 1));
+    assert_eq!(actual, expected);
+}
+
+#[test]
 fn rejects_row_best_candidates_with_mismatched_costs() {
     assert!(
         step_parity_row_best_candidates_4(
             &[StepParityState4::default()],
+            &[],
+            1,
+            1,
+            0,
+            0,
+            1,
+            false,
+            0.25
+        )
+        .is_none()
+    );
+    assert!(
+        step_parity_row_best_candidates_8(
+            &[StepParityState8::default()],
             &[],
             1,
             1,
@@ -1638,6 +2266,37 @@ fn places_prepared_rows_by_backtracking_best_step_parity_path() {
 }
 
 #[test]
+fn places_double_prepared_rows_by_backtracking_best_step_parity_path() {
+    let note_masks = [0b0001_0000u8, 0b0010_0000, 0b0001_0000, 0b0101_0000];
+    let note_counts = note_masks.map(|mask| mask.count_ones() as u8);
+    let hold_masks = [0u8; 4];
+    let mine_masks = [0u8, 0, 0b0001_0000, 0];
+    let prev_row_live_holds = [0u8; 4];
+    let row_seconds = [0.0f32, 0.125, 0.25, 0.5];
+
+    let expected = expected_place_rows_8(
+        &note_counts,
+        &note_masks,
+        &hold_masks,
+        &mine_masks,
+        &prev_row_live_holds,
+        &row_seconds,
+    );
+    let actual = step_parity_place_rows_8(
+        &note_counts,
+        &note_masks,
+        &hold_masks,
+        &mine_masks,
+        &prev_row_live_holds,
+        &row_seconds,
+        256,
+    )
+    .unwrap();
+
+    assert_eq!(actual, expected);
+}
+
+#[test]
 fn rejects_prepared_row_placement_when_state_cap_is_too_small() {
     let note_masks = [0b0001u8];
     let note_counts = [1u8];
@@ -1648,6 +2307,18 @@ fn rejects_prepared_row_placement_when_state_cap_is_too_small() {
 
     assert!(
         step_parity_place_rows_4(
+            &note_counts,
+            &note_masks,
+            &hold_masks,
+            &mine_masks,
+            &prev_row_live_holds,
+            &row_seconds,
+            1,
+        )
+        .is_none()
+    );
+    assert!(
+        step_parity_place_rows_8(
             &note_counts,
             &note_masks,
             &hold_masks,
@@ -1825,6 +2496,42 @@ fn counts_hold_prepared_rows_after_step_parity_backtracking() {
         &rows.prev_row_live_holds,
         &rows.row_seconds,
         &rows.row_ms,
+        256,
+    )
+    .unwrap();
+
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn counts_double_prepared_rows_after_step_parity_backtracking() {
+    let note_masks = [0b0001_0000u8, 0b0010_0000, 0b0001_0000, 0b0101_0000];
+    let tech_masks = note_masks;
+    let note_counts = note_masks.map(|mask| mask.count_ones() as u8);
+    let hold_masks = [0u8; 4];
+    let mine_masks = [0u8, 0, 0b0001_0000, 0];
+    let prev_row_live_holds = [0u8; 4];
+    let row_seconds = [0.0f32, 0.125, 0.25, 0.5];
+    let row_ms = [0, 125, 250, 500];
+    let placements = expected_place_rows_8(
+        &note_counts,
+        &note_masks,
+        &hold_masks,
+        &mine_masks,
+        &prev_row_live_holds,
+        &row_seconds,
+    );
+    let expected = placement_counts_8(&tech_masks, &note_counts, &row_ms, &placements);
+
+    let actual = step_parity_count_prepared_rows_8(
+        &note_counts,
+        &tech_masks,
+        &note_masks,
+        &hold_masks,
+        &mine_masks,
+        &prev_row_live_holds,
+        &row_seconds,
+        &row_ms,
         256,
     )
     .unwrap();
@@ -2024,6 +2731,55 @@ fn calculates_action_flags_like_rssp_cost_prelude() {
 }
 
 #[test]
+fn calculates_double_action_flags_like_rssp_cost_prelude() {
+    let cases = [
+        (
+            StepParityState8 {
+                combined_columns: [1, 0, 0, 0, 0, 0, 0, 0],
+                moved_mask: 0b0001,
+                ..StepParityState8::default()
+            },
+            [1, 0, 0, 0, 0, 0, 0, 0],
+            0b0000_0001,
+            0,
+        ),
+        (
+            StepParityState8 {
+                combined_columns: [0, 0, 0, 0, 0, 0, 3, 0],
+                moved_mask: 0b0100,
+                holding_mask: 0b0100,
+                ..StepParityState8::default()
+            },
+            [0, 0, 0, 0, 0, 0, 3, 0],
+            0b0100_0000,
+            0b0100_0000,
+        ),
+        (
+            StepParityState8 {
+                combined_columns: [0, 0, 0, 0, 0, 0, 3, 0],
+                moved_mask: 0b0100,
+                ..StepParityState8::default()
+            },
+            [0, 0, 0, 0, 0, 0, 3, 0],
+            0b0100_0000,
+            0,
+        ),
+    ];
+
+    for (initial, placement, active_mask, hold_mask) in cases {
+        let (result, hit, _) = if hold_mask == 0 {
+            step_parity_result_state_no_holds_8(&initial, &placement, active_mask).unwrap()
+        } else {
+            step_parity_result_state_holds_8(&initial, &placement, active_mask, hold_mask).unwrap()
+        };
+        assert_eq!(
+            step_parity_action_flags_8(&initial, &result, &hit).unwrap(),
+            expected_action_flags_8(initial, result, hit)
+        );
+    }
+}
+
+#[test]
 fn calculates_basic_action_cost_terms_like_rssp_core() {
     let cases = [
         (
@@ -2118,6 +2874,72 @@ fn calculates_basic_action_cost_terms_like_rssp_core() {
 }
 
 #[test]
+fn calculates_double_basic_action_cost_terms_like_rssp_core() {
+    let cases = [
+        (
+            StepParityState8 {
+                occupied_mask: 0b0001_0000,
+                moved_mask: 0b0001,
+                ..StepParityState8::default()
+            },
+            StepParityActionFlags4 {
+                moved_left: 1,
+                left_moved_not_holding: 1,
+                ..StepParityActionFlags4::default()
+            },
+            false,
+            0b0001_0000,
+            false,
+        ),
+        (
+            StepParityState8 {
+                moved_mask: 0b0011,
+                ..StepParityState8::default()
+            },
+            StepParityActionFlags4 {
+                moved_left: 1,
+                jacked_left: 1,
+                left_moved_not_holding: 1,
+                ..StepParityActionFlags4::default()
+            },
+            true,
+            0,
+            false,
+        ),
+        (
+            StepParityState8 {
+                occupied_mask: 0b0100_0000,
+                moved_mask: 0b1100,
+                ..StepParityState8::default()
+            },
+            StepParityActionFlags4 {
+                moved_right: 1,
+                jacked_right: 1,
+                right_moved_not_holding: 1,
+                ..StepParityActionFlags4::default()
+            },
+            true,
+            0b0100_0000,
+            false,
+        ),
+    ];
+
+    for (result, flags, multi_active, mine_mask, prev_live_hold) in cases {
+        assert_eq!(
+            step_parity_basic_action_costs_8(
+                &result,
+                &flags,
+                multi_active,
+                mine_mask,
+                prev_live_hold
+            )
+            .unwrap(),
+            expected_basic_costs_8(result, flags, multi_active, mine_mask, prev_live_hold)
+        );
+    }
+}
+
+#[test]
 fn calculates_elapsed_action_cost_terms_like_rssp_core() {
     let cases = [
         (
@@ -2161,6 +2983,45 @@ fn calculates_elapsed_action_cost_terms_like_rssp_core() {
     for (flags, note_count, elapsed) in cases {
         assert_eq!(
             step_parity_elapsed_action_costs_4(&flags, note_count, elapsed).unwrap(),
+            expected_elapsed_costs(flags, note_count, elapsed)
+        );
+    }
+}
+
+#[test]
+fn calculates_double_elapsed_action_cost_terms_like_rssp_core() {
+    let cases = [
+        (
+            StepParityActionFlags4 {
+                moved_left: 1,
+                ..StepParityActionFlags4::default()
+            },
+            2,
+            0.25f32,
+        ),
+        (
+            StepParityActionFlags4 {
+                moved_left: 1,
+                jacked_left: 1,
+                ..StepParityActionFlags4::default()
+            },
+            1,
+            0.05f32,
+        ),
+        (
+            StepParityActionFlags4 {
+                moved_right: 1,
+                jacked_right: 1,
+                ..StepParityActionFlags4::default()
+            },
+            2,
+            0.1f32,
+        ),
+    ];
+
+    for (flags, note_count, elapsed) in cases {
+        assert_eq!(
+            step_parity_elapsed_action_costs_8(&flags, note_count, elapsed).unwrap(),
             expected_elapsed_costs(flags, note_count, elapsed)
         );
     }
@@ -2260,6 +3121,87 @@ fn calculates_switch_action_cost_terms_like_rssp_core() {
 }
 
 #[test]
+fn calculates_double_switch_action_cost_terms_like_rssp_core() {
+    let cases = [
+        (
+            StepParityState8 {
+                combined_columns: [0, 0, 0, 0, 0, 1, 0, 0],
+                ..StepParityState8::default()
+            },
+            StepParityState8::default(),
+            [0, 0, 0, 0, 0, 3, 0, 0],
+            0b0010_0000,
+            0,
+            0,
+            0.3f32,
+        ),
+        (
+            StepParityState8 {
+                combined_columns: [0, 0, 0, 0, 0, 1, 0, 0],
+                ..StepParityState8::default()
+            },
+            StepParityState8::default(),
+            [0, 0, 0, 0, 0, 2, 0, 0],
+            0b0010_0000,
+            0,
+            0,
+            0.3f32,
+        ),
+        (
+            StepParityState8 {
+                combined_columns: [0, 0, 0, 0, 1, 0, 0, 0],
+                ..StepParityState8::default()
+            },
+            StepParityState8::default(),
+            [0, 0, 0, 0, 3, 0, 0, 0],
+            0,
+            0b0001_0000,
+            0,
+            0.125f32,
+        ),
+        (
+            StepParityState8 {
+                combined_columns: [0, 0, 0, 0, 1, 0, 0, 0],
+                ..StepParityState8::default()
+            },
+            StepParityState8 {
+                moved_mask: 0b0001,
+                ..StepParityState8::default()
+            },
+            [0, 0, 0, 0, 3, 0, 0, 0],
+            0,
+            0b0001_0000,
+            0,
+            0.125f32,
+        ),
+    ];
+
+    for (initial, result, placement, active_mask, side_mask, mine_mask, elapsed) in cases {
+        assert_eq!(
+            step_parity_switch_action_costs_8(
+                &initial,
+                &result,
+                &placement,
+                active_mask,
+                side_mask,
+                mine_mask,
+                elapsed
+            )
+            .unwrap(),
+            expected_switch_costs_8(
+                initial,
+                result,
+                placement,
+                active_mask,
+                side_mask,
+                mine_mask,
+                elapsed
+            )
+        );
+    }
+}
+
+#[test]
 fn calculates_bracket_tap_action_cost_terms_like_rssp_core() {
     let cases = [
         (
@@ -2301,6 +3243,46 @@ fn calculates_bracket_tap_action_cost_terms_like_rssp_core() {
         assert_eq!(
             step_parity_bracket_tap_action_costs_4(&initial, &hit, hold_mask, elapsed).unwrap(),
             expected_bracket_tap_costs(initial, hit, hold_mask, elapsed)
+        );
+    }
+}
+
+#[test]
+fn calculates_double_bracket_tap_action_cost_terms_like_rssp_core() {
+    let cases = [
+        (
+            StepParityState8::default(),
+            [-1, 4, 5, -1, -1],
+            0b0001_0000,
+            0.25f32,
+        ),
+        (
+            StepParityState8 {
+                moved_mask: 0b0001,
+                ..StepParityState8::default()
+            },
+            [-1, 4, 5, -1, -1],
+            0b0001_0000,
+            0.25f32,
+        ),
+        (
+            StepParityState8::default(),
+            [-1, -1, -1, 6, 7],
+            0b1000_0000,
+            0.5f32,
+        ),
+        (
+            StepParityState8::default(),
+            [-1, 0, 1, 6, 7],
+            0b1000_0010,
+            0.5f32,
+        ),
+    ];
+
+    for (initial, hit, hold_mask, elapsed) in cases {
+        assert_eq!(
+            step_parity_bracket_tap_action_costs_8(&initial, &hit, hold_mask, elapsed).unwrap(),
+            expected_bracket_tap_costs_8(initial, hit, hold_mask, elapsed)
         );
     }
 }
@@ -2403,6 +3385,103 @@ fn calculates_distance_action_cost_terms_like_rssp_core() {
 }
 
 #[test]
+fn calculates_double_distance_action_cost_terms_like_rssp_core() {
+    let missing_prev = StepParityState8 {
+        combined_columns: [0; 8],
+        where_feet_are: [-1; 5],
+        ..StepParityState8::default()
+    };
+    let foot_on_left = StepParityState8 {
+        combined_columns: [0, 0, 0, 0, 3, 0, 0, 0],
+        where_feet_are: [-1, -1, -1, 4, -1],
+        ..StepParityState8::default()
+    };
+    let same_side = StepParityState8 {
+        combined_columns: [0, 0, 0, 0, 0, 1, 0, 0],
+        where_feet_are: [-1, 5, -1, -1, -1],
+        ..StepParityState8::default()
+    };
+    let moved_left = StepParityState8 {
+        where_feet_are: [-1, 4, -1, -1, -1],
+        ..StepParityState8::default()
+    };
+
+    let cases = [
+        (
+            missing_prev,
+            StepParityState8 {
+                combined_columns: [0, 0, 0, 0, 0, 3, 0, 0],
+                occupied_mask: 0b0010_0000,
+                ..StepParityState8::default()
+            },
+            [-1, -1, -1, 5, -1],
+            0b0010_0000,
+            0.5f32,
+        ),
+        (
+            foot_on_left,
+            StepParityState8 {
+                combined_columns: [0, 0, 0, 0, 0, 0, 0, 3],
+                occupied_mask: 0b1000_0000,
+                ..StepParityState8::default()
+            },
+            [-1, -1, -1, 7, -1],
+            0b1000_0000,
+            0.5f32,
+        ),
+        (
+            same_side,
+            StepParityState8 {
+                combined_columns: [0, 0, 0, 0, 0, 2, 0, 0],
+                occupied_mask: 0b0010_0000,
+                ..StepParityState8::default()
+            },
+            [-1, -1, 5, -1, -1],
+            0b0010_0000,
+            0.5f32,
+        ),
+        (
+            moved_left,
+            StepParityState8 {
+                moved_mask: 0b0001,
+                ..StepParityState8::default()
+            },
+            [-1, 7, -1, -1, -1],
+            0,
+            0.5f32,
+        ),
+        (
+            moved_left,
+            StepParityState8 {
+                moved_mask: 0b0001,
+                ..StepParityState8::default()
+            },
+            [-1, 7, 4, -1, -1],
+            0,
+            0.5f32,
+        ),
+        (
+            moved_left,
+            StepParityState8 {
+                moved_mask: 0b0001,
+                ..StepParityState8::default()
+            },
+            [-1, 7, 5, -1, -1],
+            0,
+            0.5f32,
+        ),
+    ];
+
+    for (initial, result, hit, hold_mask, elapsed) in cases {
+        assert_eq!(
+            step_parity_distance_action_costs_8(&initial, &result, &hit, hold_mask, elapsed)
+                .unwrap(),
+            expected_distance_costs_8(initial, result, hit, hold_mask, elapsed)
+        );
+    }
+}
+
+#[test]
 fn calculates_orientation_action_cost_terms_like_rssp_core() {
     let cases = [
         (
@@ -2445,6 +3524,59 @@ fn calculates_orientation_action_cost_terms_like_rssp_core() {
         assert_eq!(
             step_parity_orientation_action_costs_4(&initial, &result, &hit).unwrap(),
             expected_orientation_costs(initial, result, hit)
+        );
+    }
+}
+
+#[test]
+fn calculates_double_orientation_action_cost_terms_like_rssp_core() {
+    let cases = [
+        (
+            StepParityState8::default(),
+            StepParityState8::default(),
+            [-1, 6, 5, 7, -1],
+        ),
+        (
+            StepParityState8::default(),
+            StepParityState8::default(),
+            [-1, 6, 5, 0, -1],
+        ),
+        (
+            StepParityState8::default(),
+            StepParityState8 {
+                where_feet_are: [-1, 7, -1, 0, -1],
+                ..StepParityState8::default()
+            },
+            [-1, -1, -1, -1, -1],
+        ),
+        (
+            StepParityState8 {
+                where_feet_are: [-1, 7, -1, 2, -1],
+                ..StepParityState8::default()
+            },
+            StepParityState8 {
+                where_feet_are: [-1, 6, -1, 1, -1],
+                ..StepParityState8::default()
+            },
+            [-1, -1, -1, -1, -1],
+        ),
+        (
+            StepParityState8 {
+                where_feet_are: [-1, 6, 5, 2, 1],
+                ..StepParityState8::default()
+            },
+            StepParityState8 {
+                where_feet_are: [-1, 4, 5, 2, 1],
+                ..StepParityState8::default()
+            },
+            [-1, -1, -1, -1, -1],
+        ),
+    ];
+
+    for (initial, result, hit) in cases {
+        assert_eq!(
+            step_parity_orientation_action_costs_8(&initial, &result, &hit).unwrap(),
+            expected_orientation_costs_8(initial, result, hit)
         );
     }
 }
@@ -2544,6 +3676,119 @@ fn calculates_full_action_cost_like_rssp_core_order() {
         );
         assert_eq!(
             step_parity_action_cost_4(
+                &initial,
+                &result,
+                &placement,
+                &hit,
+                active_mask.count_ones() as u8,
+                active_mask,
+                hold_mask,
+                mine_mask,
+                side_mask,
+                prev_live_hold,
+                elapsed,
+            )
+            .unwrap(),
+            expected
+        );
+    }
+}
+
+#[test]
+fn calculates_double_full_action_cost_like_rssp_core_order() {
+    let cases = [
+        (
+            StepParityState8 {
+                combined_columns: [0, 0, 0, 0, 1, 0, 0, 0],
+                where_feet_are: [-1, 4, -1, -1, -1],
+                moved_mask: 0b0001,
+                ..StepParityState8::default()
+            },
+            [0, 0, 0, 0, 1, 0, 0, 0],
+            0b0001_0000,
+            0,
+            0b0001_0000,
+            0,
+            false,
+            0.05f32,
+        ),
+        (
+            StepParityState8 {
+                combined_columns: [0, 0, 0, 0, 1, 0, 0, 0],
+                where_feet_are: [-1, 4, -1, -1, -1],
+                moved_mask: 0b0001,
+                ..StepParityState8::default()
+            },
+            [0, 0, 0, 0, 3, 0, 0, 0],
+            0b0001_0000,
+            0,
+            0,
+            0,
+            false,
+            0.3f32,
+        ),
+        (
+            StepParityState8 {
+                combined_columns: [0, 0, 0, 0, 0, 3, 0, 0],
+                where_feet_are: [-1, -1, -1, 5, -1],
+                ..StepParityState8::default()
+            },
+            [0, 0, 0, 0, 0, 1, 0, 0],
+            0b0010_0000,
+            0b0010_0000,
+            0,
+            0,
+            false,
+            0.25f32,
+        ),
+        (
+            StepParityState8 {
+                combined_columns: [0, 0, 0, 0, 0, 0, 3, 0],
+                where_feet_are: [-1, -1, -1, 6, -1],
+                moved_mask: 0b0100,
+                ..StepParityState8::default()
+            },
+            [0, 0, 0, 0, 1, 0, 4, 0],
+            0b0101_0000,
+            0,
+            0b0100_0000,
+            0b0001_0000,
+            false,
+            0.25f32,
+        ),
+    ];
+
+    for (
+        initial,
+        placement,
+        active_mask,
+        hold_mask,
+        mine_mask,
+        side_mask,
+        prev_live_hold,
+        elapsed,
+    ) in cases
+    {
+        let (result, hit, _) = if hold_mask == 0 {
+            step_parity_result_state_no_holds_8(&initial, &placement, active_mask).unwrap()
+        } else {
+            step_parity_result_state_holds_8(&initial, &placement, active_mask, hold_mask).unwrap()
+        };
+        let expected = expected_action_costs_8(
+            initial,
+            result,
+            placement,
+            hit,
+            active_mask.count_ones() as u8,
+            active_mask,
+            hold_mask,
+            mine_mask,
+            side_mask,
+            prev_live_hold,
+            elapsed,
+        );
+        assert_eq!(
+            step_parity_action_cost_8(
                 &initial,
                 &result,
                 &placement,
