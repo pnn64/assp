@@ -2045,6 +2045,7 @@ row_fake_object_count_8:
 %define TS4_STATUS 104
 %define TS4_CURRENT_ROW 112
 %define TS4_MIN_COUNT 120
+%define TS4_DEPTHS 128
 
 %macro timing_stats_4_finalize_measure 0
     cmp qword [rsp + TS4_RAW_COUNT], 0
@@ -2106,6 +2107,8 @@ row_fake_object_count_8:
     je %%hold_start
     cmp al, '4'
     je %%hold_start
+    cmp al, '3'
+    je %%end
     jmp %%store
 
 %%hold_start:
@@ -2120,9 +2123,21 @@ row_fake_object_count_8:
     jmp %%store
 
 %%reload:
+    inc byte [rsp + TS4_DEPTHS + %1]
     mov eax, [rsp + TS4_CURRENT_ROW]
     shr eax, %2
     and eax, 0xff
+    jmp %%store
+
+%%end:
+    cmp byte [rsp + TS4_DEPTHS + %1], 0
+    je %%zero
+    dec byte [rsp + TS4_DEPTHS + %1]
+    mov eax, '3'
+    jmp %%store
+
+%%zero:
+    mov eax, '0'
 
 %%store:
     shl eax, %2
@@ -2166,6 +2181,9 @@ row_fake_object_count_8:
     jmp %%done
 
 %%end:
+    cmp byte [rsp + TS4_DEPTHS + %1], 0
+    je %%done
+    dec byte [rsp + TS4_DEPTHS + %1]
     mov eax, '3'
     shl eax, %2
     or r13d, eax
@@ -2347,6 +2365,7 @@ assp_count_timing_note_stats_4:
     cmp qword [rsp + TS4_TOTAL_ROWS], 0
     je .success
 
+    mov dword [rsp + TS4_DEPTHS], 0
     xor r12d, r12d
 .transform_loop:
     cmp r12, [rsp + TS4_TOTAL_ROWS]
@@ -2492,6 +2511,7 @@ timing_hold_start_has_end_4:
 %define TS8_STATUS 104
 %define TS8_CURRENT_ROW 112
 %define TS8_MIN_COUNT 120
+%define TS8_DEPTHS 128
 
 %macro timing_stats_8_finalize_measure 0
     cmp qword [rsp + TS8_RAW_COUNT], 0
@@ -2553,6 +2573,8 @@ timing_hold_start_has_end_4:
     je %%hold_start
     cmp al, '4'
     je %%hold_start
+    cmp al, '3'
+    je %%end
     jmp %%store
 
 %%hold_start:
@@ -2567,9 +2589,21 @@ timing_hold_start_has_end_4:
     jmp %%store
 
 %%reload:
+    inc byte [rsp + TS8_DEPTHS + %1]
     mov rax, [rsp + TS8_CURRENT_ROW]
     shr rax, %2
     and eax, 0xff
+    jmp %%store
+
+%%end:
+    cmp byte [rsp + TS8_DEPTHS + %1], 0
+    je %%zero
+    dec byte [rsp + TS8_DEPTHS + %1]
+    mov eax, '3'
+    jmp %%store
+
+%%zero:
+    mov eax, '0'
 
 %%store:
     shl rax, %2
@@ -2613,6 +2647,9 @@ timing_hold_start_has_end_4:
     jmp %%done
 
 %%end:
+    cmp byte [rsp + TS8_DEPTHS + %1], 0
+    je %%done
+    dec byte [rsp + TS8_DEPTHS + %1]
     mov eax, '3'
     shl rax, %2
     or r13, rax
@@ -2794,6 +2831,7 @@ assp_count_timing_note_stats_8:
     cmp qword [rsp + TS8_TOTAL_ROWS], 0
     je .success
 
+    mov qword [rsp + TS8_DEPTHS], 0
     xor r12d, r12d
 .transform_loop:
     cmp r12, [rsp + TS8_TOTAL_ROWS]

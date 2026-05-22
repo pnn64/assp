@@ -780,6 +780,14 @@ unsafe extern "C" {
         out_hold_end_beats: *mut f32,
         out_cap: usize,
     ) -> usize;
+    fn assp_step_parity_hold_head_ends_8(
+        data: *const u8,
+        len: usize,
+        input_row_beats: *const f32,
+        input_row_count: usize,
+        out_hold_end_beats: *mut f32,
+        out_cap: usize,
+    ) -> usize;
     fn assp_step_parity_bpm_row_times_4(
         data: *const u8,
         len: usize,
@@ -791,7 +799,36 @@ unsafe extern "C" {
         out_row_beats: *mut f32,
         out_cap: usize,
     ) -> usize;
+    fn assp_step_parity_bpm_row_times_8(
+        data: *const u8,
+        len: usize,
+        bpms: *const BpmSegment,
+        bpm_count: usize,
+        offset_ms: i64,
+        out_row_seconds: *mut f32,
+        out_row_ms: *mut i32,
+        out_row_beats: *mut f32,
+        out_cap: usize,
+    ) -> usize;
     fn assp_step_parity_prepare_hold_rows_4(
+        data: *const u8,
+        len: usize,
+        input_row_seconds: *const f32,
+        input_row_ms: *const i32,
+        input_row_beats: *const f32,
+        input_hold_end_beats: *const f32,
+        input_row_count: usize,
+        out_note_counts: *mut u8,
+        out_tech_masks: *mut u8,
+        out_note_masks: *mut u8,
+        out_hold_masks: *mut u8,
+        out_mine_masks: *mut u8,
+        out_prev_row_live_holds: *mut u8,
+        out_row_seconds: *mut f32,
+        out_row_ms: *mut i32,
+        out_cap: usize,
+    ) -> usize;
+    fn assp_step_parity_prepare_hold_rows_8(
         data: *const u8,
         len: usize,
         input_row_seconds: *const f32,
@@ -2441,6 +2478,37 @@ pub fn step_parity_hold_head_ends_4(data: &[u8], input_row_beats: &[f32]) -> Opt
 }
 
 #[must_use]
+pub fn step_parity_hold_head_ends_8(data: &[u8], input_row_beats: &[f32]) -> Option<Vec<[f32; 8]>> {
+    let cap = input_row_beats.len();
+    let mut hold_end_beats = vec![-1.0f32; cap * 8];
+    let count = unsafe {
+        assp_step_parity_hold_head_ends_8(
+            data.as_ptr(),
+            data.len(),
+            input_row_beats.as_ptr(),
+            input_row_beats.len(),
+            hold_end_beats.as_mut_ptr(),
+            cap,
+        )
+    };
+    if count == NOT_FOUND {
+        return None;
+    }
+
+    hold_end_beats.truncate(count * 8);
+    Some(
+        hold_end_beats
+            .chunks_exact(8)
+            .map(|chunk| {
+                [
+                    chunk[0], chunk[1], chunk[2], chunk[3], chunk[4], chunk[5], chunk[6], chunk[7],
+                ]
+            })
+            .collect(),
+    )
+}
+
+#[must_use]
 pub fn step_parity_bpm_row_times_4(
     data: &[u8],
     bpms: &[BpmSegment],
@@ -2452,6 +2520,39 @@ pub fn step_parity_bpm_row_times_4(
     let mut row_beats = vec![0.0f32; cap];
     let count = unsafe {
         assp_step_parity_bpm_row_times_4(
+            data.as_ptr(),
+            data.len(),
+            bpms.as_ptr(),
+            bpms.len(),
+            offset_ms,
+            row_seconds.as_mut_ptr(),
+            row_ms.as_mut_ptr(),
+            row_beats.as_mut_ptr(),
+            cap,
+        )
+    };
+    if count == NOT_FOUND {
+        return None;
+    }
+
+    row_seconds.truncate(count);
+    row_ms.truncate(count);
+    row_beats.truncate(count);
+    Some((row_seconds, row_ms, row_beats))
+}
+
+#[must_use]
+pub fn step_parity_bpm_row_times_8(
+    data: &[u8],
+    bpms: &[BpmSegment],
+    offset_ms: i64,
+) -> Option<(Vec<f32>, Vec<i32>, Vec<f32>)> {
+    let cap = data.len() / 8 + 1;
+    let mut row_seconds = vec![0.0f32; cap];
+    let mut row_ms = vec![0i32; cap];
+    let mut row_beats = vec![0.0f32; cap];
+    let count = unsafe {
+        assp_step_parity_bpm_row_times_8(
             data.as_ptr(),
             data.len(),
             bpms.as_ptr(),
@@ -2556,6 +2657,88 @@ pub fn step_parity_prepare_hold_rows_4(
 }
 
 #[must_use]
+pub fn step_parity_prepare_hold_rows_8(
+    data: &[u8],
+    input_row_seconds: &[f32],
+    input_row_ms: &[i32],
+    input_row_beats: &[f32],
+) -> Option<StepParityPreparedRows4Owned> {
+    if input_row_seconds.len() != input_row_ms.len()
+        || input_row_seconds.len() != input_row_beats.len()
+    {
+        return None;
+    }
+
+    let cap = data.len() / 8 + 1;
+    let mut hold_end_beats = vec![-1.0f32; input_row_beats.len() * 8];
+    let source_count = unsafe {
+        assp_step_parity_hold_head_ends_8(
+            data.as_ptr(),
+            data.len(),
+            input_row_beats.as_ptr(),
+            input_row_beats.len(),
+            hold_end_beats.as_mut_ptr(),
+            input_row_beats.len(),
+        )
+    };
+    if source_count == NOT_FOUND {
+        return None;
+    }
+    hold_end_beats.truncate(source_count * 8);
+
+    let mut note_counts = vec![0u8; cap];
+    let mut tech_masks = vec![0u8; cap];
+    let mut note_masks = vec![0u8; cap];
+    let mut hold_masks = vec![0u8; cap];
+    let mut mine_masks = vec![0u8; cap];
+    let mut prev_row_live_holds = vec![0u8; cap];
+    let mut row_seconds = vec![0.0f32; cap];
+    let mut row_ms = vec![0i32; cap];
+    let count = unsafe {
+        assp_step_parity_prepare_hold_rows_8(
+            data.as_ptr(),
+            data.len(),
+            input_row_seconds.as_ptr(),
+            input_row_ms.as_ptr(),
+            input_row_beats.as_ptr(),
+            hold_end_beats.as_ptr(),
+            source_count,
+            note_counts.as_mut_ptr(),
+            tech_masks.as_mut_ptr(),
+            note_masks.as_mut_ptr(),
+            hold_masks.as_mut_ptr(),
+            mine_masks.as_mut_ptr(),
+            prev_row_live_holds.as_mut_ptr(),
+            row_seconds.as_mut_ptr(),
+            row_ms.as_mut_ptr(),
+            cap,
+        )
+    };
+    if count == NOT_FOUND {
+        return None;
+    }
+
+    note_counts.truncate(count);
+    tech_masks.truncate(count);
+    note_masks.truncate(count);
+    hold_masks.truncate(count);
+    mine_masks.truncate(count);
+    prev_row_live_holds.truncate(count);
+    row_seconds.truncate(count);
+    row_ms.truncate(count);
+    Some(StepParityPreparedRows4Owned {
+        note_counts,
+        tech_masks,
+        note_masks,
+        hold_masks,
+        mine_masks,
+        prev_row_live_holds,
+        row_seconds,
+        row_ms,
+    })
+}
+
+#[must_use]
 pub fn step_parity_count_hold_rows_4(
     data: &[u8],
     input_row_seconds: &[f32],
@@ -2566,6 +2749,29 @@ pub fn step_parity_count_hold_rows_4(
     let rows =
         step_parity_prepare_hold_rows_4(data, input_row_seconds, input_row_ms, input_row_beats)?;
     step_parity_count_prepared_rows_4(
+        &rows.note_counts,
+        &rows.tech_masks,
+        &rows.note_masks,
+        &rows.hold_masks,
+        &rows.mine_masks,
+        &rows.prev_row_live_holds,
+        &rows.row_seconds,
+        &rows.row_ms,
+        state_cap,
+    )
+}
+
+#[must_use]
+pub fn step_parity_count_hold_rows_8(
+    data: &[u8],
+    input_row_seconds: &[f32],
+    input_row_ms: &[i32],
+    input_row_beats: &[f32],
+    state_cap: usize,
+) -> Option<TechCounts> {
+    let rows =
+        step_parity_prepare_hold_rows_8(data, input_row_seconds, input_row_ms, input_row_beats)?;
+    step_parity_count_prepared_rows_8(
         &rows.note_counts,
         &rows.tech_masks,
         &rows.note_masks,

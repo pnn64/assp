@@ -85,11 +85,14 @@ extern assp_parse_offset_us
 extern assp_parse_tech_notation
 extern assp_count_step_tech_brackets_minimized_4
 extern assp_count_step_tech_brackets_minimized_8
-extern assp_split_double_chart_half_4
 extern assp_step_parity_bpm_row_times_4
+extern assp_step_parity_bpm_row_times_8
 extern assp_step_parity_hold_head_ends_4
+extern assp_step_parity_hold_head_ends_8
 extern assp_step_parity_prepare_hold_rows_4
+extern assp_step_parity_prepare_hold_rows_8
 extern assp_step_parity_count_prepared_rows_4
+extern assp_step_parity_count_prepared_rows_8
 extern assp_normalize_label_tag
 extern assp_chart_name_tag_allowed
 extern assp_resolve_difficulty_label
@@ -125,7 +128,7 @@ global profile_step_dp_skip_count
 %define BPM_BUFFER_CAP 65536
 %define BPM_SEGMENT_CAP 4096
 %define MINIMIZED_BUFFER_CAP 2097152
-%define ROW_SCRATCH_CAP 262144
+%define ROW_SCRATCH_CAP 2097152
 %define TECH_BUFFER_CAP 16384
 %define METADATA_BUFFER_CAP 65536
 %define PARITY_ROW_CAP 262144
@@ -2902,12 +2905,19 @@ prepare_timing_stats:
 
     mov rax, [warp_segment_count]
     or rax, [fake_segment_count]
-    jz .success
+    jnz .recompute
 
+    mov rax, [note_stats + ASSP_NOTE_STATS_HOLDS]
+    or rax, [note_stats + ASSP_NOTE_STATS_ROLLS]
+    jz .success
+    jmp .holds
+
+.recompute:
     mov rax, [note_stats + ASSP_NOTE_STATS_HOLDS]
     or rax, [note_stats + ASSP_NOTE_STATS_ROLLS]
     jz .no_holds
 
+.holds:
     mov rcx, [chart_info + ASSP_CHART_INFO_NOTES_PTR]
     mov rdx, [chart_info + ASSP_CHART_INFO_NOTES_LEN]
     lea r8, [warp_stats_segment_buffer]
@@ -3765,6 +3775,253 @@ prepare_step_parity_events_4:
     add rsp, 152
     ret
 
+prepare_step_parity_bpm_8:
+    sub rsp, 152
+
+    mov rcx, [chart_info + ASSP_CHART_INFO_NOTES_PTR]
+    mov rdx, [chart_info + ASSP_CHART_INFO_NOTES_LEN]
+    lea r8, [bpm_segment_buffer]
+    mov r9, [bpm_segment_count]
+    mov rax, [offset_ms]
+    mov [rsp + 32], rax
+    lea rax, [parity_row_seconds]
+    mov [rsp + 40], rax
+    lea rax, [parity_row_ms]
+    mov [rsp + 48], rax
+    lea rax, [parity_row_beats]
+    mov [rsp + 56], rax
+    mov qword [rsp + 64], PARITY_ROW_CAP
+    profile_begin_call
+    call assp_step_parity_bpm_row_times_8
+    profile_end_call profile_step_row_times_ticks
+    cmp rax, ASSP_NOT_FOUND
+    je .fail
+    cmp rax, PARITY_ROW_CAP
+    ja .fail
+    mov [parity_source_row_count], rax
+    add rsp, 152
+    call prepare_step_parity_rows_8
+    ret
+
+.fail:
+    xor eax, eax
+
+.done:
+    add rsp, 152
+    ret
+
+prepare_step_parity_rows_8:
+    sub rsp, 152
+
+    mov rcx, [chart_info + ASSP_CHART_INFO_NOTES_PTR]
+    mov rdx, [chart_info + ASSP_CHART_INFO_NOTES_LEN]
+    lea r8, [parity_row_beats]
+    mov r9, [parity_source_row_count]
+    lea rax, [parity_hold_end_beats]
+    mov [rsp + 32], rax
+    mov qword [rsp + 40], PARITY_ROW_CAP
+    profile_begin_call
+    call assp_step_parity_hold_head_ends_8
+    profile_end_call profile_step_hold_ends_ticks
+    cmp rax, ASSP_NOT_FOUND
+    je .fail
+    cmp rax, [parity_source_row_count]
+    jne .fail
+
+    mov rcx, [chart_info + ASSP_CHART_INFO_NOTES_PTR]
+    mov rdx, [chart_info + ASSP_CHART_INFO_NOTES_LEN]
+    lea r8, [parity_row_seconds]
+    lea r9, [parity_row_ms]
+    lea rax, [parity_row_beats]
+    mov [rsp + 32], rax
+    lea rax, [parity_hold_end_beats]
+    mov [rsp + 40], rax
+    mov rax, [parity_source_row_count]
+    mov [rsp + 48], rax
+    lea rax, [parity_note_counts]
+    mov [rsp + 56], rax
+    lea rax, [parity_tech_masks]
+    mov [rsp + 64], rax
+    lea rax, [parity_note_masks]
+    mov [rsp + 72], rax
+    lea rax, [parity_hold_masks]
+    mov [rsp + 80], rax
+    lea rax, [parity_mine_masks]
+    mov [rsp + 88], rax
+    lea rax, [parity_prev_live_holds]
+    mov [rsp + 96], rax
+    lea rax, [parity_prepared_row_seconds]
+    mov [rsp + 104], rax
+    lea rax, [parity_prepared_row_ms]
+    mov [rsp + 112], rax
+    mov qword [rsp + 120], PARITY_ROW_CAP
+    profile_begin_call
+    call assp_step_parity_prepare_hold_rows_8
+    profile_end_call profile_step_prepare_rows_ticks
+    cmp rax, ASSP_NOT_FOUND
+    je .fail
+    cmp rax, PARITY_ROW_CAP
+    ja .fail
+    mov [parity_prepared_row_count], rax
+    app_trace trace_app_parity_prepared
+
+    lea rdx, [parity_prepared_rows]
+    lea rax, [parity_note_counts]
+    mov [rdx + ASSP_STEP_PARITY_PREPARED_ROWS4_NOTE_COUNTS], rax
+    lea rax, [parity_tech_masks]
+    mov [rdx + ASSP_STEP_PARITY_PREPARED_ROWS4_TECH_MASKS], rax
+    lea rax, [parity_note_masks]
+    mov [rdx + ASSP_STEP_PARITY_PREPARED_ROWS4_NOTE_MASKS], rax
+    lea rax, [parity_hold_masks]
+    mov [rdx + ASSP_STEP_PARITY_PREPARED_ROWS4_HOLD_MASKS], rax
+    lea rax, [parity_mine_masks]
+    mov [rdx + ASSP_STEP_PARITY_PREPARED_ROWS4_MINE_MASKS], rax
+    lea rax, [parity_prev_live_holds]
+    mov [rdx + ASSP_STEP_PARITY_PREPARED_ROWS4_PREV_ROW_LIVE_HOLDS], rax
+    lea rax, [parity_prepared_row_seconds]
+    mov [rdx + ASSP_STEP_PARITY_PREPARED_ROWS4_ROW_SECONDS], rax
+    lea rax, [parity_prepared_row_ms]
+    mov [rdx + ASSP_STEP_PARITY_PREPARED_ROWS4_ROW_MS], rax
+    mov rax, [parity_prepared_row_count]
+    mov [rdx + ASSP_STEP_PARITY_PREPARED_ROWS4_ROW_COUNT], rax
+
+    lea rdx, [parity_workspace]
+    lea rax, [parity_out_placements]
+    mov [rdx + ASSP_STEP_PARITY_WORKSPACE4_OUT_PLACEMENTS], rax
+    mov qword [rdx + ASSP_STEP_PARITY_WORKSPACE4_OUT_PLACEMENT_CAP], PARITY_ROW_CAP * 8
+    lea rax, [parity_prev_states]
+    mov [rdx + ASSP_STEP_PARITY_WORKSPACE4_PREV_STATES], rax
+    lea rax, [parity_prev_costs]
+    mov [rdx + ASSP_STEP_PARITY_WORKSPACE4_PREV_COSTS], rax
+    lea rax, [parity_next_states]
+    mov [rdx + ASSP_STEP_PARITY_WORKSPACE4_NEXT_STATES], rax
+    lea rax, [parity_next_costs]
+    mov [rdx + ASSP_STEP_PARITY_WORKSPACE4_NEXT_COSTS], rax
+    lea rax, [parity_predecessors]
+    mov [rdx + ASSP_STEP_PARITY_WORKSPACE4_PREDECESSORS], rax
+    lea rax, [parity_placements]
+    mov [rdx + ASSP_STEP_PARITY_WORKSPACE4_PLACEMENTS], rax
+    lea rax, [parity_hits]
+    mov [rdx + ASSP_STEP_PARITY_WORKSPACE4_HITS], rax
+    lea rax, [parity_keys]
+    mov [rdx + ASSP_STEP_PARITY_WORKSPACE4_KEYS], rax
+    lea rax, [parity_fast_backtrack_placements]
+    mov [rdx + ASSP_STEP_PARITY_WORKSPACE4_BACKTRACK_PLACEMENTS], rax
+    lea rax, [parity_fast_backtrack_predecessors]
+    mov [rdx + ASSP_STEP_PARITY_WORKSPACE4_BACKTRACK_PREDECESSORS], rax
+    mov qword [rdx + ASSP_STEP_PARITY_WORKSPACE4_STATE_CAP], PARITY_FAST_STATE_CAP
+
+    lea rcx, [parity_prepared_rows]
+    lea rdx, [parity_workspace]
+    lea r8, [tech_counts]
+    app_trace trace_app_parity_fast
+    profile_begin_call
+    call assp_step_parity_count_prepared_rows_8
+    profile_end_call profile_step_dp_fast_ticks
+    test eax, eax
+    jnz .success
+
+    app_trace trace_app_parity_full
+    lea rax, [parity_backtrack_placements]
+    mov [parity_workspace + ASSP_STEP_PARITY_WORKSPACE4_BACKTRACK_PLACEMENTS], rax
+    lea rax, [parity_backtrack_predecessors]
+    mov [parity_workspace + ASSP_STEP_PARITY_WORKSPACE4_BACKTRACK_PREDECESSORS], rax
+    mov qword [parity_workspace + ASSP_STEP_PARITY_WORKSPACE4_STATE_CAP], PARITY_STATE_CAP
+    lea rcx, [parity_prepared_rows]
+    lea rdx, [parity_workspace]
+    lea r8, [tech_counts]
+    profile_begin_call
+    call assp_step_parity_count_prepared_rows_8
+    profile_end_call profile_step_dp_full_ticks
+    test eax, eax
+    jz .fail
+
+.success:
+    mov eax, ASSP_TRUE
+    jmp .done
+
+.fail:
+    xor eax, eax
+
+.done:
+    add rsp, 152
+    ret
+
+prepare_step_parity_events_8:
+    sub rsp, 152
+
+    mov rcx, [chart_info + ASSP_CHART_INFO_NOTES_PTR]
+    mov rdx, [chart_info + ASSP_CHART_INFO_NOTES_LEN]
+    lea r8, [bpm_segment_buffer]
+    mov r9, [bpm_segment_count]
+    mov rax, [offset_ms]
+    mov [rsp + 32], rax
+    lea rax, [parity_row_seconds]
+    mov [rsp + 40], rax
+    lea rax, [parity_row_ms]
+    mov [rsp + 48], rax
+    lea rax, [parity_row_beats]
+    mov [rsp + 56], rax
+    mov qword [rsp + 64], PARITY_ROW_CAP
+    profile_begin_call
+    call assp_step_parity_bpm_row_times_8
+    profile_end_call profile_step_row_times_ticks
+    cmp rax, ASSP_NOT_FOUND
+    je .fail
+    cmp rax, PARITY_ROW_CAP
+    ja .fail
+    mov [parity_source_row_count], rax
+
+    mov qword [rsp + 96], 0
+    profile_begin_call
+.row_time_loop:
+    mov r10, [rsp + 96]
+    cmp r10, [parity_source_row_count]
+    jae .row_time_done
+
+    lea r11, [parity_row_beats]
+    movss xmm0, [r11 + r10 * 4]
+    mulss xmm0, [rel app_const_thousand_f32]
+    cvtss2si rax, xmm0
+
+    lea rcx, [bpm_segment_buffer]
+    mov rdx, [bpm_segment_count]
+    lea r8, [stop_segment_buffer]
+    mov r9, [stop_segment_count]
+    lea r11, [delay_segment_buffer]
+    mov [rsp + 32], r11
+    mov r11, [delay_segment_count]
+    mov [rsp + 40], r11
+    lea r11, [warp_segment_buffer]
+    mov [rsp + 48], r11
+    mov r11, [warp_segment_count]
+    mov [rsp + 56], r11
+    mov [rsp + 64], rax
+    call assp_elapsed_ms_with_events
+    sub rax, [offset_ms]
+
+    mov r10, [rsp + 96]
+    lea r11, [parity_row_ms]
+    mov [r11 + r10 * 4], eax
+    cvtsi2ss xmm0, rax
+    divss xmm0, [rel app_const_thousand_f32]
+    lea r11, [parity_row_seconds]
+    movss [r11 + r10 * 4], xmm0
+
+    inc qword [rsp + 96]
+    jmp .row_time_loop
+
+.row_time_done:
+    profile_end_call profile_step_row_times_ticks
+    add rsp, 152
+    call prepare_step_parity_rows_8
+    ret
+
+.fail:
+    xor eax, eax
+    add rsp, 152
+    ret
+
 prepare_tech_counts:
     sub rsp, 40
 
@@ -3798,9 +4055,19 @@ prepare_tech_counts:
     jmp .done
 
 .count_8:
+    mov rax, [stop_segment_count]
+    or rax, [delay_segment_count]
+    or rax, [warp_segment_count]
+    jz .count_8_bpm
     cmp qword [fake_segment_count], 0
     jne .count_8_brackets
-    call prepare_split_step_parity_8
+    call prepare_step_parity_events_8
+    test eax, eax
+    jnz .done
+    jmp .count_8_brackets
+
+.count_8_bpm:
+    call prepare_step_parity_bpm_8
     test eax, eax
     jnz .done
 
@@ -3814,132 +4081,6 @@ prepare_tech_counts:
 
 .done:
     add rsp, 40
-    ret
-
-; Interim double tech path: run the proven 4-panel parity solver on each pad
-; independently and keep the native 8-panel bracket pass for cross-pad brackets.
-prepare_split_step_parity_8:
-    sub rsp, 104
-
-    cmp qword [fake_segment_count], 0
-    jne .fail_no_restore
-
-    mov rax, [chart_info + ASSP_CHART_INFO_NOTES_PTR]
-    mov [rsp + 64], rax
-    mov rax, [chart_info + ASSP_CHART_INFO_NOTES_LEN]
-    mov [rsp + 72], rax
-
-    lea r8, [split_accum_counts]
-    xor eax, eax
-    mov [r8], rax
-    mov [r8 + 8], rax
-    mov [r8 + 16], rax
-    mov [r8 + 24], rax
-
-    lea rcx, [minimized_buffer]
-    mov rdx, [minimized_chart_len]
-    lea r8, [tech_counts]
-    call assp_count_step_tech_brackets_minimized_8
-    test eax, eax
-    jz .fail_restore
-    mov eax, [tech_counts + ASSP_TECH_COUNTS_BRACKETS]
-    mov [split_accum_counts + ASSP_TECH_COUNTS_BRACKETS], eax
-
-    xor r8d, r8d
-    call prepare_split_step_parity_half_8
-    test eax, eax
-    jz .fail_restore
-    call add_split_half_counts
-
-    mov rax, [rsp + 64]
-    mov [chart_info + ASSP_CHART_INFO_NOTES_PTR], rax
-    mov rax, [rsp + 72]
-    mov [chart_info + ASSP_CHART_INFO_NOTES_LEN], rax
-    mov r8d, 4
-    call prepare_split_step_parity_half_8
-    test eax, eax
-    jz .fail_restore
-    call add_split_half_counts
-
-    mov rax, [split_accum_counts]
-    mov [tech_counts], rax
-    mov rax, [split_accum_counts + 8]
-    mov [tech_counts + 8], rax
-    mov rax, [split_accum_counts + 16]
-    mov [tech_counts + 16], rax
-    mov rax, [split_accum_counts + 24]
-    mov [tech_counts + 24], rax
-
-    mov rax, [rsp + 64]
-    mov [chart_info + ASSP_CHART_INFO_NOTES_PTR], rax
-    mov rax, [rsp + 72]
-    mov [chart_info + ASSP_CHART_INFO_NOTES_LEN], rax
-    mov eax, ASSP_TRUE
-    jmp .done
-
-.fail_restore:
-    mov rax, [rsp + 64]
-    mov [chart_info + ASSP_CHART_INFO_NOTES_PTR], rax
-    mov rax, [rsp + 72]
-    mov [chart_info + ASSP_CHART_INFO_NOTES_LEN], rax
-
-.fail_no_restore:
-    xor eax, eax
-
-.done:
-    add rsp, 104
-    ret
-
-; r8d = source half offset, 0 for columns 0..3 or 4 for columns 4..7.
-prepare_split_step_parity_half_8:
-    sub rsp, 40
-
-    mov rcx, [chart_info + ASSP_CHART_INFO_NOTES_PTR]
-    mov rdx, [chart_info + ASSP_CHART_INFO_NOTES_LEN]
-    lea r9, [parity_split_buffer]
-    mov qword [rsp + 32], MINIMIZED_BUFFER_CAP
-    call assp_split_double_chart_half_4
-    cmp rax, ASSP_NOT_FOUND
-    je .fail
-
-    lea rcx, [parity_split_buffer]
-    mov [chart_info + ASSP_CHART_INFO_NOTES_PTR], rcx
-    mov [chart_info + ASSP_CHART_INFO_NOTES_LEN], rax
-
-    mov rax, [stop_segment_count]
-    or rax, [delay_segment_count]
-    or rax, [warp_segment_count]
-    jz .bpm_only
-
-    call prepare_step_parity_events_4
-    jmp .done
-
-.bpm_only:
-    call prepare_step_parity_bpm_4
-    jmp .done
-
-.fail:
-    xor eax, eax
-
-.done:
-    add rsp, 40
-    ret
-
-add_split_half_counts:
-    mov eax, [tech_counts + ASSP_TECH_COUNTS_CROSSOVERS]
-    add [split_accum_counts + ASSP_TECH_COUNTS_CROSSOVERS], eax
-    mov eax, [tech_counts + ASSP_TECH_COUNTS_FOOTSWITCHES]
-    add [split_accum_counts + ASSP_TECH_COUNTS_FOOTSWITCHES], eax
-    mov eax, [tech_counts + ASSP_TECH_COUNTS_UP_FOOTSWITCHES]
-    add [split_accum_counts + ASSP_TECH_COUNTS_UP_FOOTSWITCHES], eax
-    mov eax, [tech_counts + ASSP_TECH_COUNTS_DOWN_FOOTSWITCHES]
-    add [split_accum_counts + ASSP_TECH_COUNTS_DOWN_FOOTSWITCHES], eax
-    mov eax, [tech_counts + ASSP_TECH_COUNTS_SIDESWITCHES]
-    add [split_accum_counts + ASSP_TECH_COUNTS_SIDESWITCHES], eax
-    mov eax, [tech_counts + ASSP_TECH_COUNTS_JACKS]
-    add [split_accum_counts + ASSP_TECH_COUNTS_JACKS], eax
-    mov eax, [tech_counts + ASSP_TECH_COUNTS_DOUBLESTEPS]
-    add [split_accum_counts + ASSP_TECH_COUNTS_DOUBLESTEPS], eax
     ret
 
 prepare_offset:
@@ -9533,7 +9674,6 @@ global_timing_tags resb ASSP_TIMING_TAGS_SIZE
 chart_timing_tags resb ASSP_TIMING_TAGS_SIZE
 note_stats resb ASSP_NOTE_STATS_SIZE
 tech_counts resb ASSP_TECH_COUNTS_SIZE
-split_accum_counts resb ASSP_TECH_COUNTS_SIZE
 stream_counts resb ASSP_STREAM_COUNTS_SIZE
 num_buffer resb 32
 raw_total_steps resq 1
@@ -9663,25 +9803,24 @@ parity_row_ms resd PARITY_ROW_CAP
 parity_row_beats resd PARITY_ROW_CAP
 parity_prepared_row_seconds resd PARITY_ROW_CAP
 parity_prepared_row_ms resd PARITY_ROW_CAP
-parity_hold_end_beats resd PARITY_ROW_CAP * 4
+parity_hold_end_beats resd PARITY_ROW_CAP * 8
 parity_note_counts resb PARITY_ROW_CAP
 parity_tech_masks resb PARITY_ROW_CAP
 parity_note_masks resb PARITY_ROW_CAP
 parity_hold_masks resb PARITY_ROW_CAP
 parity_mine_masks resb PARITY_ROW_CAP
 parity_prev_live_holds resb PARITY_ROW_CAP
-parity_out_placements resb PARITY_ROW_CAP * 4
+parity_out_placements resb PARITY_ROW_CAP * 8
 alignb 16
-parity_prev_states resb PARITY_STATE_CAP * ASSP_STEP_PARITY_STATE4_SIZE
-parity_next_states resb PARITY_STATE_CAP * ASSP_STEP_PARITY_STATE4_SIZE
+parity_prev_states resb PARITY_STATE_CAP * ASSP_STEP_PARITY_STATE8_SIZE
+parity_next_states resb PARITY_STATE_CAP * ASSP_STEP_PARITY_STATE8_SIZE
 parity_prev_costs resd PARITY_STATE_CAP
 parity_next_costs resd PARITY_STATE_CAP
 parity_predecessors resd PARITY_STATE_CAP
-parity_placements resb PARITY_STATE_CAP * 4
+parity_placements resb PARITY_STATE_CAP * 8
 parity_hits resb PARITY_STATE_CAP * 5
 parity_keys resd PARITY_STATE_CAP
 row_scratch resq ROW_SCRATCH_CAP
-parity_split_buffer resb MINIMIZED_BUFFER_CAP
 minimized_buffer resb MINIMIZED_BUFFER_CAP
 density_buffer resd DENSITY_CAP
 stream_segment_buffer resb DENSITY_CAP * ASSP_STREAM_SEGMENT_SIZE
@@ -9690,8 +9829,8 @@ text_buffer resb TEXT_BUFFER_CAP
 file_buffer resb FILE_BUFFER_CAP
 print_buffer resb PRINT_BUFFER_CAP
 alignb 16
-parity_fast_backtrack_placements resb PARITY_FAST_BACKTRACK_CAP * 4
+parity_fast_backtrack_placements resb PARITY_FAST_BACKTRACK_CAP * 8
 parity_fast_backtrack_predecessors resd PARITY_FAST_BACKTRACK_CAP
 alignb 16
-parity_backtrack_placements resb PARITY_BACKTRACK_CAP * 4
+parity_backtrack_placements resb PARITY_BACKTRACK_CAP * 8
 parity_backtrack_predecessors resd PARITY_BACKTRACK_CAP

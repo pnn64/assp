@@ -780,6 +780,14 @@ size_t assp_step_parity_hold_head_ends_4(
     float *out_hold_end_beats,
     size_t out_cap
 );
+size_t assp_step_parity_hold_head_ends_8(
+    const uint8_t *data,
+    size_t len,
+    const float *input_row_beats,
+    size_t input_row_count,
+    float *out_hold_end_beats,
+    size_t out_cap
+);
 size_t assp_step_parity_bpm_row_times_4(
     const uint8_t *data,
     size_t len,
@@ -791,7 +799,36 @@ size_t assp_step_parity_bpm_row_times_4(
     float *out_row_beats,
     size_t out_cap
 );
+size_t assp_step_parity_bpm_row_times_8(
+    const uint8_t *data,
+    size_t len,
+    const assp_bpm_segment *bpms,
+    size_t bpm_count,
+    int64_t offset_ms,
+    float *out_row_seconds,
+    int32_t *out_row_ms,
+    float *out_row_beats,
+    size_t out_cap
+);
 size_t assp_step_parity_prepare_hold_rows_4(
+    const uint8_t *data,
+    size_t len,
+    const float *input_row_seconds,
+    const int32_t *input_row_ms,
+    const float *input_row_beats,
+    const float *input_hold_end_beats,
+    size_t input_row_count,
+    uint8_t *out_note_counts,
+    uint8_t *out_tech_masks,
+    uint8_t *out_note_masks,
+    uint8_t *out_hold_masks,
+    uint8_t *out_mine_masks,
+    uint8_t *out_prev_row_live_holds,
+    float *out_row_seconds,
+    int32_t *out_row_ms,
+    size_t out_cap
+);
+size_t assp_step_parity_prepare_hold_rows_8(
     const uint8_t *data,
     size_t len,
     const float *input_row_seconds,
