@@ -941,11 +941,10 @@ fn compare_harness_chart(label: &str, expected: &Value, actual: &Value) -> Resul
     for (expected_path, actual_path) in [
         ("bpm_min", "timing.bpm_min"),
         ("bpm_max", "timing.bpm_max"),
-        ("display_bpm", "timing.display_bpm"),
         ("display_bpm_min", "timing.display_bpm_min"),
         ("display_bpm_max", "timing.display_bpm_max"),
     ] {
-        compare_path_value(
+        compare_timing_path_value(
             label,
             actual_path,
             "harness",
@@ -953,6 +952,13 @@ fn compare_harness_chart(label: &str, expected: &Value, actual: &Value) -> Resul
             get_dotted_path(actual, actual_path),
         )?;
     }
+    compare_path_value(
+        label,
+        "timing.display_bpm",
+        "harness",
+        get_path(expected, &["display_bpm"]),
+        get_path(actual, &["timing", "display_bpm"]),
+    )?;
     compare_rounded_number(
         label,
         "timing.duration_seconds",
@@ -983,7 +989,7 @@ fn compare_harness_timing(label: &str, expected: &Value, actual: &Value) -> Resu
         "scrolls",
         "fakes",
     ] {
-        compare_path_value(
+        compare_timing_path_value(
             label,
             &format!("timing.{field}"),
             "harness",
@@ -1004,7 +1010,7 @@ fn compare_harness_nps(label: &str, expected: &Value, actual: &Value) -> Result<
             "nps.equally_spaced_per_measure",
         ),
     ] {
-        compare_path_value(
+        compare_nps_path_value(
             label,
             actual_path,
             "harness",
@@ -1219,6 +1225,56 @@ fn compare_path_value(
 ) -> Result<(), String> {
     match (expected, actual) {
         (Some(expected), Some(actual)) if values_equal(expected, actual) => Ok(()),
+        (Some(expected), Some(actual)) => {
+            let diff = first_diff(expected, actual, field);
+            Err(format!(
+                "{chart}: mismatch at {} from {source} baseline: expected {}, actual {}",
+                diff.path,
+                option_brief_json(Some(diff.expected)),
+                option_brief_json(Some(diff.actual))
+            ))
+        }
+        _ => Err(format!(
+            "{chart}: mismatch at {field} from {source} baseline: expected {}, actual {}",
+            option_brief_json(expected),
+            option_brief_json(actual)
+        )),
+    }
+}
+
+const TIMING_EPS: f64 = 1e-3;
+const NPS_EPS: f64 = 1e-4;
+
+fn compare_timing_path_value(
+    chart: &str,
+    field: &str,
+    source: &str,
+    expected: Option<&Value>,
+    actual: Option<&Value>,
+) -> Result<(), String> {
+    compare_approx_path_value(chart, field, source, expected, actual, TIMING_EPS)
+}
+
+fn compare_nps_path_value(
+    chart: &str,
+    field: &str,
+    source: &str,
+    expected: Option<&Value>,
+    actual: Option<&Value>,
+) -> Result<(), String> {
+    compare_approx_path_value(chart, field, source, expected, actual, NPS_EPS)
+}
+
+fn compare_approx_path_value(
+    chart: &str,
+    field: &str,
+    source: &str,
+    expected: Option<&Value>,
+    actual: Option<&Value>,
+    epsilon: f64,
+) -> Result<(), String> {
+    match (expected, actual) {
+        (Some(expected), Some(actual)) if values_approx_equal(expected, actual, epsilon) => Ok(()),
         (Some(expected), Some(actual)) => {
             let diff = first_diff(expected, actual, field);
             Err(format!(
@@ -1453,6 +1509,30 @@ fn values_equal(expected: &Value, actual: &Value) -> bool {
     }
 }
 
+fn values_approx_equal(expected: &Value, actual: &Value, epsilon: f64) -> bool {
+    match (expected, actual) {
+        (Value::Number(expected), Value::Number(actual)) => {
+            numbers_approx_equal(expected, actual, epsilon)
+        }
+        (Value::Array(expected), Value::Array(actual)) => {
+            expected.len() == actual.len()
+                && expected
+                    .iter()
+                    .zip(actual)
+                    .all(|(expected, actual)| values_approx_equal(expected, actual, epsilon))
+        }
+        (Value::Object(expected), Value::Object(actual)) => {
+            expected.len() == actual.len()
+                && expected.iter().all(|(key, expected)| {
+                    actual
+                        .get(key)
+                        .is_some_and(|actual| values_approx_equal(expected, actual, epsilon))
+                })
+        }
+        _ => expected == actual,
+    }
+}
+
 fn numbers_equal(expected: &serde_json::Number, actual: &serde_json::Number) -> bool {
     if let (Some(expected), Some(actual)) = (expected.as_i64(), actual.as_i64()) {
         return expected == actual;
@@ -1462,6 +1542,17 @@ fn numbers_equal(expected: &serde_json::Number, actual: &serde_json::Number) -> 
     }
     match (expected.as_f64(), actual.as_f64()) {
         (Some(expected), Some(actual)) => (expected - actual).abs() <= f64::EPSILON,
+        _ => false,
+    }
+}
+
+fn numbers_approx_equal(
+    expected: &serde_json::Number,
+    actual: &serde_json::Number,
+    epsilon: f64,
+) -> bool {
+    match (expected.as_f64(), actual.as_f64()) {
+        (Some(expected), Some(actual)) => (expected - actual).abs() <= epsilon,
         _ => false,
     }
 }

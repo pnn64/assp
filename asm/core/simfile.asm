@@ -8,6 +8,7 @@ global assp_find_next_chart
 global assp_find_global_bpms
 global assp_find_chart_bpms_by_index
 global assp_find_global_tag
+global assp_find_global_tag_last
 global assp_find_tag_in_range
 global assp_find_chart_tag_by_index
 global assp_find_global_timing_tags
@@ -438,6 +439,79 @@ assp_find_global_tag:
     mov r12, r8
     mov r13, r9
     call find_tag_in_range
+    jmp .done
+
+.fail:
+    xor eax, eax
+
+.done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
+; rcx = simfile bytes, rdx = len, r8 = tag bytes, r9 = tag len,
+; stack arg 5 = out assp_byte_slice.
+; The tag must include the leading '#' and trailing ':'.
+; eax = 1 when found, 0 otherwise. Stores the last global match.
+assp_find_global_tag_last:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+
+    mov rbx, [rsp + 96]
+    test rcx, rcx
+    jz .fail
+    test r8, r8
+    jz .fail
+    test r9, r9
+    jz .fail
+    test rbx, rbx
+    jz .fail
+    cmp rdx, r9
+    jb .fail
+
+    mov qword [rbx + ASSP_BYTE_SLICE_PTR], 0
+    mov qword [rbx + ASSP_BYTE_SLICE_LEN], 0
+
+    mov r10, rcx
+    lea r11, [rcx + rdx]
+    call find_global_scan_end
+    mov r12, r8
+    mov r13, r9
+    xor r15d, r15d
+
+.scan:
+    call find_hash
+    test eax, eax
+    jz .done_scan
+
+    lea rax, [r10 + r13]
+    cmp rax, r11
+    ja .done_scan
+
+    call match_tag_at
+    test eax, eax
+    jz .next
+    call store_tag_value_at
+    test eax, eax
+    jz .next
+    mov r15d, ASSP_TRUE
+
+.next:
+    inc r10
+    jmp .scan
+
+.done_scan:
+    mov eax, r15d
     jmp .done
 
 .fail:

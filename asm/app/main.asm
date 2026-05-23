@@ -47,6 +47,7 @@ extern assp_count_timing_note_stats_no_holds_8
 extern assp_count_note_charts
 extern assp_chart_owns_timing_by_index
 extern assp_supported_step_type_lanes
+extern assp_find_global_tag_last
 extern assp_find_chart_bpms_by_index
 extern assp_find_chart_by_index
 extern assp_find_next_chart
@@ -1257,6 +1258,19 @@ zero_chart_timing_tags:
 .done:
     ret
 
+clear_sm_ssc_global_timing_tags:
+    lea r10, [global_timing_tags]
+    xor eax, eax
+    mov [r10 + ASSP_TIMING_TAGS_WARPS + ASSP_BYTE_SLICE_PTR], rax
+    mov [r10 + ASSP_TIMING_TAGS_WARPS + ASSP_BYTE_SLICE_LEN], rax
+    mov [r10 + ASSP_TIMING_TAGS_SPEEDS + ASSP_BYTE_SLICE_PTR], rax
+    mov [r10 + ASSP_TIMING_TAGS_SPEEDS + ASSP_BYTE_SLICE_LEN], rax
+    mov [r10 + ASSP_TIMING_TAGS_SCROLLS + ASSP_BYTE_SLICE_PTR], rax
+    mov [r10 + ASSP_TIMING_TAGS_SCROLLS + ASSP_BYTE_SLICE_LEN], rax
+    mov [r10 + ASSP_TIMING_TAGS_FAKES + ASSP_BYTE_SLICE_PTR], rax
+    mov [r10 + ASSP_TIMING_TAGS_FAKES + ASSP_BYTE_SLICE_LEN], rax
+    ret
+
 find_current_chart_timing_tags:
     sub rsp, 40
 
@@ -1993,6 +2007,10 @@ prepare_timing_events:
     call assp_find_global_timing_tags
     test eax, eax
     jz .fail
+    cmp qword [timing_format_sm], 0
+    je .normalize_global_timing
+    call clear_sm_ssc_global_timing_tags
+.normalize_global_timing:
     call prepare_global_normalized_timing_maps
     test eax, eax
     jz .fail
@@ -2076,6 +2094,7 @@ prepare_timing_events:
     mov [bpm_report_count], rax
     cmp qword [timing_format_sm], 0
     jne .select_stops
+    call filter_positive_bpm_report_segments
     lea rcx, [bpm_report_segment_buffer]
     mov rdx, [bpm_report_count]
     call tidy_bpm_segments_in_place
@@ -2520,6 +2539,15 @@ tidy_scroll_segments_in_place:
     jmp .same_row_loop
 
 .store_last_for_row:
+    test r9, r9
+    jz .write_segment
+    mov r11, r9
+    dec r11
+    shl r11, 4
+    cmp [rbx + r11 + ASSP_BPM_SEGMENT_BPM_MILLI], r13
+    je .collapse_loop
+
+.write_segment:
     mov r11, r9
     shl r11, 4
     mov [rbx + r11 + ASSP_BPM_SEGMENT_BEAT_MILLI], r12
@@ -4232,7 +4260,7 @@ prepare_global_metadata:
     mov r9d, tag_title_end - tag_title
     lea rax, [title_slice]
     mov [rsp + 32], rax
-    call assp_find_global_tag
+    call assp_find_global_tag_last
 
     lea rcx, [file_buffer]
     mov rdx, [file_len]
@@ -4479,6 +4507,28 @@ trim_metadata_slice:
 
 .empty:
     mov qword [rcx + ASSP_BYTE_SLICE_LEN], 0
+
+.done:
+    ret
+
+trim_trailing_colon_slice:
+    test rcx, rcx
+    jz .done
+    mov r10, [rcx + ASSP_BYTE_SLICE_PTR]
+    mov r11, [rcx + ASSP_BYTE_SLICE_LEN]
+    test r10, r10
+    jz .done
+    test r11, r11
+    jz .done
+    cmp byte [r10 + r11 - 1], ':'
+    jne .done
+    cmp r11, 1
+    je .trim
+    cmp byte [r10 + r11 - 2], '\'
+    je .done
+.trim:
+    dec r11
+    mov [rcx + ASSP_BYTE_SLICE_LEN], r11
 
 .done:
     ret
@@ -4774,11 +4824,15 @@ prepare_chart_metadata:
 
 .set_sm_step_artist:
     cmp qword [timing_format_sm], 0
-    je .done
+    je .trim_step_artist
     mov rax, [chart_info + ASSP_CHART_INFO_DESC_PTR]
     mov [step_artist_slice + ASSP_BYTE_SLICE_PTR], rax
     mov rax, [chart_info + ASSP_CHART_INFO_DESC_LEN]
     mov [step_artist_slice + ASSP_BYTE_SLICE_LEN], rax
+
+.trim_step_artist:
+    lea rcx, [step_artist_slice]
+    call trim_trailing_colon_slice
 
 .done:
     add rsp, 56
@@ -8437,6 +8491,7 @@ print_json_slice_value:
     mov [rsp + 32], rdx
     mov [rsp + 40], r8
     mov qword [rsp + 48], 0
+    mov qword [rsp + 64], 0
     json_z quote
 
 .loop:
@@ -8450,6 +8505,8 @@ print_json_slice_value:
     movzx eax, byte [rdx]
     cmp al, 80h
     jb .ascii
+    cmp qword [rsp + 64], 0
+    jne .cp1252
     call json_utf8_len
     test rax, rax
     jz .cp1252
@@ -8462,6 +8519,7 @@ print_json_slice_value:
     jmp .loop
 
 .cp1252:
+    mov qword [rsp + 64], 1
     movzx eax, byte [rdx]
     call print_json_cp1252_byte
     inc qword [rsp + 48]
@@ -8482,6 +8540,7 @@ print_json_unescaped_slice_value:
     mov [rsp + 32], rdx
     mov [rsp + 40], r8
     mov qword [rsp + 48], 0
+    mov qword [rsp + 64], 0
     json_z quote
 
 .loop:
@@ -8504,6 +8563,8 @@ print_json_unescaped_slice_value:
     movzx eax, byte [rdx]
     cmp al, 80h
     jb .ascii
+    cmp qword [rsp + 64], 0
+    jne .cp1252
     call json_utf8_len
     test rax, rax
     jz .cp1252
@@ -8516,6 +8577,7 @@ print_json_unescaped_slice_value:
     jmp .loop
 
 .cp1252:
+    mov qword [rsp + 64], 1
     movzx eax, byte [rdx]
     call print_json_cp1252_byte
     inc qword [rsp + 48]
@@ -9625,6 +9687,8 @@ print_json_label_array:
     mov [rsp + 40], r8
     mov qword [rsp + 48], 0
     mov qword [rsp + 56], 0
+    mov qword [rsp + 104], 0
+    mov qword [rsp + 112], 0
     json_z open_bracket
 
 .loop:
@@ -9681,6 +9745,33 @@ print_json_label_array:
     mov [rsp + 80], r10
     mov [rsp + 88], rax
     mov [rsp + 96], r11
+
+    cmp qword [rsp + 56], 0
+    je .remember_label
+    mov r10, [rsp + 88]
+    inc r10
+    mov r8, [rsp + 96]
+    sub r8, r10
+    cmp r8, [rsp + 112]
+    jne .remember_label
+    mov r11, [rsp + 104]
+    xor r9d, r9d
+.compare_label:
+    cmp r9, r8
+    jae .next_segment
+    mov al, [r10 + r9]
+    cmp al, [r11 + r9]
+    jne .remember_label
+    inc r9
+    jmp .compare_label
+
+.remember_label:
+    mov r10, [rsp + 88]
+    inc r10
+    mov r8, [rsp + 96]
+    sub r8, r10
+    mov [rsp + 104], r10
+    mov [rsp + 112], r8
 
     cmp qword [rsp + 56], 0
     je .open_segment
@@ -9912,7 +10003,7 @@ print_json_chart:
     lea rcx, [json_key_step_artists]
     mov rdx, [step_artist_slice + ASSP_BYTE_SLICE_PTR]
     mov r8, [step_artist_slice + ASSP_BYTE_SLICE_LEN]
-    call print_json_string_field
+    call print_json_unescaped_string_field
     lea rcx, [json_key_tech_notation]
     lea rdx, [tech_notation_buffer]
     mov r8, [tech_notation_len]
