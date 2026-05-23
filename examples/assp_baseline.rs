@@ -30,6 +30,7 @@ struct Config {
     list: bool,
     quiet: bool,
     keep_temp: bool,
+    include_raw: bool,
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -111,6 +112,7 @@ fn parse_config() -> Result<Config, String> {
         list: false,
         quiet: false,
         keep_temp: false,
+        include_raw: false,
     };
 
     let mut args = env::args().skip(1);
@@ -138,6 +140,7 @@ fn parse_config() -> Result<Config, String> {
             "--list" => config.list = true,
             "--quiet" => config.quiet = true,
             "--keep-temp" => config.keep_temp = true,
+            "--include-raw" => config.include_raw = true,
             "--" => {}
             _ if arg.starts_with('-') => return Err(format!("unknown argument: {arg}")),
             _ if config.filter.is_none() => config.filter = Some(arg),
@@ -233,7 +236,8 @@ Options:\n\
   --list                list selected simfiles without running ASSP\n\
   --quiet               suppress per-test ok lines\n\
   --temp-dir <dir>      temp directory for decompressed .zst simfiles\n\
-  --keep-temp           leave decompressed .zst temp files on disk"
+  --keep-temp           leave decompressed .zst temp files on disk\n\
+  --include-raw         include loose .sm/.ssc files; default matches RSSP .zst tests"
 }
 
 fn require_existing_dir(path: &Path, label: &str) -> Result<PathBuf, String> {
@@ -481,6 +485,9 @@ fn discover_tests(config: &Config) -> Result<Vec<TestCase>, String> {
         let Some(compressed) = simfile_compression(&source_path) else {
             continue;
         };
+        if !compressed && !config.include_raw {
+            continue;
+        }
         let relative_path = source_path
             .strip_prefix(&config.packs_dir)
             .map_err(|err| format!("failed to make relative path: {err}"))?
@@ -515,6 +522,9 @@ fn discover_exact_test(config: &Config, filter: &str) -> Result<Vec<TestCase>, S
     let Some(compressed) = simfile_compression(&source_path) else {
         return Ok(Vec::new());
     };
+    if !compressed && !config.include_raw {
+        return Ok(Vec::new());
+    }
 
     Ok(vec![TestCase {
         name: display_relative(&relative_path),
