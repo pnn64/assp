@@ -1275,7 +1275,24 @@ find_tag_in_range:
     mov rdx, rax
     call find_semicolon
     test eax, eax
+    jz .line_terminator_only
+    mov r8, rdx
+    lea rdx, [r10 + r13]
+    call find_line_tag_terminator
+    test eax, eax
+    jz .use_semicolon
+    cmp rdx, r8
+    jb .terminator_ready
+.use_semicolon:
+    mov rdx, r8
+    jmp .terminator_ready
+
+.line_terminator_only:
+    lea rdx, [r10 + r13]
+    call find_line_tag_terminator
+    test eax, eax
     jz .fail
+.terminator_ready:
     lea rax, [r10 + r13]
 
 .store:
@@ -1296,7 +1313,24 @@ store_tag_value_at:
     mov rdx, rax
     call find_semicolon
     test eax, eax
+    jz .line_terminator_only
+    mov r8, rdx
+    lea rdx, [r10 + r13]
+    call find_line_tag_terminator
+    test eax, eax
+    jz .use_semicolon
+    cmp rdx, r8
+    jb .terminator_ready
+.use_semicolon:
+    mov rdx, r8
+    jmp .terminator_ready
+
+.line_terminator_only:
+    lea rdx, [r10 + r13]
+    call find_line_tag_terminator
+    test eax, eax
     jz .fail
+.terminator_ready:
     lea rax, [r10 + r13]
 
 .store:
@@ -1420,6 +1454,59 @@ find_semicolon:
     je .found
     inc rdx
     jmp .tail
+
+.found:
+    mov eax, ASSP_TRUE
+    ret
+
+.not_found:
+    xor eax, eax
+    ret
+
+; rdx = scan start, r11 = scan end. rdx is advanced to a line break
+; that is followed by optional whitespace and another tag. This accepts
+; broken one-line metadata tags without truncating multiline timing tags.
+; eax = 1 when found, 0 otherwise.
+find_line_tag_terminator:
+    cmp rdx, r11
+    jae .not_found
+
+.loop:
+    cmp rdx, r11
+    jae .not_found
+    mov al, [rdx]
+    cmp al, 10
+    je .check_next_tag
+    cmp al, 13
+    je .check_next_tag
+    inc rdx
+    jmp .loop
+
+.check_next_tag:
+    mov r9, rdx
+    inc r9
+
+.skip_ws:
+    cmp r9, r11
+    jae .continue_after_line
+    mov al, [r9]
+    cmp al, '#'
+    je .found
+    cmp al, 10
+    je .next_ws
+    cmp al, 13
+    je .next_ws
+    cmp al, ' '
+    je .next_ws
+    cmp al, 9
+    jne .continue_after_line
+.next_ws:
+    inc r9
+    jmp .skip_ws
+
+.continue_after_line:
+    inc rdx
+    jmp .loop
 
 .found:
     mov eax, ASSP_TRUE

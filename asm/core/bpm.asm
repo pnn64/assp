@@ -931,6 +931,8 @@ assp_parse_offset_ms:
 ; rcx = offset bytes, rdx = byte len. rax = signed offset microseconds.
 ; Invalid or empty values match RSSP's parser fallback and return 0.
 assp_parse_offset_us:
+    sub rsp, 40
+
     test rdx, rdx
     jz .zero
     test rcx, rcx
@@ -947,11 +949,18 @@ assp_parse_offset_us:
     test edx, edx
     jz .done
     neg rax
-    ret
+    jmp .done
 
 .zero:
     xor eax, eax
 .done:
+    cvtsi2sd xmm0, rax
+    divsd xmm0, [rel nps_f64_1000000]
+    cvtsd2ss xmm0, xmm0
+    cvtss2sd xmm0, xmm0
+    mulsd xmm0, [rel nps_f64_1000000]
+    cvtsd2si rax, xmm0
+    add rsp, 40
     ret
 
 ; rcx = BPM segments, rdx = count, r8 = out min BPM, r9 = out max BPM.
@@ -2098,8 +2107,6 @@ assp_elapsed_seconds_f32_with_events:
     mov r15, [rbp + 64]
 
     mov rax, [rbp + 80]
-    test rax, rax
-    jle .zero
     test rsi, rsi
     jz .check_stops
     test rbx, rbx
@@ -2263,7 +2270,8 @@ assp_elapsed_seconds_f32_with_events:
     shl r10, 4
     mov r11, [rbx + r10 + ASSP_BPM_SEGMENT_BPM_MILLI]
     cvtsi2ss xmm0, r11
-    divss xmm0, [rel nps_f32_60000]
+    divss xmm0, [rel nps_f32_1000]
+    divss xmm0, [rel nps_f32_60]
     movss [rbp + F32_BPS], xmm0
     inc qword [rbp + F32_BPM_IDX]
     jmp .store_last_row
@@ -2862,12 +2870,14 @@ assp_measure_nps_milli_with_events:
 section .rdata
 align 8
 nps_f32_48 dd 48.0
+nps_f32_60 dd 60.0
 nps_f32_1000 dd 1000.0
 nps_f32_60000 dd 60000.0
 nps_f32_million dd 1000000.0
 nps_f32_one dd 1.0
 nps_f64_0_12 dq 0.12
 nps_f64_1000 dq 1000.0
+nps_f64_1000000 dq 1000000.0
 
 section .text
 

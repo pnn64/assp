@@ -131,16 +131,22 @@ global profile_step_dp_skip_count
 %define PRINT_BUFFER_CAP 2097152
 %define BPM_BUFFER_CAP 65536
 %define BPM_SEGMENT_CAP 4096
-%define MINIMIZED_BUFFER_CAP 2097152
+%define MINIMIZED_BUFFER_CAP 4194304
 %define ROW_SCRATCH_CAP 2097152
 %define TECH_BUFFER_CAP 16384
 %define METADATA_BUFFER_CAP 65536
-%define PARITY_ROW_CAP 262144
+%define PARITY_ROW_CAP 1048576
 %define PARITY_FAST_STATE_CAP 128
 %define PARITY_STATE_CAP 4096
 %define PARITY_FAST_BACKTRACK_ROW_CAP 65536
 %define PARITY_BACKTRACK_ROW_CAP 8192
 %define PARITY_FAST_BACKTRACK_CAP (PARITY_FAST_BACKTRACK_ROW_CAP * PARITY_FAST_STATE_CAP)
+%define PARITY_LARGE_STATE_CAP 32
+%define PARITY_LARGE_BACKTRACK_ROW_CAP (PARITY_FAST_BACKTRACK_CAP / PARITY_LARGE_STATE_CAP)
+%define PARITY_HUGE_STATE_CAP 16
+%define PARITY_HUGE_BACKTRACK_ROW_CAP (PARITY_FAST_BACKTRACK_CAP / PARITY_HUGE_STATE_CAP)
+%define PARITY_GIANT_STATE_CAP 8
+%define PARITY_GIANT_BACKTRACK_ROW_CAP (PARITY_FAST_BACKTRACK_CAP / PARITY_GIANT_STATE_CAP)
 %define PARITY_BACKTRACK_CAP (PARITY_BACKTRACK_ROW_CAP * PARITY_STATE_CAP)
 %define MONO_THRESHOLD 6
 %define ASSP_OS_INVALID_HANDLE -1
@@ -2738,8 +2744,13 @@ apply_sm_negative_bpm_warps:
     mov r12, [rbx + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI]
     mov r13, [rbx + r10 + ASSP_BPM_SEGMENT_BPM_MILLI]
     test r13, r13
-    jg .keep
+    jle .negative_bpm_warp
+    mov rax, 9999999000
+    cmp r13, rax
+    jg .fast_bpm_warp
+    jmp .keep
 
+.negative_bpm_warp:
     mov r11, r8
     inc r11
     cmp r11, rsi
@@ -2762,12 +2773,38 @@ apply_sm_negative_bpm_warps:
     inc r14
     jmp .skip
 
+.fast_bpm_warp:
+    mov r11, r8
+    inc r11
+    cmp r11, rsi
+    jae .skip
+    mov r10, r11
+    shl r10, 4
+    mov r15, [rbx + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    mov r13, [rbx + r10 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    test r13, r13
+    jle .skip
+    mov rax, 9999999000
+    cmp r13, rax
+    jg .skip
+    sub r15, r12
+    jle .skip
+    cmp r14, BPM_SEGMENT_CAP
+    jae .fail
+    mov r10, r14
+    shl r10, 4
+    mov [rdi + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI], r12
+    mov [rdi + r10 + ASSP_BPM_SEGMENT_BPM_MILLI], r15
+    inc r14
+    jmp .skip
+
 .keep:
     mov r11, r9
     shl r11, 4
     mov [rbx + r11 + ASSP_BPM_SEGMENT_BEAT_MILLI], r12
     mov [rbx + r11 + ASSP_BPM_SEGMENT_BPM_MILLI], r13
     inc r9
+    jmp .skip
 
 .skip:
     inc r8
@@ -2820,49 +2857,24 @@ apply_sm_negative_stop_warps:
     test rcx, rcx
     jns .keep_stop
 
-    xor r11d, r11d
-.find_bpm_loop:
-    cmp r11, r12
-    jae .final_negative_stop
-    mov rax, r11
-    shl rax, 4
-    mov rdx, [rdi + rax + ASSP_BPM_SEGMENT_BEAT_MILLI]
-    cmp rdx, r15
-    jle .next_bpm
+    cmp r15, 0
+    jl .next
 
-    cmp r14, BPM_SEGMENT_CAP
-    jae .fail
-    mov r10, r14
-    shl r10, 4
-    mov [r13 + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI], r15
-    sub rdx, r15
-    mov [r13 + r10 + ASSP_BPM_SEGMENT_BPM_MILLI], rdx
-    inc r14
-    mov [rdi + rax + ASSP_BPM_SEGMENT_BEAT_MILLI], r15
-    mov rcx, r15
-    call move_bpm_report_after_negative_stop
-    jmp .next
-
-.next_bpm:
-    inc r11
-    jmp .find_bpm_loop
-
-.final_negative_stop:
     mov edx, 60000
     xor r11d, r11d
-.prev_bpm_loop:
+.current_bpm_loop:
     cmp r11, r12
-    jae .have_prev_bpm
+    jae .have_current_bpm
     mov rax, r11
     shl rax, 4
     mov r10, [rdi + rax + ASSP_BPM_SEGMENT_BEAT_MILLI]
     cmp r10, r15
-    jg .have_prev_bpm
+    jg .have_current_bpm
     mov rdx, [rdi + rax + ASSP_BPM_SEGMENT_BPM_MILLI]
     inc r11
-    jmp .prev_bpm_loop
+    jmp .current_bpm_loop
 
-.have_prev_bpm:
+.have_current_bpm:
     test rdx, rdx
     jle .next
     cmp r14, BPM_SEGMENT_CAP
@@ -2871,14 +2883,33 @@ apply_sm_negative_stop_warps:
     neg rax
     imul rax, rdx
     cqo
-    mov r10d, 60000000
-    idiv r10
+    mov r11d, 60000000
+    idiv r11
+    test rax, rax
+    jle .next
+    mov rcx, rax
+    call milli_to_row48_f32_even
+    imul rax, rax, 1000
+    cqo
+    mov r11d, 48
+    idiv r11
     test rax, rax
     jle .next
     mov r10, r14
     shl r10, 4
     mov [r13 + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI], r15
     mov [r13 + r10 + ASSP_BPM_SEGMENT_BPM_MILLI], rax
+    mov r10, r15
+    add r10, rax
+    mov r11, r15
+    push r8
+    mov rcx, rdi
+    mov rdx, r12
+    call move_bpm_segment_at_beat
+    lea rcx, [bpm_report_segment_buffer]
+    mov rdx, [bpm_report_count]
+    call move_bpm_segment_at_beat
+    pop r8
     inc r14
     jmp .next
 
@@ -2912,21 +2943,18 @@ apply_sm_negative_stop_warps:
     pop rbx
     ret
 
-move_bpm_report_after_negative_stop:
-    cmp qword [bpm_report_count], 0
-    je .done
-    lea r10, [bpm_report_segment_buffer]
+; rcx = BPM segment buffer, rdx = segment count, r10 = old beat, r11 = new beat.
+move_bpm_segment_at_beat:
     xor eax, eax
 
 .loop:
-    cmp rax, [bpm_report_count]
+    cmp rax, rdx
     jae .done
-    mov r11, rax
-    shl r11, 4
-    mov rdx, [r10 + r11 + ASSP_BPM_SEGMENT_BEAT_MILLI]
-    cmp rdx, rcx
-    jle .next
-    mov [r10 + r11 + ASSP_BPM_SEGMENT_BEAT_MILLI], rcx
+    mov r8, rax
+    shl r8, 4
+    cmp [rcx + r8 + ASSP_BPM_SEGMENT_BEAT_MILLI], r10
+    jne .next
+    mov [rcx + r8 + ASSP_BPM_SEGMENT_BEAT_MILLI], r11
     ret
 
 .next:
@@ -2998,6 +3026,9 @@ filter_positive_bpm_report_segments:
     jl .next
     test r13, r13
     jle .next
+    mov rax, 9999999000000
+    cmp r13, rax
+    jg .next
     mov r11, r9
     shl r11, 4
     mov [rbx + r11 + ASSP_BPM_SEGMENT_BEAT_MILLI], r12
@@ -4276,8 +4307,19 @@ prepare_step_parity_rows_4:
     cmp rax, PARITY_ROW_CAP
     ja .fail
     mov [parity_prepared_row_count], rax
+    mov qword [rsp + 128], PARITY_FAST_STATE_CAP
     cmp rax, PARITY_FAST_BACKTRACK_ROW_CAP
+    jbe .fast_capacity_ready
+    mov qword [rsp + 128], PARITY_LARGE_STATE_CAP
+    cmp rax, PARITY_LARGE_BACKTRACK_ROW_CAP
+    jbe .fast_capacity_ready
+    mov qword [rsp + 128], PARITY_HUGE_STATE_CAP
+    cmp rax, PARITY_HUGE_BACKTRACK_ROW_CAP
+    jbe .fast_capacity_ready
+    mov qword [rsp + 128], PARITY_GIANT_STATE_CAP
+    cmp rax, PARITY_GIANT_BACKTRACK_ROW_CAP
     ja .fail
+.fast_capacity_ready:
     app_trace trace_app_parity_prepared
 
     lea rdx, [parity_prepared_rows]
@@ -4324,7 +4366,8 @@ prepare_step_parity_rows_4:
     mov [rdx + ASSP_STEP_PARITY_WORKSPACE4_BACKTRACK_PLACEMENTS], rax
     lea rax, [parity_fast_backtrack_predecessors]
     mov [rdx + ASSP_STEP_PARITY_WORKSPACE4_BACKTRACK_PREDECESSORS], rax
-    mov qword [rdx + ASSP_STEP_PARITY_WORKSPACE4_STATE_CAP], PARITY_FAST_STATE_CAP
+    mov rax, [rsp + 128]
+    mov [rdx + ASSP_STEP_PARITY_WORKSPACE4_STATE_CAP], rax
 
     lea rcx, [parity_prepared_rows]
     lea rdx, [parity_workspace]
@@ -4949,8 +4992,19 @@ prepare_step_parity_rows_8:
     cmp rax, PARITY_ROW_CAP
     ja .fail
     mov [parity_prepared_row_count], rax
+    mov qword [rsp + 128], PARITY_FAST_STATE_CAP
     cmp rax, PARITY_FAST_BACKTRACK_ROW_CAP
+    jbe .fast_capacity_ready
+    mov qword [rsp + 128], PARITY_LARGE_STATE_CAP
+    cmp rax, PARITY_LARGE_BACKTRACK_ROW_CAP
+    jbe .fast_capacity_ready
+    mov qword [rsp + 128], PARITY_HUGE_STATE_CAP
+    cmp rax, PARITY_HUGE_BACKTRACK_ROW_CAP
+    jbe .fast_capacity_ready
+    mov qword [rsp + 128], PARITY_GIANT_STATE_CAP
+    cmp rax, PARITY_GIANT_BACKTRACK_ROW_CAP
     ja .fail
+.fast_capacity_ready:
     app_trace trace_app_parity_prepared
 
     lea rdx, [parity_prepared_rows]
@@ -4997,7 +5051,8 @@ prepare_step_parity_rows_8:
     mov [rdx + ASSP_STEP_PARITY_WORKSPACE4_BACKTRACK_PLACEMENTS], rax
     lea rax, [parity_fast_backtrack_predecessors]
     mov [rdx + ASSP_STEP_PARITY_WORKSPACE4_BACKTRACK_PREDECESSORS], rax
-    mov qword [rdx + ASSP_STEP_PARITY_WORKSPACE4_STATE_CAP], PARITY_FAST_STATE_CAP
+    mov rax, [rsp + 128]
+    mov [rdx + ASSP_STEP_PARITY_WORKSPACE4_STATE_CAP], rax
 
     lea rcx, [parity_prepared_rows]
     lea rdx, [parity_workspace]
@@ -7656,6 +7711,15 @@ print_json_fixed3_field:
     add rsp, 56
     ret
 
+print_json_milli_bpm_sig6_field:
+    sub rsp, 56
+    mov [rsp + 32], rdx
+    call print_z
+    mov rcx, [rsp + 32]
+    call print_milli_bpm_itg_sig6_inline
+    add rsp, 56
+    ret
+
 print_json_fixed6_scaled_field:
     sub rsp, 56
     mov [rsp + 32], rdx
@@ -7701,7 +7765,30 @@ print_json_slice_value:
     cmp rax, [rsp + 40]
     jae .done_string
     mov r10, [rsp + 32]
-    movzx eax, byte [r10 + rax]
+    lea rdx, [r10 + rax]
+    mov r8, [rsp + 32]
+    add r8, [rsp + 40]
+    movzx eax, byte [rdx]
+    cmp al, 80h
+    jb .ascii
+    call json_utf8_len
+    test rax, rax
+    jz .cp1252
+    mov [rsp + 56], rax
+    mov rcx, rdx
+    mov rdx, rax
+    call print_raw
+    mov rax, [rsp + 56]
+    add [rsp + 48], rax
+    jmp .loop
+
+.cp1252:
+    movzx eax, byte [rdx]
+    call print_json_cp1252_byte
+    inc qword [rsp + 48]
+    jmp .loop
+
+.ascii:
     call print_json_byte
     inc qword [rsp + 48]
     jmp .loop
@@ -7732,7 +7819,30 @@ print_json_unescaped_slice_value:
     mov r10, [rsp + 32]
 
 .current:
-    movzx eax, byte [r10 + rax]
+    lea rdx, [r10 + rax]
+    mov r8, [rsp + 32]
+    add r8, [rsp + 40]
+    movzx eax, byte [rdx]
+    cmp al, 80h
+    jb .ascii
+    call json_utf8_len
+    test rax, rax
+    jz .cp1252
+    mov [rsp + 56], rax
+    mov rcx, rdx
+    mov rdx, rax
+    call print_raw
+    mov rax, [rsp + 56]
+    add [rsp + 48], rax
+    jmp .loop
+
+.cp1252:
+    movzx eax, byte [rdx]
+    call print_json_cp1252_byte
+    inc qword [rsp + 48]
+    jmp .loop
+
+.ascii:
     call print_json_byte
     inc qword [rsp + 48]
     jmp .loop
@@ -7808,6 +7918,144 @@ print_json_byte:
 
 .done:
     add rsp, 56
+    ret
+
+; rdx = current byte pointer, r8 = one-past-end. rax = UTF-8 byte len, or 0.
+json_utf8_len:
+    movzx eax, byte [rdx]
+    cmp al, 0c2h
+    jb .invalid
+    cmp al, 0dfh
+    jbe .two
+    cmp al, 0efh
+    jbe .three
+    cmp al, 0f4h
+    jbe .four
+    jmp .invalid
+
+.two:
+    lea r9, [rdx + 2]
+    cmp r9, r8
+    ja .invalid
+    movzx r10d, byte [rdx + 1]
+    and r10d, 0c0h
+    cmp r10d, 80h
+    jne .invalid
+    mov eax, 2
+    ret
+
+.three:
+    lea r9, [rdx + 3]
+    cmp r9, r8
+    ja .invalid
+    movzx r10d, byte [rdx + 1]
+    movzx r11d, byte [rdx + 2]
+    and r11d, 0c0h
+    cmp r11d, 80h
+    jne .invalid
+    cmp al, 0e0h
+    jne .check_ed
+    cmp r10b, 0a0h
+    jb .invalid
+    jmp .three_second_cont
+.check_ed:
+    cmp al, 0edh
+    jne .three_second_cont
+    cmp r10b, 09fh
+    ja .invalid
+.three_second_cont:
+    and r10d, 0c0h
+    cmp r10d, 80h
+    jne .invalid
+    mov eax, 3
+    ret
+
+.four:
+    lea r9, [rdx + 4]
+    cmp r9, r8
+    ja .invalid
+    movzx r10d, byte [rdx + 1]
+    movzx r11d, byte [rdx + 2]
+    and r11d, 0c0h
+    cmp r11d, 80h
+    jne .invalid
+    movzx r11d, byte [rdx + 3]
+    and r11d, 0c0h
+    cmp r11d, 80h
+    jne .invalid
+    cmp al, 0f0h
+    jne .check_f4
+    cmp r10b, 090h
+    jb .invalid
+    jmp .four_second_cont
+.check_f4:
+    cmp al, 0f4h
+    jne .four_second_cont
+    cmp r10b, 08fh
+    ja .invalid
+.four_second_cont:
+    and r10d, 0c0h
+    cmp r10d, 80h
+    jne .invalid
+    mov eax, 4
+    ret
+
+.invalid:
+    xor eax, eax
+    ret
+
+print_json_cp1252_byte:
+    cmp al, 80h
+    jb print_json_byte
+    cmp al, 9fh
+    ja .latin1
+    movzx ecx, al
+    sub ecx, 80h
+    lea r10, [cp1252_80_9f]
+    movzx eax, word [r10 + rcx * 2]
+    test eax, eax
+    jnz print_json_unicode_escape
+    add ecx, 80h
+    mov eax, ecx
+    jmp print_json_unicode_escape
+
+.latin1:
+    movzx eax, al
+    jmp print_json_unicode_escape
+
+print_json_unicode_escape:
+    sub rsp, 56
+    mov [rsp + 32], eax
+    json_z json_escape_u
+
+    mov eax, [rsp + 32]
+    shr eax, 12
+    and eax, 0fh
+    call print_json_hex_nibble
+    mov eax, [rsp + 32]
+    shr eax, 8
+    and eax, 0fh
+    call print_json_hex_nibble
+    mov eax, [rsp + 32]
+    shr eax, 4
+    and eax, 0fh
+    call print_json_hex_nibble
+    mov eax, [rsp + 32]
+    and eax, 0fh
+    call print_json_hex_nibble
+
+    add rsp, 56
+    ret
+
+print_json_hex_nibble:
+    sub rsp, 40
+    lea r10, [hex_digits]
+    mov al, [r10 + rax]
+    mov [rsp + 32], al
+    lea rcx, [rsp + 32]
+    mov edx, 1
+    call print_raw
+    add rsp, 40
     ret
 
 print_json_duration_string:
@@ -7935,6 +8183,10 @@ print_f64_sig6_inline:
     je .zero
     jb .zero
 
+    mov edx, 7
+    mov ecx, 10000000
+    ucomisd xmm0, [rel app_const_0_1_f64]
+    jb .scale_ready
     mov edx, 6
     mov ecx, 1000000
     ucomisd xmm0, [rel app_const_1_f64]
@@ -7961,6 +8213,28 @@ print_f64_sig6_inline:
     jb .scale_ready
     xor edx, edx
     mov ecx, 1
+    ucomisd xmm0, [rel app_const_million_f64]
+    jb .scale_ready
+    mov ecx, 10
+    ucomisd xmm0, [rel app_const_10000000_f64]
+    jb .large_integer_ready
+    mov ecx, 100
+    ucomisd xmm0, [rel app_const_100000000_f64]
+    jb .large_integer_ready
+    mov ecx, 1000
+    jmp .large_integer_ready
+
+.large_integer_ready:
+    mov [rsp + 32], rcx
+    cvtsi2sd xmm1, rcx
+    divsd xmm0, xmm1
+    cvtsd2si rax, xmm0
+    mov rcx, [rsp + 32]
+    imul rax, rcx
+    mov rcx, rax
+    xor edx, edx
+    call print_scaled_inline
+    jmp .done
 
 .scale_ready:
     mov [rsp + 32], rdx
@@ -9015,18 +9289,18 @@ print_json_chart:
 .json_bpms_formatted_done:
     lea rcx, [json_key_bpm_min]
     mov rdx, [raw_min_bpm_milli]
-    call print_json_fixed3_field
+    call print_json_milli_bpm_sig6_field
     lea rcx, [json_key_bpm_max]
     mov rdx, [raw_max_bpm_milli]
-    call print_json_fixed3_field
+    call print_json_milli_bpm_sig6_field
     json_z json_key_display_bpm
     call print_json_display_bpm_value
     lea rcx, [json_key_display_bpm_min]
     mov rdx, [display_min_bpm]
-    call print_json_fixed3_field
+    call print_json_milli_bpm_sig6_field
     lea rcx, [json_key_display_bpm_max]
     mov rdx, [display_max_bpm]
-    call print_json_fixed3_field
+    call print_json_milli_bpm_sig6_field
     json_z json_key_bpms
     cmp qword [timing_format_sm], 0
     je .json_bpms_milli
@@ -9112,7 +9386,8 @@ print_json_chart:
     call print_json_row_segments_array
     json_z json_key_duration_seconds
     movss xmm0, [duration_seconds_f32]
-    call print_f32_dec6_inline
+    cvtss2sd xmm0, xmm0
+    call print_f64_sig6_inline
 
     json_z json_chart_stream_info
     lea rcx, [json_key_total_streams_first]
@@ -10135,6 +10410,17 @@ print_micro_bpm_itg6_inline:
     add rsp, 72
     ret
 
+print_milli_bpm_itg_sig6_inline:
+    sub rsp, 72
+    cvtsi2ss xmm0, rcx
+    divss xmm0, [rel app_const_thousand_f32]
+    divss xmm0, [rel app_const_60_f32]
+    mulss xmm0, [rel app_const_60_f32]
+    cvtss2sd xmm0, xmm0
+    call print_f64_sig6_inline
+    add rsp, 72
+    ret
+
 print_microseconds_f32_6_inline:
     sub rsp, 72
     cvtsi2ss xmm0, rcx
@@ -10582,6 +10868,7 @@ app_const_48_f32 dd 48.0
 app_const_60_f32 dd 60.0
 app_const_million_f32 dd 1000000.0
 app_const_0_12_f64 dq 0.12
+app_const_0_1_f64 dq 0.1
 app_const_half_f64 dq 0.5
 app_const_1_f64 dq 1.0
 app_const_10_f64 dq 10.0
@@ -10590,6 +10877,8 @@ app_const_1000_f64 dq 1000.0
 app_const_10000_f64 dq 10000.0
 app_const_100000_f64 dq 100000.0
 app_const_million_f64 dq 1000000.0
+app_const_10000000_f64 dq 10000000.0
+app_const_100000000_f64 dq 100000000.0
 tag_title db "#TITLE:"
 tag_title_end:
 tag_subtitle db "#SUBTITLE:"
@@ -11121,7 +11410,13 @@ json_escape_cr db '\r', 0
 json_escape_tab db '\t', 0
 json_escape_bs db '\b', 0
 json_escape_ff db '\f', 0
+json_escape_u db '\u', 0
 json_escape_u00 db '\u00', 0
+align 2
+cp1252_80_9f dw 20ach, 0, 201ah, 0192h, 201eh, 2026h, 2020h, 2021h
+              dw 02c6h, 2030h, 0160h, 2039h, 0152h, 0, 017dh, 0
+              dw 0, 2018h, 2019h, 201ch, 201dh, 2022h, 2013h, 2014h
+              dw 02dch, 2122h, 0161h, 203ah, 0153h, 0, 017eh, 0178h
 json_space_dash_space db " - ", 0
 hex_digits db "0123456789abcdef"
 json_chart_open db '{"chart_info":{', 0

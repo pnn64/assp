@@ -7465,72 +7465,59 @@ assp_step_parity_bpm_row_times_8:
 ; xmm0 = target beat f32, r13/r14 = BPM segment array/count,
 ; r15 = offset microseconds. Returns second f32 in xmm0.
 bpm_row_time_seconds4:
-    cvtss2sd xmm7, xmm0
-    xorpd xmm0, xmm0
-    xorpd xmm1, xmm1
-    movsd xmm2, [rel const_default_bpm_f64]
-    xor ecx, ecx
-    test r14, r14
-    jz .after_changes
-    cvtsi2sd xmm2, qword [r13 + ASSP_BPM_SEGMENT_BPM_MILLI]
-    divsd xmm2, [rel const_thousand_f64]
+    push r11
+    mov r11d, ecx
+    xor edx, edx
+    xor eax, eax
 
-.init_loop:
-    cmp rcx, r14
-    jae .change_loop
-    mov r10, rcx
-    shl r10, 4
-    cvtsi2sd xmm3, qword [r13 + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI]
-    divsd xmm3, [rel const_thousand_f64]
-    xorpd xmm4, xmm4
-    comisd xmm3, xmm4
-    ja .change_loop
-    cvtsi2sd xmm2, qword [r13 + r10 + ASSP_BPM_SEGMENT_BPM_MILLI]
-    divsd xmm2, [rel const_thousand_f64]
-    inc rcx
-    jmp .init_loop
+    movss xmm2, [rel cost_one]
+    test r14, r14
+    jz .start_time
+    cvtsi2ss xmm2, qword [r13 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    divss xmm2, [rel const_thousand_f32]
+    divss xmm2, [rel const_sixty_f32]
+
+.start_time:
+    cvtsi2ss xmm0, r15
+    divss xmm0, [rel const_million_f32]
+    xorps xmm1, xmm1
+    subss xmm1, xmm0
+    movaps xmm0, xmm1
 
 .change_loop:
-    cmp rcx, r14
-    jae .after_changes
-    mov r10, rcx
+    cmp rax, r14
+    jae .marker
+    mov r10, rax
     shl r10, 4
-    cvtsi2sd xmm3, qword [r13 + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI]
-    divsd xmm3, [rel const_thousand_f64]
-    movapd xmm4, xmm1
-    comisd xmm4, xmm3
-    jae .update_bpm
-    movapd xmm4, xmm3
-    comisd xmm4, xmm7
-    jae .after_changes
-    movapd xmm5, xmm3
-    subsd xmm5, xmm1
-    mulsd xmm5, [rel const_sixty_f64]
-    divsd xmm5, xmm2
-    addsd xmm0, xmm5
-    movapd xmm1, xmm3
+    cvtsi2ss xmm4, qword [r13 + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    divss xmm4, [rel const_thousand_f32]
+    mulss xmm4, [rel rows_per_beat_f32]
+    cvtss2si r9d, xmm4
+    cmp r9d, r11d
+    jg .marker
 
-.update_bpm:
-    cvtsi2sd xmm2, qword [r13 + r10 + ASSP_BPM_SEGMENT_BPM_MILLI]
-    divsd xmm2, [rel const_thousand_f64]
-    inc rcx
+    mov ecx, r9d
+    sub ecx, edx
+    cvtsi2ss xmm3, ecx
+    divss xmm3, [rel rows_per_beat_f32]
+    divss xmm3, xmm2
+    addss xmm0, xmm3
+
+    cvtsi2ss xmm2, qword [r13 + r10 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    divss xmm2, [rel const_thousand_f32]
+    divss xmm2, [rel const_sixty_f32]
+    mov edx, r9d
+    inc rax
     jmp .change_loop
 
-.after_changes:
-    movapd xmm4, xmm7
-    comisd xmm4, xmm1
-    jbe .apply_offset
-    movapd xmm5, xmm7
-    subsd xmm5, xmm1
-    mulsd xmm5, [rel const_sixty_f64]
-    divsd xmm5, xmm2
-    addsd xmm0, xmm5
-
-.apply_offset:
-    cvtsi2sd xmm5, r15
-    divsd xmm5, [rel const_million_f64]
-    subsd xmm0, xmm5
-    cvtsd2ss xmm0, xmm0
+.marker:
+    mov ecx, r11d
+    sub ecx, edx
+    cvtsi2ss xmm3, ecx
+    divss xmm3, [rel rows_per_beat_f32]
+    divss xmm3, xmm2
+    addss xmm0, xmm3
+    pop r11
     ret
 
 ; xmm1 = value to floor. eax = floor(value).
@@ -7550,7 +7537,8 @@ fixed_bpm_row_time_seconds4:
     divss xmm0, [rel rows_per_beat_f32]
     mov rax, [r13 + ASSP_BPM_SEGMENT_BPM_MILLI]
     cvtsi2ss xmm1, rax
-    divss xmm1, [rel const_sixty_thousand_f32]
+    divss xmm1, [rel const_thousand_f32]
+    divss xmm1, [rel const_sixty_f32]
     divss xmm0, xmm1
     cvtsi2ss xmm2, r15
     divss xmm2, [rel const_million_f32]
@@ -8553,11 +8541,9 @@ step_parity_foot_masks db 0, 1, 2, 4, 8
 const_four_f32 dd 4.0
 const_thousand_f32 dd 1000.0
 const_million_f32 dd 1000000.0
-const_sixty_thousand_f32 dd 60000.0
-const_sixty_f64 dq 60.0
+const_sixty_f32 dd 60.0
 const_thousand_f64 dq 1000.0
 const_million_f64 dq 1000000.0
-const_default_bpm_f64 dq 60.0
 rows_per_beat_f32 dd 48.0
 hold_end_none dd -1.0
 step_parity_bracket_ok_8:
