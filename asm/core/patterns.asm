@@ -1462,16 +1462,14 @@ assp_pattern_percentages_centi:
     jz .percent_mono
 
     mov eax, edx
-    imul rax, rax, 10000
     mov rbx, r11
-    call .round_unsigned_div_ties_even
+    call .round_percent_centi_f64
     mov [r9], rax
 
 .percent_mono:
     mov eax, r8d
-    imul rax, rax, 10000
     mov rbx, rcx
-    call .round_unsigned_div_ties_even
+    call .round_percent_centi_f64
     mov r10, [rbp + 48]
     mov [r10], rax
 
@@ -1487,22 +1485,18 @@ assp_pattern_percentages_centi:
     pop rbp
     ret
 
-.round_unsigned_div_ties_even:
-    xor edx, edx
-    div rbx
-    mov r10, rdx
-    shl r10, 1
-    cmp r10, rbx
-    jb .round_done
-    ja .round_up
-    test al, 1
-    jz .round_done
-.round_up:
-    inc rax
-.round_done:
+.round_percent_centi_f64:
+    cvtsi2sd xmm0, rax
+    cvtsi2sd xmm1, rbx
+    divsd xmm0, xmm1
+    mulsd xmm0, [rel patterns_f64_100]
+    mulsd xmm0, [rel patterns_f64_100]
+    cvtsd2si rax, xmm0
     ret
 
 section .rdata
+
+patterns_f64_100 dq 100.0
 
 note_active_table:
     times 49 db 0

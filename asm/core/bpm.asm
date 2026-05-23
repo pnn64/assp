@@ -785,6 +785,8 @@ parse_dec6:
     cmp rsi, rdi
     jae .finish_number
     movzx eax, byte [rsi]
+    cmp al, 8
+    je .int_skip_backspace
     cmp al, '0'
     jb .check_dot
     cmp al, '9'
@@ -793,6 +795,10 @@ parse_dec6:
     imul r8, r8, 10
     add r8, rax
     inc r9
+    inc rsi
+    jmp .int_loop
+
+.int_skip_backspace:
     inc rsi
     jmp .int_loop
 
@@ -810,6 +816,8 @@ parse_dec6:
     cmp rsi, rdi
     jae .finish_frac
     movzx eax, byte [rsi]
+    cmp al, 8
+    je .frac_skip_backspace
     cmp al, '0'
     jb .finish_frac
     cmp al, '9'
@@ -842,6 +850,10 @@ parse_dec6:
     jz .extra_next
     or r10d, 0x80000000
 .extra_next:
+    inc rsi
+    jmp .frac_loop
+
+.frac_skip_backspace:
     inc rsi
     jmp .frac_loop
 
@@ -2929,6 +2941,8 @@ parse_dec3:
     cmp rsi, rdi
     jae .finish_number
     movzx eax, byte [rsi]
+    cmp al, 8
+    je .int_skip_backspace
     cmp al, '0'
     jb .check_dot
     cmp al, '9'
@@ -2937,6 +2951,10 @@ parse_dec3:
     imul r8, r8, 10
     add r8, rax
     inc r9
+    inc rsi
+    jmp .int_loop
+
+.int_skip_backspace:
     inc rsi
     jmp .int_loop
 
@@ -2954,6 +2972,8 @@ parse_dec3:
     cmp rsi, rdi
     jae .finish_frac
     movzx eax, byte [rsi]
+    cmp al, 8
+    je .frac_skip_backspace
     cmp al, '0'
     jb .finish_frac
     cmp al, '9'
@@ -2986,6 +3006,10 @@ parse_dec3:
     jz .extra_next
     or r10d, 0x80000000
 .extra_next:
+    inc rsi
+    jmp .frac_loop
+
+.frac_skip_backspace:
     inc rsi
     jmp .frac_loop
 

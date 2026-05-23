@@ -2,6 +2,7 @@ default rel
 %include "assp.inc"
 
 global assp_matrix_rating_centi
+global assp_matrix_rating_micro_centi
 
 section .text
 
@@ -38,6 +39,13 @@ section .text
 ; rcx = densities, rdx = density count, r8 = bpm segments, r9 = bpm count.
 ; rax = matrix rating rounded to cents.
 assp_matrix_rating_centi:
+    mov qword [matrix_bpm_scale], 1000
+    jmp matrix_rating_centi_core
+
+assp_matrix_rating_micro_centi:
+    mov qword [matrix_bpm_scale], 1000000
+
+matrix_rating_centi_core:
     push rbx
     push rsi
     push rdi
@@ -207,7 +215,7 @@ assp_matrix_rating_centi:
     pop rbx
     ret
 
-; rcx = bpm milli, rdx = multiplier numerator, r8 = multiplier denominator,
+; rcx = scaled bpm, rdx = multiplier numerator, r8 = multiplier denominator,
 ; r9 = measure count. rax = rounded difficulty * 100.
 matrix_get_difficulty_centi:
     push rbx
@@ -222,7 +230,7 @@ matrix_get_difficulty_centi:
     mov rax, rcx
     imul rax, rdx
     mov [rsp + DIFF_TMPQ], rax
-    mov r10, 1000
+    mov r10, [rel matrix_bpm_scale]
     imul r10, r8
     mov [rsp + DIFF_DEN], r10
     fild qword [rsp + DIFF_TMPQ]
@@ -572,3 +580,7 @@ matrix_diff_table:
     db 39, 40, 41, 42, 43, 44, 44, 45, 46, 47, 48, 49, 49
     ; 500
     db 40, 41, 42, 43, 44, 45, 45, 46, 47, 48, 49, 50, 50
+
+section .data
+
+matrix_bpm_scale dq 1000

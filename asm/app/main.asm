@@ -78,6 +78,7 @@ extern assp_nps_peak_milli_from_bpms
 extern assp_nps_median_centi
 extern assp_tier_bpm_centi
 extern assp_matrix_rating_centi
+extern assp_matrix_rating_micro_centi
 extern assp_minimize_chart_4
 extern assp_minimize_chart_8
 extern assp_normalize_float_digits
@@ -1787,9 +1788,9 @@ prepare_tier_bpm:
 
     lea rcx, [density_buffer]
     mov rdx, [measure_count]
-    lea r8, [bpm_segment_buffer]
-    mov r9, [bpm_segment_count]
-    call assp_matrix_rating_centi
+    lea r8, [bpm_report_segment_buffer]
+    mov r9, [bpm_report_count]
+    call assp_matrix_rating_micro_centi
     mov [matrix_rating_centi], rax
 
     add rsp, 40
@@ -2051,9 +2052,8 @@ prepare_timing_events:
     ja .fail
     mov [bpm_segment_count], rax
     cmp qword [timing_format_sm], 0
-    jne .tidy_bpms
+    jne .parse_bpm_report
     call filter_positive_bpm_segments
-.tidy_bpms:
     lea rcx, [bpm_segment_buffer]
     mov rdx, [bpm_segment_count]
     call tidy_bpm_segments_in_place
@@ -2074,6 +2074,8 @@ prepare_timing_events:
     cmp rax, BPM_SEGMENT_CAP
     ja .fail
     mov [bpm_report_count], rax
+    cmp qword [timing_format_sm], 0
+    jne .select_stops
     lea rcx, [bpm_report_segment_buffer]
     mov rdx, [bpm_report_count]
     call tidy_bpm_segments_in_place
@@ -2156,10 +2158,7 @@ prepare_timing_events:
     mov [warp_segment_count], rax
     cmp qword [timing_format_sm], 0
     je .warps_ready
-    call apply_sm_negative_stop_warps
-    test eax, eax
-    jz .fail
-    call apply_sm_negative_bpm_warps
+    call process_sm_timing_events
     test eax, eax
     jz .fail
     call filter_positive_bpm_report_segments
@@ -2718,6 +2717,583 @@ prepare_warp_stats_segments:
     pop rdi
     pop rsi
     pop rbx
+    ret
+
+process_sm_timing_events:
+    lea rcx, [bpm_segment_buffer]
+    mov rdx, [bpm_segment_count]
+    lea r8, [sm_bpm_segment_buffer]
+    mov r9d, 1000
+    mov r10d, ASSP_TRUE
+    call process_sm_bpms_and_stops_core
+    test eax, eax
+    jz .fail
+    mov rax, [sm_process_out_bpm_count]
+    mov [sm_timing_bpm_count], rax
+    mov rax, [sm_process_out_stop_count]
+    mov [sm_timing_stop_count], rax
+    mov rax, [sm_process_warp_count]
+    mov [sm_timing_warp_count], rax
+
+    lea rcx, [bpm_report_segment_buffer]
+    mov rdx, [bpm_report_count]
+    lea r8, [sm_bpm_report_segment_buffer]
+    mov r9d, 1000000
+    xor r10d, r10d
+    call process_sm_bpms_and_stops_core
+    test eax, eax
+    jz .fail
+
+    lea rcx, [bpm_segment_buffer]
+    lea rdx, [sm_bpm_segment_buffer]
+    mov r8, [sm_timing_bpm_count]
+    call copy_bpm_segments
+    mov rax, [sm_timing_bpm_count]
+    mov [bpm_segment_count], rax
+
+    lea rcx, [stop_segment_buffer]
+    lea rdx, [sm_stop_segment_buffer]
+    mov r8, [sm_timing_stop_count]
+    call copy_bpm_segments
+    mov rax, [sm_timing_stop_count]
+    mov [stop_segment_count], rax
+
+    lea rcx, [bpm_report_segment_buffer]
+    lea rdx, [sm_bpm_report_segment_buffer]
+    mov r8, [sm_process_out_bpm_count]
+    call copy_bpm_segments
+    mov rax, [sm_process_out_bpm_count]
+    mov [bpm_report_count], rax
+
+    mov rax, [sm_timing_warp_count]
+    mov [warp_segment_count], rax
+    mov eax, ASSP_TRUE
+    ret
+
+.fail:
+    xor eax, eax
+    ret
+
+; rcx = input BPM buffer, rdx = BPM count, r8 = output BPM buffer,
+; r9 = BPM value scale, r10d = emit stops/warps.
+%define SM_BPM_IDX 0
+%define SM_STOP_IDX 8
+%define SM_OUT_BPM_COUNT 16
+%define SM_OUT_STOP_COUNT 24
+%define SM_WARP_COUNT 32
+%define SM_CURRENT_BPM 40
+%define SM_PREWARP_BPM 48
+%define SM_WARP_START_MILLI 56
+%define SM_PREV_BEAT_MILLI 64
+%define SM_CHANGE_BEAT_MILLI 72
+%define SM_CHANGE_VALUE 80
+%define SM_IS_BPM 88
+%define SM_SCALE 96
+%define SM_FAST_THRESHOLD 104
+%define SM_EMIT_EVENTS 112
+%define SM_OUT_STOP_PTR 120
+%define SM_WARP_START_F32 128
+%define SM_TIME_OFFSET_F32 132
+%define SM_CURRENT_BPM_F32 136
+%define SM_TEMP_F32 140
+%define SM_TEMP_VALUE 144
+%define SM_LOCAL_SIZE 160
+
+process_sm_bpms_and_stops_core:
+    push rbp
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, SM_LOCAL_SIZE
+    mov rbp, rsp
+
+    mov rbx, rcx
+    mov rsi, rdx
+    mov rdi, r8
+    mov r12, r9
+    lea r13, [stop_segment_buffer]
+    mov r14, [stop_segment_count]
+    lea r15, [warp_segment_buffer]
+
+    mov qword [rbp + SM_BPM_IDX], 0
+    mov qword [rbp + SM_STOP_IDX], 0
+    mov qword [rbp + SM_OUT_BPM_COUNT], 0
+    mov qword [rbp + SM_OUT_STOP_COUNT], 0
+    mov rax, [warp_segment_count]
+    test r10d, r10d
+    jnz .store_warp_count
+    xor eax, eax
+.store_warp_count:
+    mov [rbp + SM_WARP_COUNT], rax
+    mov qword [rbp + SM_CURRENT_BPM], 0
+    mov qword [rbp + SM_PREWARP_BPM], 0
+    mov qword [rbp + SM_WARP_START_MILLI], -1
+    mov qword [rbp + SM_PREV_BEAT_MILLI], 0
+    mov [rbp + SM_SCALE], r12
+    mov rax, 9999999
+    imul rax, r12
+    mov [rbp + SM_FAST_THRESHOLD], rax
+    mov [rbp + SM_EMIT_EVENTS], r10
+    lea rax, [sm_stop_segment_buffer]
+    mov [rbp + SM_OUT_STOP_PTR], rax
+    xorps xmm0, xmm0
+    movss [rbp + SM_WARP_START_F32], xmm0
+    movss [rbp + SM_TIME_OFFSET_F32], xmm0
+    movss [rbp + SM_CURRENT_BPM_F32], xmm0
+
+.skip_negative_stops:
+    mov rax, [rbp + SM_STOP_IDX]
+    cmp rax, r14
+    jae .initial_bpm_loop
+    mov r10, rax
+    shl r10, 4
+    mov r11, [r13 + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    cmp r11, 0
+    jge .initial_bpm_loop
+    cmp qword [rbp + SM_EMIT_EVENTS], 0
+    je .next_negative_stop
+    mov rdx, [r13 + r10 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    mov rcx, [offset_us]
+    sub rcx, rdx
+    mov [offset_us], rcx
+.next_negative_stop:
+    inc qword [rbp + SM_STOP_IDX]
+    jmp .skip_negative_stops
+
+.initial_bpm_loop:
+    mov rax, [rbp + SM_BPM_IDX]
+    cmp rax, rsi
+    jae .initial_bpm_done
+    mov r10, rax
+    shl r10, 4
+    mov r11, [rbx + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    cmp r11, 0
+    jg .initial_bpm_done
+    mov r11, [rbx + r10 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    test r11, r11
+    jz .advance_initial_bpm
+    mov [rbp + SM_CURRENT_BPM], r11
+.advance_initial_bpm:
+    inc qword [rbp + SM_BPM_IDX]
+    jmp .initial_bpm_loop
+
+.initial_bpm_done:
+    cmp qword [rbp + SM_CURRENT_BPM], 0
+    jne .have_initial_bpm
+    mov rax, [rbp + SM_BPM_IDX]
+    cmp rax, rsi
+    jae .default_initial_bpm
+    mov r10, rax
+    shl r10, 4
+    mov r11, [rbx + r10 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    test r11, r11
+    jz .default_initial_bpm
+    mov [rbp + SM_CURRENT_BPM], r11
+    inc qword [rbp + SM_BPM_IDX]
+    jmp .have_initial_bpm
+
+.default_initial_bpm:
+    mov rax, 60
+    imul rax, r12
+    mov [rbp + SM_CURRENT_BPM], rax
+
+.have_initial_bpm:
+    call .set_current_bpm_f32
+    mov rax, [rbp + SM_CURRENT_BPM]
+    test rax, rax
+    jle .main_loop
+    cmp rax, [rbp + SM_FAST_THRESHOLD]
+    jg .main_loop
+    xor eax, eax
+    mov rdx, [rbp + SM_CURRENT_BPM]
+    call .append_bpm
+    test eax, eax
+    jz .fail
+
+.main_loop:
+    mov rax, [rbp + SM_BPM_IDX]
+    cmp rax, rsi
+    jb .maybe_bpm_next
+    mov rax, [rbp + SM_STOP_IDX]
+    cmp rax, r14
+    jb .choose_stop
+    jmp .finish_open_warp
+
+.maybe_bpm_next:
+    mov rdx, [rbp + SM_STOP_IDX]
+    cmp rdx, r14
+    jae .choose_bpm
+    mov r10, rax
+    shl r10, 4
+    mov r11, [rbx + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    mov r10, rdx
+    shl r10, 4
+    cmp r11, [r13 + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    jle .choose_bpm
+
+.choose_stop:
+    mov qword [rbp + SM_IS_BPM], 0
+    mov rax, [rbp + SM_STOP_IDX]
+    mov r10, rax
+    shl r10, 4
+    mov r11, [r13 + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    mov [rbp + SM_CHANGE_BEAT_MILLI], r11
+    mov r11, [r13 + r10 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    mov [rbp + SM_CHANGE_VALUE], r11
+    jmp .have_change
+
+.choose_bpm:
+    mov qword [rbp + SM_IS_BPM], ASSP_TRUE
+    mov rax, [rbp + SM_BPM_IDX]
+    mov r10, rax
+    shl r10, 4
+    mov r11, [rbx + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    mov [rbp + SM_CHANGE_BEAT_MILLI], r11
+    mov r11, [rbx + r10 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    mov [rbp + SM_CHANGE_VALUE], r11
+
+.have_change:
+    mov rax, [rbp + SM_CURRENT_BPM]
+    cmp rax, [rbp + SM_FAST_THRESHOLD]
+    jg .after_time_advance
+    test rax, rax
+    jz .after_time_advance
+    mov rax, [rbp + SM_CHANGE_BEAT_MILLI]
+    cvtsi2ss xmm0, rax
+    divss xmm0, [rel app_const_thousand_f32]
+    mov rax, [rbp + SM_PREV_BEAT_MILLI]
+    cvtsi2ss xmm1, rax
+    divss xmm1, [rel app_const_thousand_f32]
+    subss xmm0, xmm1
+    mulss xmm0, [rel app_const_60_f32]
+    divss xmm0, [rbp + SM_CURRENT_BPM_F32]
+    addss xmm0, [rbp + SM_TIME_OFFSET_F32]
+    movss [rbp + SM_TIME_OFFSET_F32], xmm0
+
+    cmp qword [rbp + SM_WARP_START_MILLI], 0
+    jl .after_time_advance
+    cmp qword [rbp + SM_CURRENT_BPM], 0
+    jle .after_time_advance
+    xorps xmm1, xmm1
+    ucomiss xmm0, xmm1
+    jbe .after_time_advance
+
+    mov rax, [rbp + SM_CHANGE_BEAT_MILLI]
+    cvtsi2ss xmm1, rax
+    divss xmm1, [rel app_const_thousand_f32]
+    movss xmm2, [rbp + SM_CURRENT_BPM_F32]
+    mulss xmm2, [rbp + SM_TIME_OFFSET_F32]
+    divss xmm2, [rel app_const_60_f32]
+    subss xmm1, xmm2
+    movss xmm2, [rbp + SM_WARP_START_F32]
+    ucomiss xmm1, xmm2
+    jbe .time_warp_bpm
+    movss xmm0, xmm2
+    subss xmm1, xmm2
+    call .append_warp
+    test eax, eax
+    jz .fail
+.time_warp_bpm:
+    call .append_current_bpm_at_warp_start
+    test eax, eax
+    jz .fail
+    mov qword [rbp + SM_WARP_START_MILLI], -1
+
+.after_time_advance:
+    mov rax, [rbp + SM_CHANGE_BEAT_MILLI]
+    mov [rbp + SM_PREV_BEAT_MILLI], rax
+    cmp qword [rbp + SM_IS_BPM], 0
+    jne .handle_bpm_change
+
+.handle_stop_change:
+    mov rdx, [rbp + SM_CHANGE_VALUE]
+    cmp qword [rbp + SM_WARP_START_MILLI], 0
+    jge .stop_during_warp
+    test rdx, rdx
+    js .start_stop_warp
+    call .append_stop_at_change
+    test eax, eax
+    jz .fail
+    jmp .advance_stop
+
+.start_stop_warp:
+    call .start_warp_at_change
+    cvtsi2ss xmm0, rdx
+    divss xmm0, [rel app_const_million_f32]
+    movss [rbp + SM_TIME_OFFSET_F32], xmm0
+    jmp .advance_stop
+
+.stop_during_warp:
+    cvtsi2ss xmm0, rdx
+    divss xmm0, [rel app_const_million_f32]
+    addss xmm0, [rbp + SM_TIME_OFFSET_F32]
+    movss [rbp + SM_TIME_OFFSET_F32], xmm0
+    test rdx, rdx
+    jle .advance_stop
+    xorps xmm1, xmm1
+    ucomiss xmm0, xmm1
+    jbe .advance_stop
+
+    mov rax, [rbp + SM_CHANGE_BEAT_MILLI]
+    cvtsi2ss xmm1, rax
+    divss xmm1, [rel app_const_thousand_f32]
+    movss xmm2, [rbp + SM_WARP_START_F32]
+    ucomiss xmm1, xmm2
+    jbe .stop_overflow_pause
+    movss xmm0, xmm2
+    subss xmm1, xmm2
+    call .append_warp
+    test eax, eax
+    jz .fail
+
+.stop_overflow_pause:
+    movss xmm0, [rbp + SM_TIME_OFFSET_F32]
+    mulss xmm0, [rel app_const_million_f32]
+    cvtss2si rdx, xmm0
+    call .append_stop_at_change_value
+    test eax, eax
+    jz .fail
+
+    mov rax, [rbp + SM_CURRENT_BPM]
+    test rax, rax
+    jl .continue_warp_after_stop
+    cmp rax, [rbp + SM_FAST_THRESHOLD]
+    jg .continue_warp_after_stop
+    call .append_current_bpm_at_warp_start
+    test eax, eax
+    jz .fail
+    mov qword [rbp + SM_WARP_START_MILLI], -1
+    jmp .advance_stop
+
+.continue_warp_after_stop:
+    call .start_warp_at_change
+    xorps xmm0, xmm0
+    movss [rbp + SM_TIME_OFFSET_F32], xmm0
+
+.advance_stop:
+    inc qword [rbp + SM_STOP_IDX]
+    jmp .main_loop
+
+.handle_bpm_change:
+    mov rdx, [rbp + SM_CHANGE_VALUE]
+    test rdx, rdx
+    jz .advance_bpm
+    cmp qword [rbp + SM_WARP_START_MILLI], 0
+    jge .set_changed_bpm
+    test rdx, rdx
+    js .start_bpm_warp
+    cmp rdx, [rbp + SM_FAST_THRESHOLD]
+    jg .start_bpm_warp
+    call .append_bpm_at_change
+    test eax, eax
+    jz .fail
+    jmp .set_changed_bpm
+
+.start_bpm_warp:
+    call .start_warp_at_change
+    xorps xmm0, xmm0
+    movss [rbp + SM_TIME_OFFSET_F32], xmm0
+
+.set_changed_bpm:
+    mov rdx, [rbp + SM_CHANGE_VALUE]
+    mov [rbp + SM_CURRENT_BPM], rdx
+    call .set_current_bpm_f32
+
+.advance_bpm:
+    inc qword [rbp + SM_BPM_IDX]
+    jmp .main_loop
+
+.finish_open_warp:
+    cmp qword [rbp + SM_WARP_START_MILLI], 0
+    jl .success
+    mov rax, [rbp + SM_CURRENT_BPM]
+    test rax, rax
+    jl .warp_forever
+    cmp rax, [rbp + SM_FAST_THRESHOLD]
+    jg .warp_forever
+    mov rax, [rbp + SM_PREV_BEAT_MILLI]
+    cvtsi2ss xmm1, rax
+    divss xmm1, [rel app_const_thousand_f32]
+    movss xmm2, [rbp + SM_CURRENT_BPM_F32]
+    mulss xmm2, [rbp + SM_TIME_OFFSET_F32]
+    divss xmm2, [rel app_const_60_f32]
+    subss xmm1, xmm2
+    jmp .append_final_warp
+
+.warp_forever:
+    movss xmm1, [rel app_const_99999999_f32]
+
+.append_final_warp:
+    movss xmm2, [rbp + SM_WARP_START_F32]
+    ucomiss xmm1, xmm2
+    jbe .final_warp_bpm
+    movss xmm0, xmm2
+    subss xmm1, xmm2
+    call .append_warp
+    test eax, eax
+    jz .fail
+.final_warp_bpm:
+    call .append_current_bpm_at_warp_start
+    test eax, eax
+    jz .fail
+
+.success:
+    mov rax, [rbp + SM_OUT_BPM_COUNT]
+    mov [sm_process_out_bpm_count], rax
+    mov rax, [rbp + SM_OUT_STOP_COUNT]
+    mov [sm_process_out_stop_count], rax
+    mov rax, [rbp + SM_WARP_COUNT]
+    mov [sm_process_warp_count], rax
+    mov eax, ASSP_TRUE
+    jmp .done
+
+.fail:
+    xor eax, eax
+
+.done:
+    add rsp, SM_LOCAL_SIZE
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    pop rbp
+    ret
+
+.set_current_bpm_f32:
+    cvtsi2ss xmm0, qword [rbp + SM_CURRENT_BPM]
+    cvtsi2ss xmm1, qword [rbp + SM_SCALE]
+    divss xmm0, xmm1
+    movss [rbp + SM_CURRENT_BPM_F32], xmm0
+    ret
+
+.start_warp_at_change:
+    mov rax, [rbp + SM_CHANGE_BEAT_MILLI]
+    mov [rbp + SM_WARP_START_MILLI], rax
+    cvtsi2ss xmm0, rax
+    divss xmm0, [rel app_const_thousand_f32]
+    movss [rbp + SM_WARP_START_F32], xmm0
+    mov rax, [rbp + SM_CURRENT_BPM]
+    mov [rbp + SM_PREWARP_BPM], rax
+    ret
+
+.append_bpm_at_change:
+    mov rax, [rbp + SM_CHANGE_BEAT_MILLI]
+    cvtsi2ss xmm0, rax
+    divss xmm0, [rel app_const_thousand_f32]
+    call .f32_to_row_milli
+    mov rdx, [rbp + SM_CHANGE_VALUE]
+    jmp .append_bpm
+
+.append_current_bpm_at_warp_start:
+    mov rdx, [rbp + SM_CURRENT_BPM]
+    cmp rdx, [rbp + SM_PREWARP_BPM]
+    jne .append_current_bpm
+    mov eax, ASSP_TRUE
+    ret
+.append_current_bpm:
+    movss xmm0, [rbp + SM_WARP_START_F32]
+    call .f32_to_row_milli
+    mov rdx, [rbp + SM_CURRENT_BPM]
+    jmp .append_bpm
+
+.append_stop_at_change:
+    mov rdx, [rbp + SM_CHANGE_VALUE]
+.append_stop_at_change_value:
+    cmp qword [rbp + SM_EMIT_EVENTS], 0
+    jne .append_stop_emit
+    mov eax, ASSP_TRUE
+    ret
+.append_stop_emit:
+    mov [rbp + SM_TEMP_VALUE], rdx
+    mov rax, [rbp + SM_CHANGE_BEAT_MILLI]
+    cvtsi2ss xmm0, rax
+    divss xmm0, [rel app_const_thousand_f32]
+    call .f32_to_row_milli
+    mov rdx, [rbp + SM_TEMP_VALUE]
+    jmp .append_stop
+
+.append_bpm:
+    mov r11, [rbp + SM_OUT_BPM_COUNT]
+    cmp r11, BPM_SEGMENT_CAP
+    jae .append_fail
+    mov r10, r11
+    shl r10, 4
+    mov [rdi + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI], rax
+    mov [rdi + r10 + ASSP_BPM_SEGMENT_BPM_MILLI], rdx
+    inc qword [rbp + SM_OUT_BPM_COUNT]
+    mov eax, ASSP_TRUE
+    ret
+
+.append_stop:
+    mov r11, [rbp + SM_OUT_STOP_COUNT]
+    cmp r11, BPM_SEGMENT_CAP
+    jae .append_fail
+    mov r10, [rbp + SM_OUT_STOP_PTR]
+    mov rcx, r11
+    shl rcx, 4
+    mov [r10 + rcx + ASSP_BPM_SEGMENT_BEAT_MILLI], rax
+    mov [r10 + rcx + ASSP_BPM_SEGMENT_BPM_MILLI], rdx
+    inc qword [rbp + SM_OUT_STOP_COUNT]
+    mov eax, ASSP_TRUE
+    ret
+
+.append_warp:
+    cmp qword [rbp + SM_EMIT_EVENTS], 0
+    jne .append_warp_emit
+    mov eax, ASSP_TRUE
+    ret
+.append_warp_emit:
+    mov r11, [rbp + SM_WARP_COUNT]
+    cmp r11, BPM_SEGMENT_CAP
+    jae .append_fail
+    mov r9, r11
+    movss [rbp + SM_TEMP_F32], xmm1
+    call .f32_to_row_milli
+    mov r10, r9
+    shl r10, 4
+    mov [r15 + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI], rax
+    movss xmm0, [rbp + SM_TEMP_F32]
+    call .f32_to_row_milli
+    mov [r15 + r10 + ASSP_BPM_SEGMENT_BPM_MILLI], rax
+    inc qword [rbp + SM_WARP_COUNT]
+    mov eax, ASSP_TRUE
+    ret
+
+.append_fail:
+    xor eax, eax
+    ret
+
+.f32_to_row_milli:
+    mulss xmm0, [rel app_const_48_f32]
+    cvtss2si rax, xmm0
+    imul rax, rax, 1000
+    cqo
+    mov r11d, 48
+    idiv r11
+    ret
+
+copy_bpm_segments:
+    test r8, r8
+    jz .done
+
+.loop:
+    mov rax, [rdx + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    mov [rcx + ASSP_BPM_SEGMENT_BEAT_MILLI], rax
+    mov rax, [rdx + ASSP_BPM_SEGMENT_BPM_MILLI]
+    mov [rcx + ASSP_BPM_SEGMENT_BPM_MILLI], rax
+    add rcx, ASSP_BPM_SEGMENT_SIZE
+    add rdx, ASSP_BPM_SEGMENT_SIZE
+    dec r8
+    jnz .loop
+
+.done:
     ret
 
 apply_sm_negative_bpm_warps:
@@ -3919,7 +4495,7 @@ prepare_global_normalized_metadata:
     mov rdx, [global_time_signatures_slice + ASSP_BYTE_SLICE_LEN]
     lea r8, [normalized_time_signatures_buffer]
     mov r9d, METADATA_BUFFER_CAP
-    call assp_trim_ascii_bytes
+    call normalize_time_signatures_ascii
     cmp rax, ASSP_NOT_FOUND
     je .fail
     mov [normalized_time_signatures_len], rax
@@ -3980,7 +4556,7 @@ prepare_selected_normalized_metadata:
 .normalize_time_signatures:
     lea r8, [selected_normalized_time_signatures_buffer]
     mov r9d, METADATA_BUFFER_CAP
-    call assp_trim_ascii_bytes
+    call normalize_time_signatures_ascii
     cmp rax, ASSP_NOT_FOUND
     je .fail
     mov [selected_normalized_time_signatures_len], rax
@@ -4041,6 +4617,92 @@ prepare_selected_normalized_metadata:
 
 .done:
     add rsp, 40
+    ret
+
+; rcx = time signature tag bytes, rdx = len, r8 = output bytes, r9 = output cap.
+; rax = bytes written, or ASSP_NOT_FOUND.
+normalize_time_signatures_ascii:
+    sub rsp, 56
+    mov [rsp + 32], r8
+    mov [rsp + 40], r9
+    call assp_trim_ascii_bytes
+    cmp rax, ASSP_NOT_FOUND
+    je .done
+    test rax, rax
+    jz .done
+
+    mov [rsp + 48], rax
+    mov r10, [rsp + 32]
+    test r10, r10
+    jz .done
+    lea r11, [r10 + rax]
+
+.scan_first_beat:
+    cmp r10, r11
+    jae .done
+    mov dl, [r10]
+    cmp dl, ' '
+    jbe .next_scan_byte
+    cmp dl, '-'
+    je .done
+    cmp dl, '+'
+    je .next_scan_byte
+    cmp dl, '='
+    je .done
+    cmp dl, ','
+    je .done
+    cmp dl, '1'
+    jb .next_scan_byte
+    cmp dl, '9'
+    jbe .prefix_default
+.next_scan_byte:
+    inc r10
+    jmp .scan_first_beat
+
+.prefix_default:
+    mov rax, [rsp + 48]
+    mov rcx, rax
+    add rcx, default_time_signature_prefix_end - default_time_signature_prefix
+    cmp rcx, [rsp + 40]
+    ja .invalid
+
+    mov r10, [rsp + 32]
+    mov r8, [rsp + 48]
+    lea r9, [r10 + r8 - 1]
+    lea r11, [r9 + default_time_signature_prefix_end - default_time_signature_prefix]
+.move_tail:
+    test r8, r8
+    jz .copy_prefix
+    mov dl, [r9]
+    mov [r11], dl
+    dec r9
+    dec r11
+    dec r8
+    jmp .move_tail
+
+.copy_prefix:
+    lea r9, [rel default_time_signature_prefix]
+    lea rdx, [rel default_time_signature_prefix_end]
+    mov r11, [rsp + 32]
+.copy_prefix_loop:
+    cmp r9, rdx
+    jae .prefixed
+    mov cl, [r9]
+    mov [r11], cl
+    inc r9
+    inc r11
+    jmp .copy_prefix_loop
+
+.prefixed:
+    mov rax, [rsp + 48]
+    add rax, default_time_signature_prefix_end - default_time_signature_prefix
+    jmp .done
+
+.invalid:
+    mov rax, ASSP_NOT_FOUND
+
+.done:
+    add rsp, 56
     ret
 
 prepare_chart_metadata:
@@ -5416,6 +6078,7 @@ store_duration_us_as_f32:
 prepare_duration_bpm_f32:
     push rbx
     push rsi
+    push rdi
     push r12
     push r13
     push r14
@@ -5427,6 +6090,16 @@ prepare_duration_bpm_f32:
     cmp qword [bpm_segment_count], 0
     je .zero
 
+    lea rbx, [bpm_segment_buffer]
+    mov r13, [bpm_segment_count]
+    xor edi, edi
+    cmp qword [bpm_report_count], 0
+    je .selected_bpms
+    lea rbx, [bpm_report_segment_buffer]
+    mov r13, [bpm_report_count]
+    mov edi, 1
+
+.selected_bpms:
     cvtsi2ss xmm7, qword [offset_us]
     divss xmm7, [rel app_const_million_f32]
     xorps xmm6, xmm6
@@ -5437,14 +6110,13 @@ prepare_duration_bpm_f32:
     call milli_to_row48_f32_even
     mov r15, rax
 
-    mov rax, [bpm_segment_buffer + ASSP_BPM_SEGMENT_BPM_MILLI]
-    call bpm_milli_to_bps_f32
+    mov rax, [rbx + ASSP_BPM_SEGMENT_BPM_MILLI]
+    mov rcx, rdi
+    call bpm_selected_to_bps_f32
     movaps xmm6, xmm0
 
-    lea rbx, [bpm_segment_buffer]
     xor rsi, rsi
     xor r12, r12
-    mov r13, [bpm_segment_count]
 
 .loop:
     cmp rsi, r13
@@ -5464,7 +6136,8 @@ prepare_duration_bpm_f32:
 
 .set_bpm:
     mov rax, [rbx + r14 + ASSP_BPM_SEGMENT_BPM_MILLI]
-    call bpm_milli_to_bps_f32
+    mov rcx, rdi
+    call bpm_selected_to_bps_f32
     movaps xmm6, xmm0
     inc rsi
     jmp .loop
@@ -5489,6 +6162,7 @@ prepare_duration_bpm_f32:
     pop r14
     pop r13
     pop r12
+    pop rdi
     pop rsi
     pop rbx
     ret
@@ -5534,8 +6208,6 @@ prepare_bpm_median_nps_f32:
     mov qword [rsp + 16], 0
     lea rbx, [bpm_segment_buffer]
     mov r12, [bpm_segment_count]
-    cmp qword [timing_format_sm], 0
-    je .selected_bpms
     cmp qword [bpm_report_count], 0
     je .selected_bpms
     lea rbx, [bpm_report_segment_buffer]
@@ -5998,10 +6670,17 @@ prepare_fixed_median_nps_f32:
     test rdi, rdi
     jz .zero
 
+    mov qword [rsp + 16], 0
     mov rax, [bpm_segment_buffer + ASSP_BPM_SEGMENT_BPM_MILLI]
+    cmp qword [bpm_report_count], 0
+    je .selected_bpm
+    mov rax, [bpm_report_segment_buffer + ASSP_BPM_SEGMENT_BPM_MILLI]
+    mov qword [rsp + 16], 1
+.selected_bpm:
     test rax, rax
     jle .zero
-    call bpm_milli_to_bps_f32
+    mov rcx, [rsp + 16]
+    call bpm_selected_to_bps_f32
     movaps xmm6, xmm0
 
     cvtsi2ss xmm7, qword [offset_us]
@@ -8183,6 +8862,14 @@ print_f64_sig6_inline:
     je .zero
     jb .zero
 
+    mov edx, 9
+    mov ecx, 1000000000
+    ucomisd xmm0, [rel app_const_0_001_f64]
+    jb .scale_ready
+    mov edx, 8
+    mov ecx, 100000000
+    ucomisd xmm0, [rel app_const_0_01_f64]
+    jb .scale_ready
     mov edx, 7
     mov ecx, 10000000
     ucomisd xmm0, [rel app_const_0_1_f64]
@@ -9274,8 +9961,6 @@ print_json_chart:
     call print_json_string_field
     lea rcx, [json_key_bpms_formatted]
     call print_z
-    cmp qword [timing_format_sm], 0
-    je .json_bpms_formatted_milli
     cmp qword [bpm_report_count], 0
     je .json_bpms_formatted_milli
     lea rdx, [bpm_report_segment_buffer]
@@ -9302,8 +9987,6 @@ print_json_chart:
     mov rdx, [display_max_bpm]
     call print_json_milli_bpm_sig6_field
     json_z json_key_bpms
-    cmp qword [timing_format_sm], 0
-    je .json_bpms_milli
     cmp qword [bpm_report_count], 0
     je .json_bpms_milli
     lea rdx, [bpm_report_segment_buffer]
@@ -10867,7 +11550,10 @@ app_const_thousand_f32 dd 1000.0
 app_const_48_f32 dd 48.0
 app_const_60_f32 dd 60.0
 app_const_million_f32 dd 1000000.0
+app_const_99999999_f32 dd 99999999.0
 app_const_0_12_f64 dq 0.12
+app_const_0_001_f64 dq 0.001
+app_const_0_01_f64 dq 0.01
 app_const_0_1_f64 dq 0.1
 app_const_half_f64 dq 0.5
 app_const_1_f64 dq 1.0
@@ -11464,6 +12150,8 @@ json_key_stops_array db ',"stops":', 0
 json_key_delays_array db ',"delays":', 0
 json_key_time_signatures db ',"time_signatures":', 0
 json_default_time_signatures db '[[0,4,4]]', 0
+default_time_signature_prefix db '0.000=4=4,'
+default_time_signature_prefix_end:
 json_key_warps_array db ',"warps":', 0
 json_key_labels db ',"labels":', 0
 json_default_labels db '[[0,"Song Start"]]', 0
@@ -11773,6 +12461,12 @@ delay_report_count resq 1
 warp_report_count resq 1
 speed_report_count resq 1
 scroll_report_count resq 1
+sm_process_out_bpm_count resq 1
+sm_process_out_stop_count resq 1
+sm_process_warp_count resq 1
+sm_timing_bpm_count resq 1
+sm_timing_stop_count resq 1
+sm_timing_warp_count resq 1
 minimized_chart_len resq 1
 pattern_bitmask_count resq 1
 parity_source_row_count resq 1
@@ -11841,6 +12535,9 @@ selected_normalized_scrolls_buffer resb BPM_BUFFER_CAP
 bpm_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
 bpm_report_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
 stop_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
+sm_bpm_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
+sm_bpm_report_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
+sm_stop_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
 delay_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
 warp_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
 warp_stats_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE

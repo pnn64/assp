@@ -1822,9 +1822,39 @@ parse_sm_notes_block:
 
 .field_done:
     lea rax, [r12 + 1]
+    mov r8, rax
+    mov rdx, rax
+
+.note_data_scan:
+    cmp rdx, r11
+    jae .store_note_data
+    cmp byte [rdx], ';'
+    je .store_note_data
+    cmp byte [rdx], ':'
+    jne .note_data_next
+
+    mov rax, rdx
+    xor ecx, ecx
+.note_slash_loop:
+    cmp rax, r8
+    jbe .note_slash_done
+    dec rax
+    cmp byte [rax], '\'
+    jne .note_slash_done
+    inc ecx
+    jmp .note_slash_loop
+.note_slash_done:
+    test ecx, 1
+    jz .store_note_data
+
+.note_data_next:
+    inc rdx
+    jmp .note_data_scan
+
+.store_note_data:
+    mov rax, r8
     mov [rbx + ASSP_CHART_INFO_NOTES_PTR], rax
-    mov rdx, r11
-    sub rdx, rax
+    sub rdx, r8
     mov [rbx + ASSP_CHART_INFO_NOTES_LEN], rdx
     mov eax, ASSP_TRUE
     ret
