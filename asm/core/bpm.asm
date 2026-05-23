@@ -3,6 +3,7 @@ default rel
 
 global assp_normalize_float_digits
 global assp_parse_bpm_map
+global assp_parse_speed_map
 global assp_parse_timing_seconds_map
 global assp_parse_offset_ms
 global assp_parse_offset_us
@@ -207,6 +208,291 @@ assp_normalize_float_digits:
 
 .pop_done:
     add rsp, 64
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
+; rcx = SPEEDS map bytes, rdx = len, r8 = optional assp_speed_segment output,
+; r9 = output cap. rax = parsed segment count, or ASSP_NOT_FOUND.
+; Beats are signed thousandths; ratios and delays are signed millionths.
+; Invalid comma entries are skipped.
+assp_parse_speed_map:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 80
+
+    test rdx, rdx
+    jz .empty
+    test rcx, rcx
+    jz .invalid
+
+    mov rsi, rcx
+    lea r12, [rcx + rdx]
+    mov rdi, r8
+    mov r13, r9
+    xor r14d, r14d
+
+.entry_loop:
+    cmp rsi, r12
+    jae .sort
+
+    mov r10, rsi
+.find_comma:
+    cmp r10, r12
+    jae .entry_bounds
+    cmp byte [r10], ','
+    je .entry_bounds
+    inc r10
+    jmp .find_comma
+
+.entry_bounds:
+    mov [rsp], r10
+
+    mov rax, rsi
+.find_eq1:
+    cmp rax, [rsp]
+    jae .skip_entry
+    cmp byte [rax], '='
+    je .found_eq1
+    inc rax
+    jmp .find_eq1
+.found_eq1:
+    mov [rsp + 8], rax
+    inc rax
+
+.find_eq2:
+    cmp rax, [rsp]
+    jae .skip_entry
+    cmp byte [rax], '='
+    je .found_eq2
+    inc rax
+    jmp .find_eq2
+.found_eq2:
+    mov [rsp + 16], rax
+    inc rax
+
+    mov r11, [rsp]
+    mov [rsp + 64], r11
+    mov qword [rsp + 24], 0
+.find_eq3:
+    cmp rax, [rsp]
+    jae .parse_fields
+    cmp byte [rax], '='
+    je .found_eq3
+    inc rax
+    jmp .find_eq3
+.found_eq3:
+    mov [rsp + 24], rax
+    mov r11, rax
+    mov [rsp + 64], r11
+
+.parse_fields:
+    mov rbx, rsi
+    mov rdx, [rsp + 8]
+    xor r15d, r15d
+
+.trim_beat_right:
+    cmp rdx, rbx
+    jbe .skip_entry
+    cmp byte [rdx - 1], ' '
+    ja .check_row_suffix
+    dec rdx
+    jmp .trim_beat_right
+
+.check_row_suffix:
+    cmp byte [rdx - 1], 'r'
+    je .row_suffix
+    cmp byte [rdx - 1], 'R'
+    jne .parse_beat_value
+.row_suffix:
+    mov r15d, ASSP_TRUE
+    dec rdx
+.trim_before_suffix:
+    cmp rdx, rbx
+    jbe .skip_entry
+    cmp byte [rdx - 1], ' '
+    ja .parse_beat_value
+    dec rdx
+    jmp .trim_before_suffix
+
+.parse_beat_value:
+    mov rcx, rbx
+    call parse_dec3
+    cmp rax, ASSP_NOT_FOUND
+    je .skip_entry
+    test edx, edx
+    jz .beat_positive
+    neg rax
+.beat_positive:
+    test r15d, r15d
+    jz .store_beat
+    cqo
+    mov r10d, 48
+    idiv r10
+.store_beat:
+    mov [rsp + 32], rax
+
+    mov rcx, [rsp + 8]
+    inc rcx
+    mov rdx, [rsp + 16]
+    call parse_dec6
+    cmp rax, ASSP_NOT_FOUND
+    je .skip_entry
+    test edx, edx
+    jz .store_ratio
+    neg rax
+.store_ratio:
+    mov [rsp + 40], rax
+
+    mov rcx, [rsp + 16]
+    inc rcx
+    mov rdx, [rsp + 64]
+    call parse_dec6
+    cmp rax, ASSP_NOT_FOUND
+    je .skip_entry
+    test edx, edx
+    jz .store_delay
+    neg rax
+.store_delay:
+    mov [rsp + 48], rax
+
+    xor eax, eax
+    mov r10, [rsp + 24]
+    test r10, r10
+    jz .store_unit
+    inc r10
+    mov r11, [rsp]
+.find_unit_end:
+    cmp r10, r11
+    jae .trim_unit_right
+    cmp byte [r10], ' '
+    ja .trim_unit_right
+    inc r10
+    jmp .find_unit_end
+.trim_unit_right:
+    cmp r11, r10
+    jbe .store_unit
+    cmp byte [r11 - 1], ' '
+    ja .check_unit
+    dec r11
+    jmp .trim_unit_right
+.check_unit:
+    lea rbx, [r10 + 1]
+    cmp rbx, r11
+    jne .store_unit
+    cmp byte [r10], '1'
+    jne .store_unit
+    mov eax, 1
+.store_unit:
+    mov [rsp + 56], rax
+
+    test rdi, rdi
+    jz .inc_count
+    cmp r14, r13
+    jae .inc_count
+    mov r10, r14
+    imul r10, ASSP_SPEED_SEGMENT_SIZE
+    mov rax, [rsp + 32]
+    mov [rdi + r10 + ASSP_SPEED_SEGMENT_BEAT_MILLI], rax
+    mov rax, [rsp + 40]
+    mov [rdi + r10 + ASSP_SPEED_SEGMENT_RATIO_MICRO], rax
+    mov rax, [rsp + 48]
+    mov [rdi + r10 + ASSP_SPEED_SEGMENT_DELAY_MICRO], rax
+    mov rax, [rsp + 56]
+    mov [rdi + r10 + ASSP_SPEED_SEGMENT_UNIT], rax
+
+.inc_count:
+    inc r14
+
+.skip_entry:
+    mov rsi, [rsp]
+    cmp rsi, r12
+    jae .sort
+    inc rsi
+    jmp .entry_loop
+
+.empty:
+    xor r14d, r14d
+
+.sort:
+    test rdi, rdi
+    jz .done
+    cmp r14, 2
+    jb .done
+    cmp r14, r13
+    ja .done
+
+    mov r8d, 1
+.sort_outer:
+    cmp r8, r14
+    jae .done
+    mov r10, r8
+    imul r10, ASSP_SPEED_SEGMENT_SIZE
+    mov rax, [rdi + r10 + ASSP_SPEED_SEGMENT_BEAT_MILLI]
+    mov [rsp + 32], rax
+    mov rax, [rdi + r10 + ASSP_SPEED_SEGMENT_RATIO_MICRO]
+    mov [rsp + 40], rax
+    mov rax, [rdi + r10 + ASSP_SPEED_SEGMENT_DELAY_MICRO]
+    mov [rsp + 48], rax
+    mov rax, [rdi + r10 + ASSP_SPEED_SEGMENT_UNIT]
+    mov [rsp + 56], rax
+    mov r9, r8
+
+.sort_inner:
+    test r9, r9
+    jz .sort_place
+    mov r10, r9
+    dec r10
+    imul r10, ASSP_SPEED_SEGMENT_SIZE
+    mov rax, [rdi + r10 + ASSP_SPEED_SEGMENT_BEAT_MILLI]
+    cmp rax, [rsp + 32]
+    jle .sort_place
+
+    mov r11, r9
+    imul r11, ASSP_SPEED_SEGMENT_SIZE
+    mov [rdi + r11 + ASSP_SPEED_SEGMENT_BEAT_MILLI], rax
+    mov rax, [rdi + r10 + ASSP_SPEED_SEGMENT_RATIO_MICRO]
+    mov [rdi + r11 + ASSP_SPEED_SEGMENT_RATIO_MICRO], rax
+    mov rax, [rdi + r10 + ASSP_SPEED_SEGMENT_DELAY_MICRO]
+    mov [rdi + r11 + ASSP_SPEED_SEGMENT_DELAY_MICRO], rax
+    mov rax, [rdi + r10 + ASSP_SPEED_SEGMENT_UNIT]
+    mov [rdi + r11 + ASSP_SPEED_SEGMENT_UNIT], rax
+    dec r9
+    jmp .sort_inner
+
+.sort_place:
+    mov r11, r9
+    imul r11, ASSP_SPEED_SEGMENT_SIZE
+    mov rax, [rsp + 32]
+    mov [rdi + r11 + ASSP_SPEED_SEGMENT_BEAT_MILLI], rax
+    mov rax, [rsp + 40]
+    mov [rdi + r11 + ASSP_SPEED_SEGMENT_RATIO_MICRO], rax
+    mov rax, [rsp + 48]
+    mov [rdi + r11 + ASSP_SPEED_SEGMENT_DELAY_MICRO], rax
+    mov rax, [rsp + 56]
+    mov [rdi + r11 + ASSP_SPEED_SEGMENT_UNIT], rax
+    inc r8
+    jmp .sort_outer
+
+.done:
+    mov rax, r14
+    jmp .pop_done
+
+.invalid:
+    mov rax, ASSP_NOT_FOUND
+
+.pop_done:
+    add rsp, 80
     pop r15
     pop r14
     pop r13

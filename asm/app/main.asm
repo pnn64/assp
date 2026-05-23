@@ -79,6 +79,7 @@ extern assp_minimize_chart_4
 extern assp_minimize_chart_8
 extern assp_normalize_float_digits
 extern assp_parse_bpm_map
+extern assp_parse_speed_map
 extern assp_parse_timing_seconds_map
 extern assp_parse_offset_ms
 extern assp_parse_offset_us
@@ -1929,6 +1930,8 @@ prepare_timing_events:
     mov qword [warp_segment_count], 0
     mov qword [warp_stats_segment_count], 0
     mov qword [fake_segment_count], 0
+    mov qword [timing_speed_segment_count], 0
+    mov qword [timing_scroll_segment_count], 0
     mov qword [stop_report_count], 0
     mov qword [delay_report_count], 0
     mov qword [warp_report_count], 0
@@ -2110,8 +2113,8 @@ prepare_timing_events:
     mov rdx, [chart_timing_tags + ASSP_TIMING_TAGS_SPEEDS + ASSP_BYTE_SLICE_LEN]
     jmp .count_speeds
 .global_speeds:
-    lea rcx, [normalized_speeds_buffer]
-    mov rdx, [normalized_speeds_len]
+    mov rcx, [global_timing_tags + ASSP_TIMING_TAGS_SPEEDS + ASSP_BYTE_SLICE_PTR]
+    mov rdx, [global_timing_tags + ASSP_TIMING_TAGS_SPEEDS + ASSP_BYTE_SLICE_LEN]
 .count_speeds:
     call assp_count_gimmick_speed_segments
     cmp rax, ASSP_NOT_FOUND
@@ -2131,6 +2134,50 @@ prepare_timing_events:
     cmp rax, ASSP_NOT_FOUND
     je .fail
     mov [scroll_report_count], rax
+
+    cmp qword [chart_has_own_timing], 0
+    je .global_speed_segments
+    mov rcx, [chart_timing_tags + ASSP_TIMING_TAGS_SPEEDS + ASSP_BYTE_SLICE_PTR]
+    mov rdx, [chart_timing_tags + ASSP_TIMING_TAGS_SPEEDS + ASSP_BYTE_SLICE_LEN]
+    jmp .parse_speed_segments
+.global_speed_segments:
+    mov rcx, [global_timing_tags + ASSP_TIMING_TAGS_SPEEDS + ASSP_BYTE_SLICE_PTR]
+    mov rdx, [global_timing_tags + ASSP_TIMING_TAGS_SPEEDS + ASSP_BYTE_SLICE_LEN]
+.parse_speed_segments:
+    lea r8, [speed_segment_buffer]
+    mov r9d, BPM_SEGMENT_CAP
+    call assp_parse_speed_map
+    cmp rax, ASSP_NOT_FOUND
+    je .fail
+    cmp rax, BPM_SEGMENT_CAP
+    ja .fail
+    mov [timing_speed_segment_count], rax
+    lea rcx, [speed_segment_buffer]
+    mov rdx, [timing_speed_segment_count]
+    call tidy_speed_segments_in_place
+    mov [timing_speed_segment_count], rax
+
+    cmp qword [chart_has_own_timing], 0
+    je .global_scroll_segments
+    mov rcx, [chart_timing_tags + ASSP_TIMING_TAGS_SCROLLS + ASSP_BYTE_SLICE_PTR]
+    mov rdx, [chart_timing_tags + ASSP_TIMING_TAGS_SCROLLS + ASSP_BYTE_SLICE_LEN]
+    jmp .parse_scroll_segments
+.global_scroll_segments:
+    mov rcx, [global_timing_tags + ASSP_TIMING_TAGS_SCROLLS + ASSP_BYTE_SLICE_PTR]
+    mov rdx, [global_timing_tags + ASSP_TIMING_TAGS_SCROLLS + ASSP_BYTE_SLICE_LEN]
+.parse_scroll_segments:
+    lea r8, [scroll_segment_buffer]
+    mov r9d, BPM_SEGMENT_CAP
+    call assp_parse_timing_seconds_map
+    cmp rax, ASSP_NOT_FOUND
+    je .fail
+    cmp rax, BPM_SEGMENT_CAP
+    ja .fail
+    mov [timing_scroll_segment_count], rax
+    lea rcx, [scroll_segment_buffer]
+    mov rdx, [timing_scroll_segment_count]
+    call tidy_scroll_segments_in_place
+    mov [timing_scroll_segment_count], rax
 
     cmp qword [chart_has_own_timing], 0
     je .global_fakes
@@ -2343,6 +2390,172 @@ tidy_row_segments_in_place:
     pop r13
     pop r12
     pop rdi
+    pop rsi
+    pop rbx
+    ret
+
+; rcx = assp_bpm_segment buffer, rdx = segment count.
+; rax = tidied count. Values are micro-scaled scroll ratios.
+tidy_scroll_segments_in_place:
+    push rbx
+    push rsi
+    push r12
+    push r13
+
+    test rcx, rcx
+    jz .empty
+    test rdx, rdx
+    jz .empty
+
+    mov rbx, rcx
+    mov rsi, rdx
+    xor r8d, r8d
+
+.quantize_loop:
+    cmp r8, rsi
+    jae .collapse
+    mov r10, r8
+    shl r10, 4
+    mov rcx, [rbx + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    call milli_to_row48_f32_even
+    imul rax, rax, 1000
+    cqo
+    mov r11d, 48
+    idiv r11
+    mov [rbx + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI], rax
+    inc r8
+    jmp .quantize_loop
+
+.collapse:
+    xor r8d, r8d
+    xor r9d, r9d
+
+.collapse_loop:
+    cmp r8, rsi
+    jae .done
+    mov r10, r8
+    shl r10, 4
+    mov r12, [rbx + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    mov r13, [rbx + r10 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    inc r8
+
+.same_row_loop:
+    cmp r8, rsi
+    jae .store_last_for_row
+    mov r10, r8
+    shl r10, 4
+    cmp [rbx + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI], r12
+    jne .store_last_for_row
+    mov r13, [rbx + r10 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    inc r8
+    jmp .same_row_loop
+
+.store_last_for_row:
+    mov r11, r9
+    shl r11, 4
+    mov [rbx + r11 + ASSP_BPM_SEGMENT_BEAT_MILLI], r12
+    mov [rbx + r11 + ASSP_BPM_SEGMENT_BPM_MILLI], r13
+    inc r9
+    jmp .collapse_loop
+
+.done:
+    mov rax, r9
+    jmp .pop_done
+
+.empty:
+    xor eax, eax
+
+.pop_done:
+    pop r13
+    pop r12
+    pop rsi
+    pop rbx
+    ret
+
+; rcx = assp_speed_segment buffer, rdx = segment count.
+; rax = tidied count.
+tidy_speed_segments_in_place:
+    push rbx
+    push rsi
+    push r12
+    push r13
+    push r14
+    push r15
+
+    test rcx, rcx
+    jz .empty
+    test rdx, rdx
+    jz .empty
+
+    mov rbx, rcx
+    mov rsi, rdx
+    xor r8d, r8d
+
+.quantize_loop:
+    cmp r8, rsi
+    jae .collapse
+    mov r10, r8
+    imul r10, ASSP_SPEED_SEGMENT_SIZE
+    mov rcx, [rbx + r10 + ASSP_SPEED_SEGMENT_BEAT_MILLI]
+    call milli_to_row48_f32_even
+    imul rax, rax, 1000
+    cqo
+    mov r11d, 48
+    idiv r11
+    mov [rbx + r10 + ASSP_SPEED_SEGMENT_BEAT_MILLI], rax
+    inc r8
+    jmp .quantize_loop
+
+.collapse:
+    xor r8d, r8d
+    xor r9d, r9d
+
+.collapse_loop:
+    cmp r8, rsi
+    jae .done
+    mov r10, r8
+    imul r10, ASSP_SPEED_SEGMENT_SIZE
+    mov r12, [rbx + r10 + ASSP_SPEED_SEGMENT_BEAT_MILLI]
+    mov r13, [rbx + r10 + ASSP_SPEED_SEGMENT_RATIO_MICRO]
+    mov r14, [rbx + r10 + ASSP_SPEED_SEGMENT_DELAY_MICRO]
+    mov r15, [rbx + r10 + ASSP_SPEED_SEGMENT_UNIT]
+    inc r8
+
+.same_row_loop:
+    cmp r8, rsi
+    jae .store_last_for_row
+    mov r10, r8
+    imul r10, ASSP_SPEED_SEGMENT_SIZE
+    cmp [rbx + r10 + ASSP_SPEED_SEGMENT_BEAT_MILLI], r12
+    jne .store_last_for_row
+    mov r13, [rbx + r10 + ASSP_SPEED_SEGMENT_RATIO_MICRO]
+    mov r14, [rbx + r10 + ASSP_SPEED_SEGMENT_DELAY_MICRO]
+    mov r15, [rbx + r10 + ASSP_SPEED_SEGMENT_UNIT]
+    inc r8
+    jmp .same_row_loop
+
+.store_last_for_row:
+    mov r11, r9
+    imul r11, ASSP_SPEED_SEGMENT_SIZE
+    mov [rbx + r11 + ASSP_SPEED_SEGMENT_BEAT_MILLI], r12
+    mov [rbx + r11 + ASSP_SPEED_SEGMENT_RATIO_MICRO], r13
+    mov [rbx + r11 + ASSP_SPEED_SEGMENT_DELAY_MICRO], r14
+    mov [rbx + r11 + ASSP_SPEED_SEGMENT_UNIT], r15
+    inc r9
+    jmp .collapse_loop
+
+.done:
+    mov rax, r9
+    jmp .pop_done
+
+.empty:
+    xor eax, eax
+
+.pop_done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
     pop rsi
     pop rbx
     ret
@@ -3810,6 +4023,202 @@ prepare_step_parity_bpm_8:
     add rsp, 152
     ret
 
+; rsi = start of an 8-panel row in parity_masked_buffer.
+%macro mask_fake_row8_col 1
+    mov al, [rsi + %1]
+    cmp al, 'M'
+    je %%mine
+    cmp al, 'm'
+    je %%mine
+    cmp al, 'F'
+    je %%fake
+    cmp al, 'f'
+    je %%fake
+    mov byte [rsi + %1], '0'
+    jmp %%done
+%%mine:
+    mov byte [rsi + %1], 'M'
+    mov edx, 1
+    jmp %%done
+%%fake:
+    mov byte [rsi + %1], 'F'
+    mov edx, 1
+%%done:
+%endmacro
+
+mask_fake_row8:
+    xor edx, edx
+    mask_fake_row8_col 0
+    mask_fake_row8_col 1
+    mask_fake_row8_col 2
+    mask_fake_row8_col 3
+    mask_fake_row8_col 4
+    mask_fake_row8_col 5
+    mask_fake_row8_col 6
+    mask_fake_row8_col 7
+    test edx, edx
+    jnz .done
+    mov byte [rsi], 'F'
+.done:
+    ret
+
+; r13 = nonzero source row index. eax = 1 when the row is timing-fake.
+parity_source_row_is_fake_8:
+    cmp qword [fake_segment_count], 0
+    je .no
+    cmp r13, [parity_source_row_count]
+    jae .no
+
+    lea rax, [parity_row_beats]
+    movss xmm0, [rax + r13 * 4]
+    mulss xmm0, [rel app_const_48_f32]
+    cvtss2si rax, xmm0
+    imul rax, rax, 1000
+    cqo
+    mov ecx, 48
+    idiv rcx
+    mov r8, rax
+
+    lea r9, [fake_segment_buffer]
+    mov r10, [fake_segment_count]
+    xor r11d, r11d
+.loop:
+    cmp r11, r10
+    jae .no
+    mov rax, r11
+    shl rax, 4
+    mov rcx, [r9 + rax + ASSP_BPM_SEGMENT_BPM_MILLI]
+    test rcx, rcx
+    jle .next
+    mov rdx, [r9 + rax + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    cmp r8, rdx
+    jl .next
+    add rdx, rcx
+    cmp r8, rdx
+    jl .yes
+.next:
+    inc r11
+    jmp .loop
+.yes:
+    mov eax, ASSP_TRUE
+    ret
+.no:
+    xor eax, eax
+    ret
+
+mask_fake_rows_for_parity_8:
+    push rbx
+    push rsi
+    push rdi
+    push r13
+    push r14
+
+    mov r14, [chart_info + ASSP_CHART_INFO_NOTES_LEN]
+    cmp r14, MINIMIZED_BUFFER_CAP
+    ja .fail
+    mov rsi, [chart_info + ASSP_CHART_INFO_NOTES_PTR]
+    test r14, r14
+    jz .success_empty
+    test rsi, rsi
+    jz .fail
+
+    lea rdi, [parity_masked_buffer]
+    mov rcx, r14
+    cld
+    rep movsb
+
+    lea rsi, [parity_masked_buffer]
+    lea rbx, [rsi + r14]
+    xor r13d, r13d
+
+.line_loop:
+    cmp rsi, rbx
+    jae .success
+
+.trim_left:
+    cmp rsi, rbx
+    jae .success
+    mov al, [rsi]
+    cmp al, ' '
+    je .trim_advance
+    cmp al, 9
+    jb .line_start
+    cmp al, 13
+    jbe .trim_advance
+    jmp .line_start
+
+.trim_advance:
+    inc rsi
+    jmp .trim_left
+
+.line_start:
+    mov al, [rsi]
+    cmp al, '/'
+    je .skip_to_next_line
+    cmp al, ','
+    je .measure_done
+    cmp al, ';'
+    je .success
+
+    lea rax, [rsi + 8]
+    cmp rax, rbx
+    ja .success
+
+    cmp dword [rsi], 30303030h
+    jne .nonzero_row
+    cmp dword [rsi + 4], 30303030h
+    je .row_done
+
+.nonzero_row:
+    cmp r13, [parity_source_row_count]
+    jae .fail
+    call parity_source_row_is_fake_8
+    test eax, eax
+    jz .source_row_done
+    call mask_fake_row8
+
+.source_row_done:
+    inc r13
+
+.row_done:
+    add rsi, 8
+    jmp .skip_to_next_line
+
+.measure_done:
+    inc rsi
+    jmp .line_loop
+
+.skip_to_next_line:
+    cmp rsi, rbx
+    jae .success
+    mov al, [rsi]
+    cmp al, ';'
+    je .success
+    inc rsi
+    cmp al, 10
+    je .line_loop
+    cmp al, ','
+    je .line_loop
+    jmp .skip_to_next_line
+
+.success:
+    cmp r13, [parity_source_row_count]
+    jne .fail
+.success_empty:
+    mov eax, ASSP_TRUE
+    jmp .done
+
+.fail:
+    xor eax, eax
+
+.done:
+    pop r14
+    pop r13
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
 prepare_step_parity_rows_8:
     sub rsp, 152
 
@@ -3828,8 +4237,20 @@ prepare_step_parity_rows_8:
     cmp rax, [parity_source_row_count]
     jne .fail
 
+    cmp qword [fake_segment_count], 0
+    je .prepare_original_rows
+    call mask_fake_rows_for_parity_8
+    test eax, eax
+    jz .fail
+    lea rcx, [parity_masked_buffer]
+    mov rdx, [chart_info + ASSP_CHART_INFO_NOTES_LEN]
+    jmp .prepare_rows
+
+.prepare_original_rows:
     mov rcx, [chart_info + ASSP_CHART_INFO_NOTES_PTR]
     mov rdx, [chart_info + ASSP_CHART_INFO_NOTES_LEN]
+
+.prepare_rows:
     lea r8, [parity_row_seconds]
     lea r9, [parity_row_ms]
     lea rax, [parity_row_beats]
@@ -4059,8 +4480,6 @@ prepare_tech_counts:
     or rax, [delay_segment_count]
     or rax, [warp_segment_count]
     jz .count_8_bpm
-    cmp qword [fake_segment_count], 0
-    jne .count_8_brackets
     call prepare_step_parity_events_8
     test eax, eax
     jnz .done
@@ -4172,6 +4591,17 @@ prepare_duration:
     call assp_elapsed_ms_with_events
     sub rax, [offset_ms]
     mov [duration_ms], rax
+    cmp qword [warp_segment_count], 0
+    jne .store_event_duration_ms
+    call prepare_duration_bpm_f32
+    lea rcx, [stop_segment_buffer]
+    mov rdx, [stop_segment_count]
+    call add_second_segments_to_duration_f32
+    lea rcx, [delay_segment_buffer]
+    mov rdx, [delay_segment_count]
+    call add_second_segments_to_duration_f32
+    jmp .success
+.store_event_duration_ms:
     call store_duration_ms_as_f32
     jmp .success
 
@@ -4299,6 +4729,50 @@ add_rows_to_duration_f32:
     divss xmm0, [rel app_const_48_f32]
     divss xmm0, xmm6
     addss xmm7, xmm0
+    ret
+
+; rcx = assp_bpm_segment buffer, rdx = count. Values are microseconds.
+add_second_segments_to_duration_f32:
+    push rbx
+    push rsi
+    push r12
+    push r13
+
+    test rcx, rcx
+    jz .done
+    test rdx, rdx
+    jz .done
+
+    mov rbx, rcx
+    mov rsi, rdx
+    mov rcx, [last_beat_milli]
+    call milli_to_row48_f32_even
+    mov r12, rax
+    xor r13d, r13d
+
+.loop:
+    cmp r13, rsi
+    jae .done
+    mov r10, r13
+    shl r10, 4
+    mov rcx, [rbx + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    call milli_to_row48_f32_even
+    cmp rax, r12
+    jg .done
+    mov r10, r13
+    shl r10, 4
+    cvtsi2ss xmm0, qword [rbx + r10 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    divss xmm0, [rel app_const_million_f32]
+    addss xmm0, [duration_seconds_f32]
+    movss [duration_seconds_f32], xmm0
+    inc r13
+    jmp .loop
+
+.done:
+    pop r13
+    pop r12
+    pop rsi
+    pop rbx
     ret
 
 prepare_bpm_median_nps_f32:
@@ -7095,6 +7569,442 @@ print_json_row_segments_array:
     add rsp, 88
     ret
 
+print_json_speed_segments_array:
+    sub rsp, 88
+    mov [rsp + 32], rdx
+    mov [rsp + 40], r8
+    mov qword [rsp + 48], 0
+    json_z open_bracket
+
+.loop:
+    mov rax, [rsp + 48]
+    cmp rax, [rsp + 40]
+    jae .done_array
+    test rax, rax
+    jz .segment
+    json_z comma
+
+.segment:
+    mov r10, [rsp + 48]
+    imul r10, ASSP_SPEED_SEGMENT_SIZE
+    add r10, [rsp + 32]
+    mov [rsp + 56], r10
+    json_z open_bracket
+    mov r10, [rsp + 56]
+    mov rcx, [r10 + ASSP_SPEED_SEGMENT_BEAT_MILLI]
+    call print_milli_as_row48_f32_6_inline
+    json_z comma
+    mov r10, [rsp + 56]
+    mov rcx, [r10 + ASSP_SPEED_SEGMENT_RATIO_MICRO]
+    call print_microseconds_f32_6_inline
+    json_z comma
+    mov r10, [rsp + 56]
+    mov rcx, [r10 + ASSP_SPEED_SEGMENT_DELAY_MICRO]
+    call print_microseconds_f32_6_inline
+    json_z comma
+    mov r10, [rsp + 56]
+    mov rcx, [r10 + ASSP_SPEED_SEGMENT_UNIT]
+    call print_u64
+    json_z close_bracket
+    inc qword [rsp + 48]
+    jmp .loop
+
+.done_array:
+    json_z close_bracket
+    add rsp, 88
+    ret
+
+print_json_scroll_segments_array:
+    sub rsp, 88
+    mov [rsp + 32], rdx
+    mov [rsp + 40], r8
+    mov qword [rsp + 48], 0
+    json_z open_bracket
+
+.loop:
+    mov rax, [rsp + 48]
+    cmp rax, [rsp + 40]
+    jae .done_array
+    test rax, rax
+    jz .segment
+    json_z comma
+
+.segment:
+    mov r10, [rsp + 48]
+    imul r10, ASSP_BPM_SEGMENT_SIZE
+    add r10, [rsp + 32]
+    mov [rsp + 56], r10
+    json_z open_bracket
+    mov r10, [rsp + 56]
+    mov rcx, [r10 + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    call print_milli_as_row48_f32_6_inline
+    json_z comma
+    mov r10, [rsp + 56]
+    mov rcx, [r10 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    call print_microseconds_f32_6_inline
+    json_z close_bracket
+    inc qword [rsp + 48]
+    jmp .loop
+
+.done_array:
+    json_z close_bracket
+    add rsp, 88
+    ret
+
+; rdx = field start, r8 = field end.
+print_json_trimmed_raw:
+    sub rsp, 40
+    mov r10, rdx
+    mov r11, r8
+.trim_left:
+    cmp r10, r11
+    jae .done
+    cmp byte [r10], ' '
+    ja .trim_right
+    inc r10
+    jmp .trim_left
+.trim_right:
+    cmp r11, r10
+    jbe .done
+    cmp byte [r11 - 1], ' '
+    ja .emit
+    dec r11
+    jmp .trim_right
+.emit:
+    mov rcx, r10
+    mov rdx, r11
+    sub rdx, r10
+    call print_raw
+.done:
+    add rsp, 40
+    ret
+
+; rdx = field start, r8 = field end.
+print_json_trimmed_string:
+    sub rsp, 40
+    mov r10, rdx
+    mov r11, r8
+.trim_left:
+    cmp r10, r11
+    jae .empty
+    cmp byte [r10], ' '
+    ja .trim_right
+    inc r10
+    jmp .trim_left
+.trim_right:
+    cmp r11, r10
+    jbe .empty
+    cmp byte [r11 - 1], ' '
+    ja .emit
+    dec r11
+    jmp .trim_right
+.emit:
+    mov rdx, r10
+    mov r8, r11
+    sub r8, r10
+    call print_json_slice_value
+    jmp .done
+.empty:
+    json_z quote
+    json_z quote
+.done:
+    add rsp, 40
+    ret
+
+; rdx = comma-separated beat=value=value bytes, r8 = len.
+print_json_metadata3_array:
+    sub rsp, 136
+    mov [rsp + 32], rdx
+    mov [rsp + 40], r8
+    mov qword [rsp + 48], 0
+    mov qword [rsp + 56], 0
+    json_z open_bracket
+
+.loop:
+    mov rax, [rsp + 48]
+    cmp rax, [rsp + 40]
+    jae .done_array
+    mov r10, [rsp + 32]
+    add r10, rax
+    mov r11, [rsp + 32]
+    add r11, [rsp + 40]
+    mov r9, r10
+.find_comma:
+    cmp r9, r11
+    jae .segment_bounds
+    cmp byte [r9], ','
+    je .segment_bounds
+    inc r9
+    jmp .find_comma
+
+.segment_bounds:
+    mov [rsp + 64], r10
+    mov [rsp + 72], r9
+    mov rax, r9
+    sub rax, [rsp + 32]
+    mov [rsp + 48], rax
+
+    mov r10, [rsp + 64]
+    mov r11, [rsp + 72]
+.trim_left:
+    cmp r10, r11
+    jae .next_segment
+    cmp byte [r10], ' '
+    ja .trim_right
+    inc r10
+    jmp .trim_left
+.trim_right:
+    cmp r11, r10
+    jbe .next_segment
+    cmp byte [r11 - 1], ' '
+    ja .find_eq1
+    dec r11
+    jmp .trim_right
+
+.find_eq1:
+    mov rax, r10
+.eq1_loop:
+    cmp rax, r11
+    jae .next_segment
+    cmp byte [rax], '='
+    je .found_eq1
+    inc rax
+    jmp .eq1_loop
+.found_eq1:
+    mov [rsp + 80], r10
+    mov [rsp + 88], rax
+    inc rax
+.eq2_loop:
+    cmp rax, r11
+    jae .next_segment
+    cmp byte [rax], '='
+    je .found_eq2
+    inc rax
+    jmp .eq2_loop
+.found_eq2:
+    mov [rsp + 96], rax
+    mov [rsp + 104], r11
+
+    cmp qword [rsp + 56], 0
+    je .open_segment
+    json_z comma
+.open_segment:
+    mov qword [rsp + 56], 1
+    json_z open_bracket
+    mov rdx, [rsp + 80]
+    mov r8, [rsp + 88]
+    call print_json_trimmed_raw
+    json_z comma
+    mov rdx, [rsp + 88]
+    inc rdx
+    mov r8, [rsp + 96]
+    call print_json_trimmed_raw
+    json_z comma
+    mov rdx, [rsp + 96]
+    inc rdx
+    mov r8, [rsp + 104]
+    call print_json_trimmed_raw
+    json_z close_bracket
+
+.next_segment:
+    mov rax, [rsp + 48]
+    cmp rax, [rsp + 40]
+    jae .loop
+    inc rax
+    mov [rsp + 48], rax
+    jmp .loop
+
+.done_array:
+    json_z close_bracket
+    add rsp, 136
+    ret
+
+; rdx = comma-separated beat=value bytes, r8 = len.
+print_json_metadata2_array:
+    sub rsp, 128
+    mov [rsp + 32], rdx
+    mov [rsp + 40], r8
+    mov qword [rsp + 48], 0
+    mov qword [rsp + 56], 0
+    json_z open_bracket
+
+.loop:
+    mov rax, [rsp + 48]
+    cmp rax, [rsp + 40]
+    jae .done_array
+    mov r10, [rsp + 32]
+    add r10, rax
+    mov r11, [rsp + 32]
+    add r11, [rsp + 40]
+    mov r9, r10
+.find_comma:
+    cmp r9, r11
+    jae .segment_bounds
+    cmp byte [r9], ','
+    je .segment_bounds
+    inc r9
+    jmp .find_comma
+
+.segment_bounds:
+    mov [rsp + 64], r10
+    mov [rsp + 72], r9
+    mov rax, r9
+    sub rax, [rsp + 32]
+    mov [rsp + 48], rax
+
+    mov r10, [rsp + 64]
+    mov r11, [rsp + 72]
+.trim_left:
+    cmp r10, r11
+    jae .next_segment
+    cmp byte [r10], ' '
+    ja .trim_right
+    inc r10
+    jmp .trim_left
+.trim_right:
+    cmp r11, r10
+    jbe .next_segment
+    cmp byte [r11 - 1], ' '
+    ja .find_eq
+    dec r11
+    jmp .trim_right
+
+.find_eq:
+    mov rax, r10
+.eq_loop:
+    cmp rax, r11
+    jae .next_segment
+    cmp byte [rax], '='
+    je .found_eq
+    inc rax
+    jmp .eq_loop
+.found_eq:
+    mov [rsp + 80], r10
+    mov [rsp + 88], rax
+    mov [rsp + 96], r11
+
+    cmp qword [rsp + 56], 0
+    je .open_segment
+    json_z comma
+.open_segment:
+    mov qword [rsp + 56], 1
+    json_z open_bracket
+    mov rdx, [rsp + 80]
+    mov r8, [rsp + 88]
+    call print_json_trimmed_raw
+    json_z comma
+    mov rdx, [rsp + 88]
+    inc rdx
+    mov r8, [rsp + 96]
+    call print_json_trimmed_raw
+    json_z close_bracket
+
+.next_segment:
+    mov rax, [rsp + 48]
+    cmp rax, [rsp + 40]
+    jae .loop
+    inc rax
+    mov [rsp + 48], rax
+    jmp .loop
+
+.done_array:
+    json_z close_bracket
+    add rsp, 128
+    ret
+
+; rdx = comma-separated beat=label bytes, r8 = len.
+print_json_label_array:
+    sub rsp, 128
+    mov [rsp + 32], rdx
+    mov [rsp + 40], r8
+    mov qword [rsp + 48], 0
+    mov qword [rsp + 56], 0
+    json_z open_bracket
+
+.loop:
+    mov rax, [rsp + 48]
+    cmp rax, [rsp + 40]
+    jae .done_array
+    mov r10, [rsp + 32]
+    add r10, rax
+    mov r11, [rsp + 32]
+    add r11, [rsp + 40]
+    mov r9, r10
+.find_comma:
+    cmp r9, r11
+    jae .segment_bounds
+    cmp byte [r9], ','
+    je .segment_bounds
+    inc r9
+    jmp .find_comma
+
+.segment_bounds:
+    mov [rsp + 64], r10
+    mov [rsp + 72], r9
+    mov rax, r9
+    sub rax, [rsp + 32]
+    mov [rsp + 48], rax
+
+    mov r10, [rsp + 64]
+    mov r11, [rsp + 72]
+.trim_left:
+    cmp r10, r11
+    jae .next_segment
+    cmp byte [r10], ' '
+    ja .trim_right
+    inc r10
+    jmp .trim_left
+.trim_right:
+    cmp r11, r10
+    jbe .next_segment
+    cmp byte [r11 - 1], ' '
+    ja .find_eq
+    dec r11
+    jmp .trim_right
+
+.find_eq:
+    mov rax, r10
+.eq_loop:
+    cmp rax, r11
+    jae .next_segment
+    cmp byte [rax], '='
+    je .found_eq
+    inc rax
+    jmp .eq_loop
+.found_eq:
+    mov [rsp + 80], r10
+    mov [rsp + 88], rax
+    mov [rsp + 96], r11
+
+    cmp qword [rsp + 56], 0
+    je .open_segment
+    json_z comma
+.open_segment:
+    mov qword [rsp + 56], 1
+    json_z open_bracket
+    mov rdx, [rsp + 80]
+    mov r8, [rsp + 88]
+    call print_json_trimmed_raw
+    json_z comma
+    mov rdx, [rsp + 88]
+    inc rdx
+    mov r8, [rsp + 96]
+    call print_json_trimmed_string
+    json_z close_bracket
+
+.next_segment:
+    mov rax, [rsp + 48]
+    cmp rax, [rsp + 40]
+    jae .loop
+    inc rax
+    mov [rsp + 48], rax
+    jmp .loop
+
+.done_array:
+    json_z close_bracket
+    add rsp, 128
+    ret
+
 print_json_bpm_segments_string:
     sub rsp, 88
     mov [rsp + 32], rdx
@@ -7341,21 +8251,62 @@ print_json_chart:
     mov r8, [delay_segment_count]
     call print_json_second_segments_array
     json_z json_key_time_signatures
+    cmp qword [selected_normalized_time_signatures_len], 0
+    je .json_default_time_signatures
+    lea rdx, [selected_normalized_time_signatures_buffer]
+    mov r8, [selected_normalized_time_signatures_len]
+    call print_json_metadata3_array
+    jmp .json_warps
+.json_default_time_signatures:
     json_z json_default_time_signatures
+.json_warps:
     json_z json_key_warps_array
     lea rdx, [warp_segment_buffer]
     mov r8, [warp_segment_count]
     call print_json_row_segments_array
     json_z json_key_labels
+    cmp qword [selected_normalized_labels_len], 0
+    je .json_default_labels
+    lea rdx, [selected_normalized_labels_buffer]
+    mov r8, [selected_normalized_labels_len]
+    call print_json_label_array
+    jmp .json_tickcounts
+.json_default_labels:
     json_z json_default_labels
+.json_tickcounts:
     json_z json_key_tickcounts
+    cmp qword [selected_normalized_tickcounts_len], 0
+    je .json_default_tickcounts
+    lea rdx, [selected_normalized_tickcounts_buffer]
+    mov r8, [selected_normalized_tickcounts_len]
+    call print_json_metadata2_array
+    jmp .json_combos
+.json_default_tickcounts:
     json_z json_default_tickcounts
+.json_combos:
     json_z json_key_combos
     json_z json_default_combos
+.json_speeds:
     json_z json_key_speeds_array
+    cmp qword [timing_speed_segment_count], 0
+    je .json_default_speeds
+    lea rdx, [speed_segment_buffer]
+    mov r8, [timing_speed_segment_count]
+    call print_json_speed_segments_array
+    jmp .json_scrolls
+.json_default_speeds:
     json_z json_default_speeds
+.json_scrolls:
     json_z json_key_scrolls_array
+    cmp qword [timing_scroll_segment_count], 0
+    je .json_default_scrolls
+    lea rdx, [scroll_segment_buffer]
+    mov r8, [timing_scroll_segment_count]
+    call print_json_scroll_segments_array
+    jmp .json_fakes
+.json_default_scrolls:
     json_z json_default_scrolls
+.json_fakes:
     json_z json_key_fakes_array
     lea rdx, [fake_segment_buffer]
     mov r8, [fake_segment_count]
@@ -9708,6 +10659,8 @@ delay_segment_count resq 1
 warp_segment_count resq 1
 warp_stats_segment_count resq 1
 fake_segment_count resq 1
+timing_speed_segment_count resq 1
+timing_scroll_segment_count resq 1
 tech_notation_len resq 1
 difficulty_label_len resq 1
 stop_report_count resq 1
@@ -9787,6 +10740,8 @@ delay_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
 warp_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
 warp_stats_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
 fake_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
+speed_segment_buffer resb BPM_SEGMENT_CAP * ASSP_SPEED_SEGMENT_SIZE
+scroll_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
 nps_buffer resd DENSITY_CAP
 nps_raw_buffer resq DENSITY_CAP
 nps_sort_buffer resq DENSITY_CAP
@@ -9822,6 +10777,7 @@ parity_hits resb PARITY_STATE_CAP * 5
 parity_keys resd PARITY_STATE_CAP
 row_scratch resq ROW_SCRATCH_CAP
 minimized_buffer resb MINIMIZED_BUFFER_CAP
+parity_masked_buffer resb MINIMIZED_BUFFER_CAP
 density_buffer resd DENSITY_CAP
 stream_segment_buffer resb DENSITY_CAP * ASSP_STREAM_SEGMENT_SIZE
 stream_token_buffer resb DENSITY_CAP * ASSP_STREAM_TOKEN_SIZE
