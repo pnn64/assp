@@ -18,6 +18,7 @@ param(
     [switch]$NoBuild,
     [switch]$KeepTemp,
     [switch]$IncludeRaw,
+    [switch]$IncludeKnownBad,
     [int]$Jobs,
     [int]$MaxFailures = 50,
     [Parameter(ValueFromRemainingArguments = $true)]
@@ -125,6 +126,9 @@ if ($KeepTemp) {
 }
 if ($IncludeRaw) {
     $runnerArgs += "--include-raw"
+}
+if ($IncludeKnownBad) {
+    $runnerArgs += "--include-known-bad"
 }
 if ($Jobs -gt 0) {
     $runnerArgs += "--jobs"

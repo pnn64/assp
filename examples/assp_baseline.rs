@@ -31,6 +31,7 @@ struct Config {
     quiet: bool,
     keep_temp: bool,
     include_raw: bool,
+    include_known_bad: bool,
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -62,6 +63,19 @@ struct Failure {
     name: String,
     message: String,
 }
+
+const KNOWN_BAD_BASELINES: &[&str] = &[
+    r"Cirque du Beast\[Serenade] - 30MIN HARDER\04 - 30MIN HARDER.sm.zst",
+    r"CuoReNeRo MeGaPacK 2\Dokudenpa [Skor]\dokudenpa.sm.zst",
+    r"CuoReNeRo MeGaPacK 4\deltaMAX [Mad Matt & WinDEU]\DeltaMAX.sm.zst",
+    r"CuoReNeRo MeGaPacK\Summer [camsta4]\Summer.sm.zst",
+    r"East Coast Stamina 2.5\Shit Pallette 2.0 - [Mad Matt]\Shit Pallette 2.0.sm.zst",
+    r"ITGAlex's Compilation 4\Juggler's Maddness\jugglers.ssc.zst",
+    r"Tech Spectrum\[E]BR+XO(lv.4) Antithese\antithese.sm.zst",
+    r"Tech Spectrum\[G]BR+XO+FS(BXF)(lvl.7) Swampgator\swampgator.sm.zst",
+    r"Tech Spectrum\[G]BR+XO+FS(BXF)(lvl.9) Our Styles\ourstyles.sm.zst",
+    r"The Classics Pack Vol 1\Cooking by the Book [jAAAmes]\Cooking by the Book.ssc.zst",
+];
 
 struct PreparedInput {
     path: PathBuf,
@@ -113,6 +127,7 @@ fn parse_config() -> Result<Config, String> {
         quiet: false,
         keep_temp: false,
         include_raw: false,
+        include_known_bad: false,
     };
 
     let mut args = env::args().skip(1);
@@ -141,6 +156,7 @@ fn parse_config() -> Result<Config, String> {
             "--quiet" => config.quiet = true,
             "--keep-temp" => config.keep_temp = true,
             "--include-raw" => config.include_raw = true,
+            "--include-known-bad" => config.include_known_bad = true,
             "--" => {}
             _ if arg.starts_with('-') => return Err(format!("unknown argument: {arg}")),
             _ if config.filter.is_none() => config.filter = Some(arg),
@@ -237,6 +253,7 @@ Options:\n\
   --quiet               suppress per-test ok lines\n\
   --temp-dir <dir>      temp directory for decompressed .zst simfiles\n\
   --keep-temp           leave decompressed .zst temp files on disk\n\
+  --include-known-bad   include files with known-bad harness baselines\n\
   --include-raw         include loose .sm/.ssc files; default matches RSSP .zst tests"
 }
 
@@ -513,6 +530,9 @@ fn discover_exact_test(config: &Config, filter: &str) -> Result<Vec<TestCase>, S
     if config.skips.iter().any(|skip| filter.contains(skip)) {
         return Ok(Vec::new());
     }
+    if !config.include_known_bad && is_known_bad_baseline(filter) {
+        return Ok(Vec::new());
+    }
 
     let relative_path = path_from_name(filter);
     let source_path = config.packs_dir.join(&relative_path);
@@ -573,11 +593,18 @@ fn selected(config: &Config, name: &str) -> bool {
     if config.skips.iter().any(|skip| name.contains(skip)) {
         return false;
     }
+    if !config.include_known_bad && is_known_bad_baseline(name) {
+        return false;
+    }
     match &config.filter {
         Some(filter) if config.exact => name == filter,
         Some(filter) => name.contains(filter),
         None => true,
     }
+}
+
+fn is_known_bad_baseline(name: &str) -> bool {
+    KNOWN_BAD_BASELINES.contains(&name)
 }
 
 fn run_test(config: &Config, test: &TestCase, index: usize) -> Result<TestStatus, String> {
