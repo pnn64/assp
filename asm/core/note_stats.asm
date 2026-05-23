@@ -2046,6 +2046,7 @@ row_fake_object_count_8:
 %define TS4_CURRENT_ROW 112
 %define TS4_MIN_COUNT 120
 %define TS4_DEPTHS 128
+%define TS4_LIFTS 136
 
 %macro timing_stats_4_finalize_measure 0
     cmp qword [rsp + TS4_RAW_COUNT], 0
@@ -2109,6 +2110,15 @@ row_fake_object_count_8:
     je %%hold_start
     cmp al, '3'
     je %%end
+    cmp al, 'L'
+    je %%lift
+    cmp al, 'l'
+    je %%lift
+    jmp %%store
+
+%%lift:
+    inc qword [rsp + TS4_LIFTS]
+    mov eax, '1'
     jmp %%store
 
 %%hold_start:
@@ -2366,6 +2376,7 @@ assp_count_timing_note_stats_4:
     je .success
 
     mov dword [rsp + TS4_DEPTHS], 0
+    mov qword [rsp + TS4_LIFTS], 0
     xor r12d, r12d
 .transform_loop:
     cmp r12, [rsp + TS4_TOTAL_ROWS]
@@ -2423,6 +2434,14 @@ assp_count_timing_note_stats_4:
     call assp_count_note_stats_4
     test eax, eax
     jz .invalid
+    mov r8, [rsp + TS4_OUT]
+    mov rax, [rsp + TS4_LIFTS]
+    add [r8 + ASSP_NOTE_STATS_LIFTS], rax
+    mov rcx, [rsp + TS4_TEXT_BASE]
+    mov rdx, [rsp + TS4_TOTAL_ROWS]
+    call count_mine_hold_hands_4
+    mov r8, [rsp + TS4_OUT]
+    add [r8 + ASSP_NOTE_STATS_HANDS], rax
 
 .success:
     mov eax, ASSP_TRUE
@@ -2439,6 +2458,149 @@ assp_count_timing_note_stats_4:
     pop r12
     pop rdi
     pop rsi
+    pop rbx
+    ret
+
+%macro count_mine_hold_hand_lane 1
+    mov bl, [r10 + %1]
+    cmp bl, '1'
+    je %%note
+    cmp bl, '2'
+    je %%hold_start
+    cmp bl, '4'
+    je %%hold_start
+    cmp bl, '3'
+    je %%end
+    cmp bl, 'M'
+    je %%mine
+    cmp bl, 'm'
+    je %%mine
+    jmp %%done
+
+%%note:
+    inc r11d
+    jmp %%done
+
+%%hold_start:
+    inc r11d
+    inc r12d
+    jmp %%done
+
+%%end:
+    inc r13d
+    jmp %%done
+
+%%mine:
+    mov r14d, 1
+
+%%done:
+%endmacro
+
+count_mine_hold_hands_4:
+    push rbx
+    push r12
+    push r13
+    push r14
+
+    xor eax, eax
+    xor r8d, r8d
+    xor r9d, r9d
+
+.loop:
+    cmp r9, rdx
+    jae .done
+
+    mov r10, r9
+    imul r10, 5
+    add r10, rcx
+    xor r11d, r11d
+    xor r12d, r12d
+    xor r13d, r13d
+    xor r14d, r14d
+
+    count_mine_hold_hand_lane 0
+    count_mine_hold_hand_lane 1
+    count_mine_hold_hand_lane 2
+    count_mine_hold_hand_lane 3
+
+    test r11d, r11d
+    jnz .update_active
+    test r14d, r14d
+    jz .update_active
+    cmp r8d, 3
+    jl .update_active
+    inc rax
+
+.update_active:
+    add r8d, r12d
+    sub r8d, r13d
+    jge .next
+    xor r8d, r8d
+
+.next:
+    inc r9
+    jmp .loop
+
+.done:
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+count_mine_hold_hands_8:
+    push rbx
+    push r12
+    push r13
+    push r14
+
+    xor eax, eax
+    xor r8d, r8d
+    xor r9d, r9d
+
+.loop:
+    cmp r9, rdx
+    jae .done
+
+    mov r10, r9
+    imul r10, 9
+    add r10, rcx
+    xor r11d, r11d
+    xor r12d, r12d
+    xor r13d, r13d
+    xor r14d, r14d
+
+    count_mine_hold_hand_lane 0
+    count_mine_hold_hand_lane 1
+    count_mine_hold_hand_lane 2
+    count_mine_hold_hand_lane 3
+    count_mine_hold_hand_lane 4
+    count_mine_hold_hand_lane 5
+    count_mine_hold_hand_lane 6
+    count_mine_hold_hand_lane 7
+
+    test r11d, r11d
+    jnz .update_active
+    test r14d, r14d
+    jz .update_active
+    cmp r8d, 3
+    jl .update_active
+    inc rax
+
+.update_active:
+    add r8d, r12d
+    sub r8d, r13d
+    jge .next
+    xor r8d, r8d
+
+.next:
+    inc r9
+    jmp .loop
+
+.done:
+    pop r14
+    pop r13
+    pop r12
     pop rbx
     ret
 
@@ -2512,6 +2674,7 @@ timing_hold_start_has_end_4:
 %define TS8_CURRENT_ROW 112
 %define TS8_MIN_COUNT 120
 %define TS8_DEPTHS 128
+%define TS8_LIFTS 136
 
 %macro timing_stats_8_finalize_measure 0
     cmp qword [rsp + TS8_RAW_COUNT], 0
@@ -2575,6 +2738,15 @@ timing_hold_start_has_end_4:
     je %%hold_start
     cmp al, '3'
     je %%end
+    cmp al, 'L'
+    je %%lift
+    cmp al, 'l'
+    je %%lift
+    jmp %%store
+
+%%lift:
+    inc qword [rsp + TS8_LIFTS]
+    mov eax, '1'
     jmp %%store
 
 %%hold_start:
@@ -2832,6 +3004,7 @@ assp_count_timing_note_stats_8:
     je .success
 
     mov qword [rsp + TS8_DEPTHS], 0
+    mov qword [rsp + TS8_LIFTS], 0
     xor r12d, r12d
 .transform_loop:
     cmp r12, [rsp + TS8_TOTAL_ROWS]
@@ -2897,6 +3070,14 @@ assp_count_timing_note_stats_8:
     call assp_count_note_stats_8
     test eax, eax
     jz .invalid
+    mov r8, [rsp + TS8_OUT]
+    mov rax, [rsp + TS8_LIFTS]
+    add [r8 + ASSP_NOTE_STATS_LIFTS], rax
+    mov rcx, [rsp + TS8_TEXT_BASE]
+    mov rdx, [rsp + TS8_TOTAL_ROWS]
+    call count_mine_hold_hands_8
+    mov r8, [rsp + TS8_OUT]
+    add [r8 + ASSP_NOTE_STATS_HANDS], rax
 
 .success:
     mov eax, ASSP_TRUE

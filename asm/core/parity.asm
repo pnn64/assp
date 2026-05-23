@@ -6914,7 +6914,7 @@ assp_step_parity_hold_head_ends_8:
     ret
 
 ; rcx = minimized 4-panel note-data, rdx = byte length,
-; r8 = BPM segments, r9 = BPM segment count, stack arg 5 = offset milliseconds,
+; r8 = BPM segments, r9 = BPM segment count, stack arg 5 = offset microseconds,
 ; stack arg 6 = out row seconds, stack arg 7 = out row milliseconds,
 ; stack arg 8 = out row beats, stack arg 9 = output row capacity.
 ; Emits one time row for each nonzero source row used by RSSP step parity.
@@ -7187,7 +7187,7 @@ assp_step_parity_bpm_row_times_4:
     ret
 
 ; rcx = minimized 8-panel note-data, rdx = byte length,
-; r8 = BPM segments, r9 = BPM segment count, stack arg 5 = offset milliseconds,
+; r8 = BPM segments, r9 = BPM segment count, stack arg 5 = offset microseconds,
 ; stack arg 6 = out row seconds, stack arg 7 = out row milliseconds,
 ; stack arg 8 = out row beats, stack arg 9 = output row capacity.
 ; Emits one time row for each nonzero source row used by RSSP step parity.
@@ -7463,7 +7463,7 @@ assp_step_parity_bpm_row_times_8:
     ret
 
 ; xmm0 = target beat f32, r13/r14 = BPM segment array/count,
-; r15 = offset milliseconds. Returns second f32 in xmm0.
+; r15 = offset microseconds. Returns second f32 in xmm0.
 bpm_row_time_seconds4:
     cvtss2sd xmm7, xmm0
     xorpd xmm0, xmm0
@@ -7528,7 +7528,7 @@ bpm_row_time_seconds4:
 
 .apply_offset:
     cvtsi2sd xmm5, r15
-    divsd xmm5, [rel const_thousand_f64]
+    divsd xmm5, [rel const_million_f64]
     subsd xmm0, xmm5
     cvtsd2ss xmm0, xmm0
     ret
@@ -7544,7 +7544,7 @@ floor_ss_to_i32_4:
     ret
 
 ; ecx = quantized note row, r13 = one BPM segment at beat 0,
-; r15 = offset milliseconds. xmm0 = seconds matching rssp fixed timing.
+; r15 = offset microseconds. xmm0 = seconds matching rssp fixed timing.
 fixed_bpm_row_time_seconds4:
     cvtsi2ss xmm0, ecx
     divss xmm0, [rel rows_per_beat_f32]
@@ -7553,7 +7553,7 @@ fixed_bpm_row_time_seconds4:
     divss xmm1, [rel const_sixty_thousand_f32]
     divss xmm0, xmm1
     cvtsi2ss xmm2, r15
-    divss xmm2, [rel const_thousand_f32]
+    divss xmm2, [rel const_million_f32]
     subss xmm0, xmm2
     ret
 
@@ -8552,9 +8552,11 @@ cost_one dd 1.0
 step_parity_foot_masks db 0, 1, 2, 4, 8
 const_four_f32 dd 4.0
 const_thousand_f32 dd 1000.0
+const_million_f32 dd 1000000.0
 const_sixty_thousand_f32 dd 60000.0
 const_sixty_f64 dq 60.0
 const_thousand_f64 dq 1000.0
+const_million_f64 dq 1000000.0
 const_default_bpm_f64 dq 60.0
 rows_per_beat_f32 dd 48.0
 hold_end_none dd -1.0

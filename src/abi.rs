@@ -793,7 +793,7 @@ unsafe extern "C" {
         len: usize,
         bpms: *const BpmSegment,
         bpm_count: usize,
-        offset_ms: i64,
+        offset_us: i64,
         out_row_seconds: *mut f32,
         out_row_ms: *mut i32,
         out_row_beats: *mut f32,
@@ -804,7 +804,7 @@ unsafe extern "C" {
         len: usize,
         bpms: *const BpmSegment,
         bpm_count: usize,
-        offset_ms: i64,
+        offset_us: i64,
         out_row_seconds: *mut f32,
         out_row_ms: *mut i32,
         out_row_beats: *mut f32,
@@ -869,6 +869,7 @@ unsafe extern "C" {
         out_cap: usize,
     ) -> usize;
     fn assp_parse_offset_ms(data: *const u8, len: usize) -> i64;
+    fn assp_parse_offset_us(data: *const u8, len: usize) -> i64;
     fn assp_bpm_display_range(
         segments: *const BpmSegment,
         len: usize,
@@ -2512,7 +2513,7 @@ pub fn step_parity_hold_head_ends_8(data: &[u8], input_row_beats: &[f32]) -> Opt
 pub fn step_parity_bpm_row_times_4(
     data: &[u8],
     bpms: &[BpmSegment],
-    offset_ms: i64,
+    offset_us: i64,
 ) -> Option<(Vec<f32>, Vec<i32>, Vec<f32>)> {
     let cap = data.len() / 4 + 1;
     let mut row_seconds = vec![0.0f32; cap];
@@ -2524,7 +2525,7 @@ pub fn step_parity_bpm_row_times_4(
             data.len(),
             bpms.as_ptr(),
             bpms.len(),
-            offset_ms,
+            offset_us,
             row_seconds.as_mut_ptr(),
             row_ms.as_mut_ptr(),
             row_beats.as_mut_ptr(),
@@ -2545,7 +2546,7 @@ pub fn step_parity_bpm_row_times_4(
 pub fn step_parity_bpm_row_times_8(
     data: &[u8],
     bpms: &[BpmSegment],
-    offset_ms: i64,
+    offset_us: i64,
 ) -> Option<(Vec<f32>, Vec<i32>, Vec<f32>)> {
     let cap = data.len() / 8 + 1;
     let mut row_seconds = vec![0.0f32; cap];
@@ -2557,7 +2558,7 @@ pub fn step_parity_bpm_row_times_8(
             data.len(),
             bpms.as_ptr(),
             bpms.len(),
-            offset_ms,
+            offset_us,
             row_seconds.as_mut_ptr(),
             row_ms.as_mut_ptr(),
             row_beats.as_mut_ptr(),
@@ -3138,6 +3139,11 @@ pub fn parse_bpm_map(data: &[u8]) -> Option<Vec<BpmSegment>> {
 #[must_use]
 pub fn parse_offset_ms(data: &[u8]) -> i64 {
     unsafe { assp_parse_offset_ms(data.as_ptr(), data.len()) }
+}
+
+#[must_use]
+pub fn parse_offset_us(data: &[u8]) -> i64 {
+    unsafe { assp_parse_offset_us(data.as_ptr(), data.len()) }
 }
 
 #[must_use]

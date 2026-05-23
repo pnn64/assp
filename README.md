@@ -4,7 +4,7 @@
 simfile parser.
 
 The executable is built from assembly. The Rust crate in this directory is only
-an optional parity-test harness that calls assembly routines from Rust tests.
+an optional test and baseline harness around the assembly executable and ABI.
 `build.ps1` does not compile or link Rust code unless one of the RSSP comparison
 modes is requested.
 
@@ -32,7 +32,7 @@ test coverage, read `src/abi.rs` and `tests/`.
 - A Windows x64 linker: Visual Studio Build Tools, `lld-link`, or Rust's
   `rust-lld`
 - Windows SDK x64 import libraries
-- `cargo` only for Rust tests or RSSP comparison modes
+- `cargo` only for Rust tests and parity harnesses
 
 Linux and FreeBSD native builds use:
 
@@ -145,6 +145,49 @@ Use `-Filter` and `-Exact` for one file:
 
 Extra `all_parity` harness arguments can still be passed after `--` when
 needed.
+
+## ASSP Baseline Harness
+
+`fast-parity.ps1` runs only ASSP. It walks a pack tree, runs
+`assp.exe --json` for each `.sm`, `.ssc`, `.sm.zst`, and `.ssc.zst` file, and
+compares the output to compressed baselines in a directory you choose. By
+default it uses the checked-in `tests\data\packs` tree and the same mixed
+baseline sources as RSSP's full `all_parity` test:
+
+- `<md5>.json.zst` for ITGmania/reference harness fields such as metadata,
+  BPMs, hashes, timing, NPS, step counts, tech counts, and stream breakdowns.
+- `<md5>.rssp.json.zst` for RSSP-owned fields such as matrix rating, SN
+  breakdowns, `sn_breaks`, mono/candle stats, boxes, and anchors.
+
+Compare against the existing RSSP JSON baselines:
+
+```powershell
+.\fast-parity.ps1 -NoBuild -Quiet
+```
+
+Create or refresh ASSP-owned snapshot baselines in the same sharded layout:
+
+```powershell
+.\fast-parity.ps1 -Update -Quiet
+```
+
+To compare against one complete JSON snapshot instead of the mixed full-parity
+sources, use JSON mode. Auto lookup prefers `<md5>.assp.json.zst` when present,
+then falls back to `<md5>.rssp.json.zst`, then `<md5>.json.zst`.
+
+```powershell
+.\fast-parity.ps1 -NoBuild -CompareMode json -BaselineSuffix assp -Quiet
+```
+
+Quiet runs use parallel ASSP processes by default, capped at eight workers. Use
+`-Jobs` to tune that. Failure output is capped at 50 files by default; use
+`-MaxFailures 0` to collect every failure.
+
+Use filters for focused runs:
+
+```powershell
+.\fast-parity.ps1 -NoBuild -Exact -Filter "138 Is Great\baam-138\steps.ssc.zst"
+```
 
 Quiet all-chart modes:
 

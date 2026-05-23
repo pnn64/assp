@@ -5,7 +5,7 @@ use assp::{
     TechCounts, calculate_step_tech_counts_from_placements_4,
     calculate_step_tech_counts_from_placements_8, count_step_tech_brackets_minimized_4,
     count_step_tech_brackets_minimized_8, find_bpms_for_chart, find_chart_by_index,
-    find_global_tag, minimize_chart_4, parse_offset_ms, parse_tech_notation,
+    find_global_tag, minimize_chart_4, parse_offset_us, parse_tech_notation,
     step_parity_action_cost_4, step_parity_action_cost_8, step_parity_action_flags_4,
     step_parity_action_flags_8, step_parity_basic_action_costs_4, step_parity_basic_action_costs_8,
     step_parity_bpm_row_times_4, step_parity_bpm_row_times_8,
@@ -175,14 +175,14 @@ fn assert_bpm_only_fixture_step_parity(data: &[u8], chart_idx: usize) {
     if bpms.is_empty() {
         bpms.push((0.0, 60.0));
     }
-    let offset_ms = find_global_tag(data, b"OFFSET")
-        .map(|slice| parse_offset_ms(slice_from(data, slice.data, slice.len)))
+    let offset_us = find_global_tag(data, b"OFFSET")
+        .map(|slice| parse_offset_us(slice_from(data, slice.data, slice.len)))
         .unwrap_or(0);
-    let offset = offset_ms as f64 / 1000.0;
+    let offset = offset_us as f64 / 1_000_000.0;
     let (row_seconds, row_ms) = bpm_row_times(&row_beats, &bpms, offset);
     let asm_bpms = assp::parse_bpm_map(bpms_bytes).unwrap();
     let (asm_row_seconds, asm_row_ms, asm_row_beats) =
-        step_parity_bpm_row_times_4(&asm_minimized, &asm_bpms, offset_ms as i64).unwrap();
+        step_parity_bpm_row_times_4(&asm_minimized, &asm_bpms, offset_us as i64).unwrap();
     assert_eq!(asm_row_beats, row_beats, "row beats for chart {chart_idx}");
     assert_eq!(asm_row_ms, row_ms, "row milliseconds for chart {chart_idx}");
     assert_eq!(asm_row_seconds.len(), row_seconds.len());

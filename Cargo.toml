@@ -13,5 +13,9 @@ path = "src/lib.rs"
 
 [dev-dependencies]
 rssp-core = { path = "../rssp/crates/rssp-core" }
+md5 = "0.7"
+serde_json = "1"
+walkdir = "2"
+zstd = "0.13"
 
 [build-dependencies]

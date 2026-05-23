@@ -33,7 +33,7 @@ pub use abi::{
     measure_equally_spaced_minimized_8, measure_nps_milli_from_bpms, measure_nps_milli_with_events,
     minimize_chart_4, minimize_chart_8, minimize_measure_4, minimize_measure_8,
     normalize_float_digits, normalize_label_tag, nps_median_centi, nps_peak_milli_from_bpms,
-    parse_bpm_map, parse_offset_ms, parse_tech_notation, pattern_percentages_centi,
+    parse_bpm_map, parse_offset_ms, parse_offset_us, parse_tech_notation, pattern_percentages_centi,
     resolve_difficulty_label, resolve_display_bpm, sha1_short_hex2, step_parity_action_cost_4,
     step_parity_action_cost_8, step_parity_action_flags_4, step_parity_action_flags_8,
     step_parity_basic_action_costs_4, step_parity_basic_action_costs_8,
