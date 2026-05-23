@@ -1209,6 +1209,15 @@ fn compare_path_value(
 ) -> Result<(), String> {
     match (expected, actual) {
         (Some(expected), Some(actual)) if values_equal(expected, actual) => Ok(()),
+        (Some(expected), Some(actual)) => {
+            let diff = first_diff(expected, actual, field);
+            Err(format!(
+                "{chart}: mismatch at {} from {source} baseline: expected {}, actual {}",
+                diff.path,
+                option_brief_json(Some(diff.expected)),
+                option_brief_json(Some(diff.actual))
+            ))
+        }
         _ => Err(format!(
             "{chart}: mismatch at {field} from {source} baseline: expected {}, actual {}",
             option_brief_json(expected),
