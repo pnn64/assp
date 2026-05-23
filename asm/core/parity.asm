@@ -4598,7 +4598,83 @@ assp_step_parity_row_best_candidates_8:
     mov qword [rsp + 56], 24
     call assp_step_parity_row_transitions_8
     cmp rax, ASSP_NOT_FOUND
-    je .fail
+    jne .transitions_ready
+    jmp .fail
+
+.transitions_ready:
+    test rax, rax
+    jnz .have_transitions
+    mov ecx, [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_NOTE_MASK]
+    and ecx, 0ffh
+    lea rdx, [rsp + 256]
+    mov r8d, 24
+    call assp_step_parity_permutations_8
+    test rax, rax
+    jnz .fallback_perms_ready
+    mov qword [rsp + 256], 0
+    mov eax, 1
+
+.fallback_perms_ready:
+    mov [rsp + 128], rax
+    mov qword [rsp + 248], 0
+
+.fallback_build_loop:
+    mov rax, [rsp + 248]
+    cmp rax, [rsp + 128]
+    jae .fallback_done
+
+    mov rcx, [rsp + 144]
+    shl rcx, 4
+    lea rcx, [r12 + rcx]
+    mov rdx, [rsp + 248]
+    lea rdx, [rsp + 256 + rdx * 8]
+    mov r8d, [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_NOTE_MASK]
+    or r8d, [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_HOLD_MASK]
+    and r8d, 0ffh
+    mov r9d, [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_HOLD_MASK]
+    and r9d, 0ffh
+    test r9d, r9d
+    jnz .fallback_build_holds
+
+    mov rax, [rsp + 248]
+    shl rax, 4
+    lea r9, [rsp + 448 + rax]
+    mov rax, [rsp + 248]
+    lea r10, [rax + rax * 4]
+    lea r10, [rsp + 832 + r10]
+    mov [rsp + 32], r10
+    mov rax, [rsp + 248]
+    lea r10, [rsp + 960 + rax * 4]
+    mov [rsp + 40], r10
+    call assp_step_parity_result_state_no_holds_8
+    test eax, eax
+    jz .fail
+    jmp .fallback_next
+
+.fallback_build_holds:
+    mov rax, [rsp + 248]
+    shl rax, 4
+    lea r10, [rsp + 448 + rax]
+    mov [rsp + 32], r10
+    mov rax, [rsp + 248]
+    lea r10, [rax + rax * 4]
+    lea r10, [rsp + 832 + r10]
+    mov [rsp + 40], r10
+    mov rax, [rsp + 248]
+    lea r10, [rsp + 960 + rax * 4]
+    mov [rsp + 48], r10
+    call assp_step_parity_result_state_holds_8
+    test eax, eax
+    jz .fail
+
+.fallback_next:
+    inc qword [rsp + 248]
+    jmp .fallback_build_loop
+
+.fallback_done:
+    mov rax, [rsp + 128]
+
+.have_transitions:
     mov [rsp + 128], rax
     mov qword [rsp + 152], 0
 
@@ -4641,7 +4717,10 @@ assp_step_parity_row_best_candidates_8:
     mov [rsp + 88], rax
     call assp_step_parity_action_cost_8
     test eax, eax
-    jz .fail
+    jnz .action_cost_ready
+    jmp .fail
+
+.action_cost_ready:
 
     mov eax, [rsp + 232]
     movss xmm0, [r13 + rax * 4]
@@ -4675,7 +4754,10 @@ assp_step_parity_row_best_candidates_8:
 .append_candidate:
     mov r11, [rsp + 136]
     cmp r11, [rsp + 120]
-    jae .fail
+    jb .append_candidate_ready
+    jmp .fail
+
+.append_candidate_ready:
     mov byte [rsp + 240], 1
 
 .store_candidate:
@@ -5991,7 +6073,10 @@ assp_step_parity_place_rows_8:
     cmp rax, ASSP_NOT_FOUND
     je .fail
     test rax, rax
-    jz .fail
+    jnz .row_candidates_ready
+    jmp .fail
+
+.row_candidates_ready:
     mov [rsp + 200], rax
 
     mov r9, [rsp + 160]

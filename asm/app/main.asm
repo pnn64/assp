@@ -62,7 +62,10 @@ extern assp_bpm_average_centi
 extern assp_bpm_display_range
 extern assp_bpm_median_centi
 extern assp_elapsed_ms_bpm_only
+extern assp_elapsed_us_bpm_only
 extern assp_elapsed_ms_with_events
+extern assp_elapsed_us_with_events
+extern assp_elapsed_seconds_f32_with_events
 extern assp_last_beat_milli_4
 extern assp_last_beat_milli_8
 extern assp_measure_densities_4
@@ -134,9 +137,10 @@ global profile_step_dp_skip_count
 %define METADATA_BUFFER_CAP 65536
 %define PARITY_ROW_CAP 262144
 %define PARITY_FAST_STATE_CAP 64
-%define PARITY_STATE_CAP 512
-%define PARITY_FAST_BACKTRACK_CAP (PARITY_ROW_CAP * PARITY_FAST_STATE_CAP)
-%define PARITY_BACKTRACK_CAP (PARITY_ROW_CAP * PARITY_STATE_CAP)
+%define PARITY_STATE_CAP 4096
+%define PARITY_BACKTRACK_ROW_CAP 8192
+%define PARITY_FAST_BACKTRACK_CAP (PARITY_BACKTRACK_ROW_CAP * PARITY_FAST_STATE_CAP)
+%define PARITY_BACKTRACK_CAP (PARITY_BACKTRACK_ROW_CAP * PARITY_STATE_CAP)
 %define MONO_THRESHOLD 6
 %define ASSP_OS_INVALID_HANDLE -1
 
@@ -3829,6 +3833,8 @@ prepare_step_parity_rows_4:
     cmp rax, PARITY_ROW_CAP
     ja .fail
     mov [parity_prepared_row_count], rax
+    cmp rax, PARITY_BACKTRACK_ROW_CAP
+    ja .fail
     app_trace trace_app_parity_prepared
 
     lea rdx, [parity_prepared_rows]
@@ -3949,6 +3955,7 @@ prepare_step_parity_events_4:
     movss xmm0, [r11 + r10 * 4]
     mulss xmm0, [rel app_const_thousand_f32]
     cvtss2si rax, xmm0
+    mov [rsp + 80], rax
 
     lea rcx, [bpm_segment_buffer]
     mov rdx, [bpm_segment_count]
@@ -3962,15 +3969,38 @@ prepare_step_parity_events_4:
     mov [rsp + 48], r11
     mov r11, [warp_segment_count]
     mov [rsp + 56], r11
+    mov rax, [rsp + 80]
     mov [rsp + 64], rax
-    call assp_elapsed_ms_with_events
+    call assp_elapsed_us_with_events
+    mov [rsp + 88], rax
+    add rax, 500
+    xor edx, edx
+    mov ecx, 1000
+    div rcx
     sub rax, [offset_ms]
 
     mov r10, [rsp + 96]
     lea r11, [parity_row_ms]
     mov [r11 + r10 * 4], eax
-    cvtsi2ss xmm0, rax
-    divss xmm0, [rel app_const_thousand_f32]
+
+    lea rcx, [bpm_segment_buffer]
+    mov rdx, [bpm_segment_count]
+    lea r8, [stop_segment_buffer]
+    mov r9, [stop_segment_count]
+    lea r11, [delay_segment_buffer]
+    mov [rsp + 32], r11
+    mov r11, [delay_segment_count]
+    mov [rsp + 40], r11
+    lea r11, [warp_segment_buffer]
+    mov [rsp + 48], r11
+    mov r11, [warp_segment_count]
+    mov [rsp + 56], r11
+    mov rax, [rsp + 80]
+    mov [rsp + 64], rax
+    mov rax, [offset_us]
+    mov [rsp + 72], rax
+    call assp_elapsed_seconds_f32_with_events
+    mov r10, [rsp + 96]
     lea r11, [parity_row_seconds]
     movss [r11 + r10 * 4], xmm0
 
@@ -4284,6 +4314,8 @@ prepare_step_parity_rows_8:
     cmp rax, PARITY_ROW_CAP
     ja .fail
     mov [parity_prepared_row_count], rax
+    cmp rax, PARITY_BACKTRACK_ROW_CAP
+    ja .fail
     app_trace trace_app_parity_prepared
 
     lea rdx, [parity_prepared_rows]
@@ -4404,6 +4436,7 @@ prepare_step_parity_events_8:
     movss xmm0, [r11 + r10 * 4]
     mulss xmm0, [rel app_const_thousand_f32]
     cvtss2si rax, xmm0
+    mov [rsp + 80], rax
 
     lea rcx, [bpm_segment_buffer]
     mov rdx, [bpm_segment_count]
@@ -4417,15 +4450,38 @@ prepare_step_parity_events_8:
     mov [rsp + 48], r11
     mov r11, [warp_segment_count]
     mov [rsp + 56], r11
+    mov rax, [rsp + 80]
     mov [rsp + 64], rax
-    call assp_elapsed_ms_with_events
+    call assp_elapsed_us_with_events
+    mov [rsp + 88], rax
+    add rax, 500
+    xor edx, edx
+    mov ecx, 1000
+    div rcx
     sub rax, [offset_ms]
 
     mov r10, [rsp + 96]
     lea r11, [parity_row_ms]
     mov [r11 + r10 * 4], eax
-    cvtsi2ss xmm0, rax
-    divss xmm0, [rel app_const_thousand_f32]
+
+    lea rcx, [bpm_segment_buffer]
+    mov rdx, [bpm_segment_count]
+    lea r8, [stop_segment_buffer]
+    mov r9, [stop_segment_count]
+    lea r11, [delay_segment_buffer]
+    mov [rsp + 32], r11
+    mov r11, [delay_segment_count]
+    mov [rsp + 40], r11
+    lea r11, [warp_segment_buffer]
+    mov [rsp + 48], r11
+    mov r11, [warp_segment_count]
+    mov [rsp + 56], r11
+    mov rax, [rsp + 80]
+    mov [rsp + 64], rax
+    mov rax, [offset_us]
+    mov [rsp + 72], rax
+    call assp_elapsed_seconds_f32_with_events
+    mov r10, [rsp + 96]
     lea r11, [parity_row_seconds]
     movss [r11 + r10 * 4], xmm0
 
@@ -4588,20 +4644,13 @@ prepare_duration:
     mov [rsp + 56], rax
     mov rax, [last_beat_milli]
     mov [rsp + 64], rax
-    call assp_elapsed_ms_with_events
+    call assp_elapsed_us_with_events
+    add rax, 500
+    xor edx, edx
+    mov ecx, 1000
+    div rcx
     sub rax, [offset_ms]
     mov [duration_ms], rax
-    cmp qword [warp_segment_count], 0
-    jne .store_event_duration_ms
-    call prepare_duration_bpm_f32
-    lea rcx, [stop_segment_buffer]
-    mov rdx, [stop_segment_count]
-    call add_second_segments_to_duration_f32
-    lea rcx, [delay_segment_buffer]
-    mov rdx, [delay_segment_count]
-    call add_second_segments_to_duration_f32
-    jmp .success
-.store_event_duration_ms:
     call store_duration_ms_as_f32
     jmp .success
 
@@ -4729,50 +4778,6 @@ add_rows_to_duration_f32:
     divss xmm0, [rel app_const_48_f32]
     divss xmm0, xmm6
     addss xmm7, xmm0
-    ret
-
-; rcx = assp_bpm_segment buffer, rdx = count. Values are microseconds.
-add_second_segments_to_duration_f32:
-    push rbx
-    push rsi
-    push r12
-    push r13
-
-    test rcx, rcx
-    jz .done
-    test rdx, rdx
-    jz .done
-
-    mov rbx, rcx
-    mov rsi, rdx
-    mov rcx, [last_beat_milli]
-    call milli_to_row48_f32_even
-    mov r12, rax
-    xor r13d, r13d
-
-.loop:
-    cmp r13, rsi
-    jae .done
-    mov r10, r13
-    shl r10, 4
-    mov rcx, [rbx + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI]
-    call milli_to_row48_f32_even
-    cmp rax, r12
-    jg .done
-    mov r10, r13
-    shl r10, 4
-    cvtsi2ss xmm0, qword [rbx + r10 + ASSP_BPM_SEGMENT_BPM_MILLI]
-    divss xmm0, [rel app_const_million_f32]
-    addss xmm0, [duration_seconds_f32]
-    movss [duration_seconds_f32], xmm0
-    inc r13
-    jmp .loop
-
-.done:
-    pop r13
-    pop r12
-    pop rsi
-    pop rbx
     ret
 
 prepare_bpm_median_nps_f32:

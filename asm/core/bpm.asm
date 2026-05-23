@@ -13,7 +13,10 @@ global assp_bpm_median_centi
 global assp_bpm_at_beat_milli
 global assp_tier_bpm_centi
 global assp_elapsed_ms_bpm_only
+global assp_elapsed_us_bpm_only
 global assp_elapsed_ms_with_events
+global assp_elapsed_us_with_events
+global assp_elapsed_seconds_f32_with_events
 global assp_measure_nps_milli_from_bpms
 global assp_measure_nps_milli_with_events
 global assp_nps_peak_milli_from_bpms
@@ -35,6 +38,20 @@ section .text
 %define EVT_BEST_VAL -152
 %define EVT_BEST_TYPE -160
 %define EVT_BEST_PRI -168
+%define EVT_RETURN_US -176
+
+%define F32_TIME -64
+%define F32_BPS -68
+%define F32_LAST_ROW -72
+%define F32_TARGET_ROW -76
+%define F32_WARP_DEST_ROW -80
+%define F32_IS_WARPING -84
+%define F32_BPM_IDX -96
+%define F32_STOP_IDX -104
+%define F32_DELAY_IDX -112
+%define F32_WARP_IDX -120
+%define F32_BEST_ROW -124
+%define F32_BEST_TYPE -128
 
 %define NPS_DENSITIES -8
 %define NPS_DENSITY_LEN -16
@@ -1666,15 +1683,31 @@ assp_bpm_at_beat_milli:
     ret
 
 ; rcx = assp_bpm_segment ptr, rdx = segment count, r8 = target beat_milli.
-; rax = elapsed milliseconds using only BPM changes.
-assp_elapsed_ms_bpm_only:
+; rax = elapsed microseconds using only BPM changes.
+assp_elapsed_us_bpm_only:
     push rbx
     push rsi
+    push rdi
     push r12
     push r13
     push r14
     push r15
+    xor edi, edi
+    jmp assp_elapsed_bpm_only_common
 
+; rcx = assp_bpm_segment ptr, rdx = segment count, r8 = target beat_milli.
+; rax = elapsed milliseconds using only BPM changes.
+assp_elapsed_ms_bpm_only:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+    mov edi, 1
+
+assp_elapsed_bpm_only_common:
     test rdx, rdx
     jz .zero
     test rcx, rcx
@@ -1736,14 +1769,15 @@ assp_elapsed_ms_bpm_only:
     cqo
     idiv r9
     add rax, rbx
-    jmp .to_millis
+    jmp .done
 
 .zero:
     xor eax, eax
     jmp .pop_done
 
 .done:
-    jmp .to_millis
+    test edi, edi
+    jz .pop_done
 
 .to_millis:
     test rax, rax
@@ -1758,6 +1792,7 @@ assp_elapsed_ms_bpm_only:
     pop r14
     pop r13
     pop r12
+    pop rdi
     pop rsi
     pop rbx
     ret
@@ -1765,7 +1800,24 @@ assp_elapsed_ms_bpm_only:
 ; rcx = BPM segments, rdx = BPM count, r8 = stop segments, r9 = stop count,
 ; stack arg 5 = delay segments, arg 6 = delay count, arg 7 = warp segments,
 ; arg 8 = warp count, arg 9 = target beat_milli.
-; rax = elapsed milliseconds using RSSP's BPM/stop/delay/warp event order.
+; Stop and delay values are already microseconds.
+; rax = elapsed microseconds using RSSP's BPM/stop/delay/warp event order.
+assp_elapsed_us_with_events:
+    push rbp
+    mov rbp, rsp
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 128
+    mov qword [rbp + EVT_RETURN_US], -1
+    jmp assp_elapsed_events_common
+
+; Stop and delay values are milliseconds.
+; rax = elapsed milliseconds, rounded from microseconds.
 assp_elapsed_ms_with_events:
     push rbp
     mov rbp, rsp
@@ -1777,7 +1829,9 @@ assp_elapsed_ms_with_events:
     push r14
     push r15
     sub rsp, 128
+    mov qword [rbp + EVT_RETURN_US], 1000
 
+assp_elapsed_events_common:
     mov rbx, rcx
     mov rsi, rdx
     mov rdi, r8
@@ -1942,12 +1996,22 @@ assp_elapsed_ms_with_events:
 
 .apply_stop:
     mov rax, [rbp + EVT_BEST_VAL]
+    mov r10, [rbp + EVT_RETURN_US]
+    test r10, r10
+    jle .add_stop_time
+    imul rax, r10
+.add_stop_time:
     add [rbp + EVT_TIME], rax
     inc qword [rbp + EVT_I_STOP]
     jmp .select_loop
 
 .apply_delay:
     mov rax, [rbp + EVT_BEST_VAL]
+    mov r10, [rbp + EVT_RETURN_US]
+    test r10, r10
+    jle .add_delay_time
+    imul rax, r10
+.add_delay_time:
     add [rbp + EVT_TIME], rax
     inc qword [rbp + EVT_I_DELAY]
     jmp .select_loop
@@ -1986,6 +2050,8 @@ assp_elapsed_ms_with_events:
     mov rax, [rbp + EVT_TIME]
     test rax, rax
     jle .pop_done
+    cmp qword [rbp + EVT_RETURN_US], 0
+    jl .pop_done
     add rax, 500
     xor edx, edx
     mov r9d, 1000
@@ -1997,6 +2063,266 @@ assp_elapsed_ms_with_events:
 
 .pop_done:
     add rsp, 128
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    pop rbp
+    ret
+
+; rcx = BPM segments, rdx = BPM count, r8 = stop segments, r9 = stop count,
+; stack arg 5 = delay segments, arg 6 = delay count, arg 7 = warp segments,
+; arg 8 = warp count, arg 9 = target beat_milli, arg 10 = offset_us.
+; xmm0 = elapsed seconds using RSSP's f32 timing row event order.
+assp_elapsed_seconds_f32_with_events:
+    push rbp
+    mov rbp, rsp
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 96
+
+    mov rbx, rcx
+    mov rsi, rdx
+    mov rdi, r8
+    mov r12, r9
+    mov r13, [rbp + 48]
+    mov r14, [rbp + 56]
+    mov r15, [rbp + 64]
+
+    mov rax, [rbp + 80]
+    test rax, rax
+    jle .zero
+    test rsi, rsi
+    jz .check_stops
+    test rbx, rbx
+    jz .zero
+.check_stops:
+    test r12, r12
+    jz .check_delays
+    test rdi, rdi
+    jz .zero
+.check_delays:
+    test r14, r14
+    jz .check_warps
+    test r13, r13
+    jz .zero
+.check_warps:
+    cmp qword [rbp + 72], 0
+    je .init
+    test r15, r15
+    jz .zero
+
+.init:
+    cvtsi2ss xmm0, rax
+    mulss xmm0, [rel nps_f32_48]
+    divss xmm0, [rel nps_f32_1000]
+    cvtss2si eax, xmm0
+    mov [rbp + F32_TARGET_ROW], eax
+
+    cvtsi2ss xmm0, qword [rbp + 88]
+    divss xmm0, [rel nps_f32_million]
+    xorps xmm1, xmm1
+    subss xmm1, xmm0
+    movss xmm0, xmm1
+    movss [rbp + F32_TIME], xmm0
+    mov dword [rbp + F32_LAST_ROW], 0
+    mov dword [rbp + F32_WARP_DEST_ROW], 0
+    mov dword [rbp + F32_IS_WARPING], 0
+    mov qword [rbp + F32_BPM_IDX], 0
+    mov qword [rbp + F32_STOP_IDX], 0
+    mov qword [rbp + F32_DELAY_IDX], 0
+    mov qword [rbp + F32_WARP_IDX], 0
+    movss xmm0, [rel nps_f32_one]
+    movss [rbp + F32_BPS], xmm0
+
+.select_loop:
+    mov dword [rbp + F32_BEST_ROW], 7fffffffh
+    mov dword [rbp + F32_BEST_TYPE], -1
+
+.check_warp_dest:
+    cmp dword [rbp + F32_IS_WARPING], 0
+    je .check_bpm
+    mov eax, [rbp + F32_WARP_DEST_ROW]
+    cmp eax, [rbp + F32_BEST_ROW]
+    jge .check_bpm
+    mov [rbp + F32_BEST_ROW], eax
+    mov dword [rbp + F32_BEST_TYPE], 5
+
+.check_bpm:
+    mov rax, [rbp + F32_BPM_IDX]
+    cmp rax, rsi
+    jae .check_delay
+    mov r10, rax
+    shl r10, 4
+    mov r11, [rbx + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    cvtsi2ss xmm0, r11
+    mulss xmm0, [rel nps_f32_48]
+    divss xmm0, [rel nps_f32_1000]
+    cvtss2si eax, xmm0
+    cmp eax, [rbp + F32_BEST_ROW]
+    jge .check_delay
+    mov [rbp + F32_BEST_ROW], eax
+    mov dword [rbp + F32_BEST_TYPE], 0
+
+.check_delay:
+    mov rax, [rbp + F32_DELAY_IDX]
+    cmp rax, r14
+    jae .check_marker
+    mov r10, rax
+    shl r10, 4
+    mov r11, [r13 + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    cvtsi2ss xmm0, r11
+    mulss xmm0, [rel nps_f32_48]
+    divss xmm0, [rel nps_f32_1000]
+    cvtss2si eax, xmm0
+    cmp eax, [rbp + F32_BEST_ROW]
+    jge .check_marker
+    mov [rbp + F32_BEST_ROW], eax
+    mov dword [rbp + F32_BEST_TYPE], 1
+
+.check_marker:
+    mov eax, [rbp + F32_TARGET_ROW]
+    cmp eax, [rbp + F32_BEST_ROW]
+    jge .check_stop
+    mov [rbp + F32_BEST_ROW], eax
+    mov dword [rbp + F32_BEST_TYPE], 2
+
+.check_stop:
+    mov rax, [rbp + F32_STOP_IDX]
+    cmp rax, r12
+    jae .check_warp
+    mov r10, rax
+    shl r10, 4
+    mov r11, [rdi + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    cvtsi2ss xmm0, r11
+    mulss xmm0, [rel nps_f32_48]
+    divss xmm0, [rel nps_f32_1000]
+    cvtss2si eax, xmm0
+    cmp eax, [rbp + F32_BEST_ROW]
+    jge .check_warp
+    mov [rbp + F32_BEST_ROW], eax
+    mov dword [rbp + F32_BEST_TYPE], 3
+
+.check_warp:
+    mov rax, [rbp + F32_WARP_IDX]
+    cmp rax, [rbp + 72]
+    jae .selected
+    mov r10, rax
+    shl r10, 4
+    mov r11, [r15 + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    cvtsi2ss xmm0, r11
+    mulss xmm0, [rel nps_f32_48]
+    divss xmm0, [rel nps_f32_1000]
+    cvtss2si eax, xmm0
+    cmp eax, [rbp + F32_BEST_ROW]
+    jge .selected
+    mov [rbp + F32_BEST_ROW], eax
+    mov dword [rbp + F32_BEST_TYPE], 4
+
+.selected:
+    cmp dword [rbp + F32_BEST_TYPE], -1
+    je .done
+
+    cmp dword [rbp + F32_IS_WARPING], 0
+    jne .dt_done
+    mov eax, [rbp + F32_BEST_ROW]
+    sub eax, [rbp + F32_LAST_ROW]
+    jle .dt_done
+    cvtsi2ss xmm0, eax
+    divss xmm0, [rel nps_f32_48]
+    divss xmm0, [rbp + F32_BPS]
+    addss xmm0, [rbp + F32_TIME]
+    movss [rbp + F32_TIME], xmm0
+
+.dt_done:
+    mov eax, [rbp + F32_BEST_TYPE]
+    cmp eax, 2
+    je .done
+    test eax, eax
+    jz .apply_bpm
+    cmp eax, 1
+    je .apply_delay
+    cmp eax, 3
+    je .apply_stop
+    cmp eax, 4
+    je .apply_warp
+    mov dword [rbp + F32_IS_WARPING], 0
+    jmp .store_last_row
+
+.apply_bpm:
+    mov rax, [rbp + F32_BPM_IDX]
+    mov r10, rax
+    shl r10, 4
+    mov r11, [rbx + r10 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    cvtsi2ss xmm0, r11
+    divss xmm0, [rel nps_f32_60000]
+    movss [rbp + F32_BPS], xmm0
+    inc qword [rbp + F32_BPM_IDX]
+    jmp .store_last_row
+
+.apply_delay:
+    mov rax, [rbp + F32_DELAY_IDX]
+    mov r10, rax
+    shl r10, 4
+    mov r11, [r13 + r10 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    cvtsi2ss xmm0, r11
+    divss xmm0, [rel nps_f32_million]
+    addss xmm0, [rbp + F32_TIME]
+    movss [rbp + F32_TIME], xmm0
+    inc qword [rbp + F32_DELAY_IDX]
+    jmp .store_last_row
+
+.apply_stop:
+    mov rax, [rbp + F32_STOP_IDX]
+    mov r10, rax
+    shl r10, 4
+    mov r11, [rdi + r10 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    cvtsi2ss xmm0, r11
+    divss xmm0, [rel nps_f32_million]
+    addss xmm0, [rbp + F32_TIME]
+    movss [rbp + F32_TIME], xmm0
+    inc qword [rbp + F32_STOP_IDX]
+    jmp .store_last_row
+
+.apply_warp:
+    mov rax, [rbp + F32_WARP_IDX]
+    mov r10, rax
+    shl r10, 4
+    mov r11, [r15 + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    add r11, [r15 + r10 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    cvtsi2ss xmm0, r11
+    mulss xmm0, [rel nps_f32_48]
+    divss xmm0, [rel nps_f32_1000]
+    cvtss2si eax, xmm0
+    cmp eax, [rbp + F32_WARP_DEST_ROW]
+    jle .warp_dest_ready
+    mov [rbp + F32_WARP_DEST_ROW], eax
+.warp_dest_ready:
+    mov dword [rbp + F32_IS_WARPING], 1
+    inc qword [rbp + F32_WARP_IDX]
+
+.store_last_row:
+    mov eax, [rbp + F32_BEST_ROW]
+    mov [rbp + F32_LAST_ROW], eax
+    jmp .select_loop
+
+.zero:
+    xorps xmm0, xmm0
+    jmp .pop_done
+
+.done:
+    movss xmm0, [rbp + F32_TIME]
+
+.pop_done:
+    add rsp, 96
     pop r15
     pop r14
     pop r13
@@ -2536,7 +2862,10 @@ assp_measure_nps_milli_with_events:
 section .rdata
 align 8
 nps_f32_48 dd 48.0
+nps_f32_1000 dd 1000.0
 nps_f32_60000 dd 60000.0
+nps_f32_million dd 1000000.0
+nps_f32_one dd 1.0
 nps_f64_0_12 dq 0.12
 nps_f64_1000 dq 1000.0
 

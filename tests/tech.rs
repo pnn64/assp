@@ -440,6 +440,16 @@ fn expected_permutations_8(mask: u8) -> Vec<[u8; 8]> {
     out
 }
 
+fn expected_row_permutations_8(note_mask: u8, hold_mask: u8) -> Vec<[u8; 8]> {
+    let union = expected_permutations_8(note_mask | hold_mask);
+    if !union.is_empty() {
+        return union;
+    }
+
+    let note = expected_permutations_8(note_mask);
+    if note.is_empty() { vec![[0; 8]] } else { note }
+}
+
 fn valid_placement_8(placement: &[u8; 8]) -> bool {
     let mut pos = [u8::MAX; 5];
     for (col, &foot) in placement.iter().enumerate() {
@@ -1607,9 +1617,10 @@ fn expected_best_row_candidates_8(
     elapsed: f32,
 ) -> Vec<(u32, [u8; 8], StepParityState8, [i8; 5], u32, f32)> {
     let active_mask = note_mask | hold_mask;
+    let placements = expected_row_permutations_8(note_mask, hold_mask);
     let mut out: Vec<(u32, [u8; 8], StepParityState8, [i8; 5], u32, f32)> = Vec::new();
     for (pred, initial) in initial_states.iter().copied().enumerate() {
-        for placement in expected_permutations_8(active_mask) {
+        for placement in placements.iter().copied() {
             let (state, hit, key) =
                 expected_result_state_8(initial, placement, active_mask, hold_mask);
             let action = expected_action_costs_8(
@@ -2231,6 +2242,68 @@ fn selects_best_double_row_candidates_by_state_key_like_rssp_dp() {
 }
 
 #[test]
+fn falls_back_to_double_note_permutations_when_hold_union_has_no_valid_row() {
+    let initial_states = [StepParityState8::default()];
+    let initial_costs = [0.0f32];
+    let note_mask = 0b0000_0100u8;
+    let hold_mask = 0b0001_0010u8;
+    let note_count = note_mask.count_ones() as u8;
+    let mine_mask = 0;
+    let side_mask = (note_mask | hold_mask) & 0b1001_1001;
+    let elapsed = 0.125f32;
+    let expected = expected_best_row_candidates_8(
+        &initial_states,
+        &initial_costs,
+        note_count,
+        note_mask,
+        hold_mask,
+        mine_mask,
+        side_mask,
+        true,
+        elapsed,
+    );
+
+    assert!(expected_permutations_8(note_mask | hold_mask).is_empty());
+    assert!(!expected_permutations_8(note_mask).is_empty());
+    assert!(step_parity_row_transitions_8(&initial_states[0], note_mask, hold_mask).is_empty());
+
+    let actual: Vec<_> = step_parity_row_best_candidates_8(
+        &initial_states,
+        &initial_costs,
+        note_count,
+        note_mask,
+        hold_mask,
+        mine_mask,
+        side_mask,
+        true,
+        elapsed,
+    )
+    .unwrap()
+    .into_iter()
+    .map(|c| {
+        (
+            c.predecessor,
+            c.transition.placement,
+            c.transition.state,
+            c.transition.hit,
+            c.transition.key,
+            c.cost,
+        )
+    })
+    .collect();
+
+    assert!(!actual.is_empty());
+    assert!(
+        actual
+            .iter()
+            .all(|(_, placement, _, _, _, _)| placement[2] != 0
+                && placement[1] == 0
+                && placement[4] == 0)
+    );
+    assert_eq!(actual, expected);
+}
+
+#[test]
 fn rejects_row_best_candidates_with_mismatched_costs() {
     assert!(
         step_parity_row_best_candidates_4(
@@ -2301,6 +2374,37 @@ fn places_double_prepared_rows_by_backtracking_best_step_parity_path() {
     let mine_masks = [0u8, 0, 0b0001_0000, 0];
     let prev_row_live_holds = [0u8; 4];
     let row_seconds = [0.0f32, 0.125, 0.25, 0.5];
+
+    let expected = expected_place_rows_8(
+        &note_counts,
+        &note_masks,
+        &hold_masks,
+        &mine_masks,
+        &prev_row_live_holds,
+        &row_seconds,
+    );
+    let actual = step_parity_place_rows_8(
+        &note_counts,
+        &note_masks,
+        &hold_masks,
+        &mine_masks,
+        &prev_row_live_holds,
+        &row_seconds,
+        256,
+    )
+    .unwrap();
+
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn places_double_row_with_unplaceable_hold_union_using_note_fallback() {
+    let note_masks = [0b0000_0100u8];
+    let note_counts = [1u8];
+    let hold_masks = [0b0001_0010u8];
+    let mine_masks = [0u8];
+    let prev_row_live_holds = [1u8];
+    let row_seconds = [0.0f32];
 
     let expected = expected_place_rows_8(
         &note_counts,
