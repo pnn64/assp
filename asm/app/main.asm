@@ -92,7 +92,9 @@ extern assp_parse_tech_notation
 extern assp_count_step_tech_brackets_minimized_4
 extern assp_count_step_tech_brackets_minimized_8
 extern assp_step_parity_bpm_row_times_4
+extern assp_step_parity_bpm_row_times_micro_4
 extern assp_step_parity_bpm_row_times_8
+extern assp_step_parity_bpm_row_times_micro_8
 extern assp_step_parity_hold_head_ends_4
 extern assp_step_parity_hold_head_ends_8
 extern assp_step_parity_prepare_hold_rows_4
@@ -131,8 +133,8 @@ global profile_step_dp_skip_count
 %define DENSITY_CAP 131072
 %define TEXT_BUFFER_CAP 1048576
 %define PRINT_BUFFER_CAP 2097152
-%define BPM_BUFFER_CAP 65536
-%define BPM_SEGMENT_CAP 4096
+%define BPM_BUFFER_CAP 131072
+%define BPM_SEGMENT_CAP 8192
 %define MINIMIZED_BUFFER_CAP 4194304
 %define ROW_SCRATCH_CAP 2097152
 %define TECH_BUFFER_CAP 16384
@@ -140,9 +142,11 @@ global profile_step_dp_skip_count
 %define PARITY_ROW_CAP 1048576
 %define PARITY_FAST_STATE_CAP 128
 %define PARITY_STATE_CAP 4096
-%define PARITY_FAST_BACKTRACK_ROW_CAP 65536
+%define PARITY_FAST_BACKTRACK_ROW_CAP 131072
 %define PARITY_BACKTRACK_ROW_CAP 8192
 %define PARITY_FAST_BACKTRACK_CAP (PARITY_FAST_BACKTRACK_ROW_CAP * PARITY_FAST_STATE_CAP)
+%define PARITY_MEDIUM_STATE_CAP 64
+%define PARITY_MEDIUM_BACKTRACK_ROW_CAP (PARITY_FAST_BACKTRACK_CAP / PARITY_MEDIUM_STATE_CAP)
 %define PARITY_LARGE_STATE_CAP 32
 %define PARITY_LARGE_BACKTRACK_ROW_CAP (PARITY_FAST_BACKTRACK_CAP / PARITY_LARGE_STATE_CAP)
 %define PARITY_HUGE_STATE_CAP 16
@@ -1800,14 +1804,63 @@ prepare_tier_bpm:
     call assp_tier_bpm_centi
     mov [tier_bpm_centi], rax
 
+    lea rcx, [bpm_report_segment_buffer]
+    mov rdx, [bpm_report_count]
+    lea r8, [matrix_bpm_segment_buffer]
+    call prepare_matrix_bpm_segments
+
     lea rcx, [density_buffer]
     mov rdx, [measure_count]
-    lea r8, [bpm_report_segment_buffer]
+    lea r8, [matrix_bpm_segment_buffer]
     mov r9, [bpm_report_count]
     call assp_matrix_rating_micro_centi
     mov [matrix_rating_centi], rax
 
     add rsp, 40
+    ret
+
+; rcx = source bpm report segments, rdx = count, r8 = output segments.
+; Matrix scoring in RSSP sees BPMs after the timing parser's f32 cast.
+prepare_matrix_bpm_segments:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+
+    mov rsi, rcx
+    mov rdi, r8
+    mov r12, rdx
+    xor ebx, ebx
+
+.loop:
+    cmp rbx, r12
+    jae .done
+    mov rax, rbx
+    shl rax, 4
+    mov rcx, [rsi + rax + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    mov [rdi + rax + ASSP_BPM_SEGMENT_BEAT_MILLI], rcx
+    mov rcx, [rsi + rax + ASSP_BPM_SEGMENT_BPM_MILLI]
+    call bpm_micro_to_f32_micro
+    mov rdx, rbx
+    shl rdx, 4
+    mov [rdi + rdx + ASSP_BPM_SEGMENT_BPM_MILLI], rax
+    inc rbx
+    jmp .loop
+
+.done:
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
+bpm_micro_to_f32_micro:
+    cvtsi2sd xmm0, rcx
+    divsd xmm0, [rel app_const_million_f64]
+    cvtsd2ss xmm0, xmm0
+    cvtss2sd xmm0, xmm0
+    mulsd xmm0, [rel app_const_million_f64]
+    cvtsd2si rax, xmm0
     ret
 
 prepare_equally_spaced:
@@ -1959,7 +2012,24 @@ prepare_facing_steps:
 prepare_pattern_percentages:
     sub rsp, 40
 
-    mov rcx, [raw_total_steps]
+    xor ecx, ecx
+    cmp qword [chart_lanes], 4
+    jne .have_total_steps
+
+    xor r10d, r10d
+    mov r11, [pattern_bitmask_count]
+    lea rax, [pattern_bitmask_buffer]
+.count_steps:
+    cmp r10, r11
+    jae .have_total_steps
+    cmp byte [rax + r10], 0
+    je .count_next
+    inc rcx
+.count_next:
+    inc r10
+    jmp .count_steps
+
+.have_total_steps:
     mov edx, [default_pattern_counts + ASSP_PATTERN_CANDLE_LEFT * 4]
     add edx, [default_pattern_counts + ASSP_PATTERN_CANDLE_RIGHT * 4]
     mov r8d, [facing_counts + 0]
@@ -2126,6 +2196,10 @@ prepare_timing_events:
     je .fail
     cmp rax, BPM_SEGMENT_CAP
     ja .fail
+    mov [stop_segment_count], rax
+    lea rcx, [stop_segment_buffer]
+    mov rdx, [stop_segment_count]
+    call dedupe_identical_segments_in_place
     mov [stop_segment_count], rax
 
     cmp qword [chart_has_own_timing], 0
@@ -2300,6 +2374,71 @@ prepare_timing_events:
     add rsp, 56
     ret
 
+; rcx = sorted assp_bpm_segment buffer, rdx = segment count.
+; rax = count after removing adjacent exact duplicate segments.
+dedupe_identical_segments_in_place:
+    push rbx
+    push rsi
+    push r12
+    push r13
+    push r14
+    push r15
+
+    test rcx, rcx
+    jz .empty
+    test rdx, rdx
+    jz .empty
+
+    mov rbx, rcx
+    mov rsi, rdx
+    xor r8d, r8d
+    xor r9d, r9d
+    xor r15d, r15d
+
+.loop:
+    cmp r8, rsi
+    jae .done
+    mov r10, r8
+    shl r10, 4
+    mov r12, [rbx + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    mov r13, [rbx + r10 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    test r15d, r15d
+    jz .keep
+    cmp r12, r14
+    jne .keep
+    cmp r13, r11
+    je .skip
+
+.keep:
+    mov r10, r9
+    shl r10, 4
+    mov [rbx + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI], r12
+    mov [rbx + r10 + ASSP_BPM_SEGMENT_BPM_MILLI], r13
+    mov r14, r12
+    mov r11, r13
+    mov r15d, ASSP_TRUE
+    inc r9
+
+.skip:
+    inc r8
+    jmp .loop
+
+.done:
+    mov rax, r9
+    jmp .pop_done
+
+.empty:
+    xor eax, eax
+
+.pop_done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rsi
+    pop rbx
+    ret
+
 ; rcx = assp_bpm_segment buffer, rdx = segment count.
 ; rax = tidied count. Matches RSSP tidy_bpms for sorted parsed BPMs.
 tidy_bpm_segments_in_place:
@@ -2431,6 +2570,13 @@ tidy_row_segments_in_place:
     mov r11d, 48
     idiv r11
     mov [rbx + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI], rax
+    mov rcx, [rbx + r10 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    call milli_to_row48_f32_even
+    imul rax, rax, 1000
+    cqo
+    mov r11d, 48
+    idiv r11
+    mov [rbx + r10 + ASSP_BPM_SEGMENT_BPM_MILLI], rax
     inc r8
     jmp .quantize_loop
 
@@ -2864,6 +3010,10 @@ process_sm_bpms_and_stops_core:
     mov [rbp + SM_SCALE], r12
     mov rax, 9999999
     imul rax, r12
+    mov rcx, r12
+    sar rcx, 1
+    add rax, rcx
+    dec rax
     mov [rbp + SM_FAST_THRESHOLD], rax
     mov [rbp + SM_EMIT_EVENTS], r10
     lea rax, [sm_stop_segment_buffer]
@@ -3349,7 +3499,7 @@ apply_sm_negative_bpm_warps:
     mov r13, [rbx + r10 + ASSP_BPM_SEGMENT_BPM_MILLI]
     test r13, r13
     jle .negative_bpm_warp
-    mov rax, 9999999000
+    mov rax, 9999999499
     cmp r13, rax
     jg .fast_bpm_warp
     jmp .keep
@@ -3388,7 +3538,7 @@ apply_sm_negative_bpm_warps:
     mov r13, [rbx + r10 + ASSP_BPM_SEGMENT_BPM_MILLI]
     test r13, r13
     jle .skip
-    mov rax, 9999999000
+    mov rax, 9999999499
     cmp r13, rax
     jg .skip
     sub r15, r12
@@ -3630,7 +3780,7 @@ filter_positive_bpm_report_segments:
     jl .next
     test r13, r13
     jle .next
-    mov rax, 9999999000000
+    mov rax, 9999999499999
     cmp r13, rax
     jg .next
     mov r11, r9
@@ -4133,12 +4283,6 @@ prepare_timing_stats:
     mov rax, [warp_segment_count]
     or rax, [fake_segment_count]
     jnz .recompute
-
-    mov rax, [note_stats + ASSP_NOTE_STATS_HOLDS]
-    or rax, [note_stats + ASSP_NOTE_STATS_ROLLS]
-    jnz .holds
-    cmp qword [note_stats + ASSP_NOTE_STATS_LIFTS], 0
-    jnz .no_holds
     jmp .success
 
 .recompute:
@@ -4928,8 +5072,8 @@ prepare_step_parity_bpm_4:
 
     mov rcx, [chart_info + ASSP_CHART_INFO_NOTES_PTR]
     mov rdx, [chart_info + ASSP_CHART_INFO_NOTES_LEN]
-    lea r8, [bpm_segment_buffer]
-    mov r9, [bpm_segment_count]
+    lea r8, [bpm_report_segment_buffer]
+    mov r9, [bpm_report_count]
     mov rax, [offset_us]
     mov [rsp + 32], rax
     lea rax, [parity_row_seconds]
@@ -4940,7 +5084,7 @@ prepare_step_parity_bpm_4:
     mov [rsp + 56], rax
     mov qword [rsp + 64], PARITY_ROW_CAP
     profile_begin_call
-    call assp_step_parity_bpm_row_times_4
+    call assp_step_parity_bpm_row_times_micro_4
     profile_end_call profile_step_row_times_ticks
     cmp rax, ASSP_NOT_FOUND
     je .fail
@@ -5025,6 +5169,9 @@ prepare_step_parity_rows_4:
     mov [parity_prepared_row_count], rax
     mov qword [rsp + 128], PARITY_FAST_STATE_CAP
     cmp rax, PARITY_FAST_BACKTRACK_ROW_CAP
+    jbe .fast_capacity_ready
+    mov qword [rsp + 128], PARITY_MEDIUM_STATE_CAP
+    cmp rax, PARITY_MEDIUM_BACKTRACK_ROW_CAP
     jbe .fast_capacity_ready
     mov qword [rsp + 128], PARITY_LARGE_STATE_CAP
     cmp rax, PARITY_LARGE_BACKTRACK_ROW_CAP
@@ -5318,8 +5465,8 @@ prepare_step_parity_events_4:
 
     mov rcx, [chart_info + ASSP_CHART_INFO_NOTES_PTR]
     mov rdx, [chart_info + ASSP_CHART_INFO_NOTES_LEN]
-    lea r8, [bpm_segment_buffer]
-    mov r9, [bpm_segment_count]
+    lea r8, [bpm_report_segment_buffer]
+    mov r9, [bpm_report_count]
     mov rax, [offset_us]
     mov [rsp + 32], rax
     lea rax, [parity_row_seconds]
@@ -5330,7 +5477,7 @@ prepare_step_parity_events_4:
     mov [rsp + 56], rax
     mov qword [rsp + 64], PARITY_ROW_CAP
     profile_begin_call
-    call assp_step_parity_bpm_row_times_4
+    call assp_step_parity_bpm_row_times_micro_4
     profile_end_call profile_step_row_times_ticks
     cmp rax, ASSP_NOT_FOUND
     je .fail
@@ -5417,8 +5564,8 @@ prepare_step_parity_bpm_8:
 
     mov rcx, [chart_info + ASSP_CHART_INFO_NOTES_PTR]
     mov rdx, [chart_info + ASSP_CHART_INFO_NOTES_LEN]
-    lea r8, [bpm_segment_buffer]
-    mov r9, [bpm_segment_count]
+    lea r8, [bpm_report_segment_buffer]
+    mov r9, [bpm_report_count]
     mov rax, [offset_us]
     mov [rsp + 32], rax
     lea rax, [parity_row_seconds]
@@ -5429,7 +5576,7 @@ prepare_step_parity_bpm_8:
     mov [rsp + 56], rax
     mov qword [rsp + 64], PARITY_ROW_CAP
     profile_begin_call
-    call assp_step_parity_bpm_row_times_8
+    call assp_step_parity_bpm_row_times_micro_8
     profile_end_call profile_step_row_times_ticks
     cmp rax, ASSP_NOT_FOUND
     je .fail
@@ -5711,6 +5858,9 @@ prepare_step_parity_rows_8:
     mov qword [rsp + 128], PARITY_FAST_STATE_CAP
     cmp rax, PARITY_FAST_BACKTRACK_ROW_CAP
     jbe .fast_capacity_ready
+    mov qword [rsp + 128], PARITY_MEDIUM_STATE_CAP
+    cmp rax, PARITY_MEDIUM_BACKTRACK_ROW_CAP
+    jbe .fast_capacity_ready
     mov qword [rsp + 128], PARITY_LARGE_STATE_CAP
     cmp rax, PARITY_LARGE_BACKTRACK_ROW_CAP
     jbe .fast_capacity_ready
@@ -5814,8 +5964,8 @@ prepare_step_parity_events_8:
 
     mov rcx, [chart_info + ASSP_CHART_INFO_NOTES_PTR]
     mov rdx, [chart_info + ASSP_CHART_INFO_NOTES_LEN]
-    lea r8, [bpm_segment_buffer]
-    mov r9, [bpm_segment_count]
+    lea r8, [bpm_report_segment_buffer]
+    mov r9, [bpm_report_count]
     mov rax, [offset_us]
     mov [rsp + 32], rax
     lea rax, [parity_row_seconds]
@@ -5826,7 +5976,7 @@ prepare_step_parity_events_8:
     mov [rsp + 56], rax
     mov qword [rsp + 64], PARITY_ROW_CAP
     profile_begin_call
-    call assp_step_parity_bpm_row_times_8
+    call assp_step_parity_bpm_row_times_micro_8
     profile_end_call profile_step_row_times_ticks
     cmp rax, ASSP_NOT_FOUND
     je .fail
@@ -5918,12 +6068,9 @@ prepare_tech_counts:
     or rax, [delay_segment_count]
     or rax, [warp_segment_count]
     jnz .count_4_timing_events
-    cmp qword [bpm_segment_count], 1
-    ja .count_4_bpm_events
     jmp .count_4_bpm
 
 .count_4_timing_events:
-.count_4_bpm_events:
     call prepare_step_parity_events_4
     test eax, eax
     jnz .done
@@ -5948,8 +6095,6 @@ prepare_tech_counts:
     or rax, [delay_segment_count]
     or rax, [warp_segment_count]
     jnz .count_8_events
-    cmp qword [bpm_segment_count], 1
-    ja .count_8_events
     jmp .count_8_bpm
 
 .count_8_events:
@@ -12625,6 +12770,7 @@ selected_normalized_speeds_buffer resb BPM_BUFFER_CAP
 selected_normalized_scrolls_buffer resb BPM_BUFFER_CAP
 bpm_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
 bpm_report_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
+matrix_bpm_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
 stop_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
 sm_bpm_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE
 sm_bpm_report_segment_buffer resb BPM_SEGMENT_CAP * ASSP_BPM_SEGMENT_SIZE

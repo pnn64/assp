@@ -40,7 +40,9 @@ global assp_step_parity_count_prepared_rows_8
 global assp_step_parity_hold_head_ends_4
 global assp_step_parity_hold_head_ends_8
 global assp_step_parity_bpm_row_times_4
+global assp_step_parity_bpm_row_times_micro_4
 global assp_step_parity_bpm_row_times_8
+global assp_step_parity_bpm_row_times_micro_8
 global assp_step_parity_prepare_hold_rows_4
 global assp_step_parity_prepare_hold_rows_8
 global assp_step_parity_prepare_tap_rows_4
@@ -6920,6 +6922,14 @@ assp_step_parity_hold_head_ends_8:
 ; Emits one time row for each nonzero source row used by RSSP step parity.
 ; rax = emitted row count, or ASSP_NOT_FOUND.
 assp_step_parity_bpm_row_times_4:
+    xor eax, eax
+    jmp step_parity_bpm_row_times_4_entry
+
+; Same as assp_step_parity_bpm_row_times_4, but BPM values are millionths.
+assp_step_parity_bpm_row_times_micro_4:
+    mov eax, ASSP_TRUE
+
+step_parity_bpm_row_times_4_entry:
     push rbx
     push rsi
     push rdi
@@ -6930,6 +6940,7 @@ assp_step_parity_bpm_row_times_4:
     push rbp
     mov rbp, rsp
     sub rsp, 112
+    mov [rbp - 88], eax
 
     mov rsi, rcx
     lea rbx, [rcx + rdx]
@@ -7193,6 +7204,14 @@ assp_step_parity_bpm_row_times_4:
 ; Emits one time row for each nonzero source row used by RSSP step parity.
 ; rax = emitted row count, or ASSP_NOT_FOUND.
 assp_step_parity_bpm_row_times_8:
+    xor eax, eax
+    jmp step_parity_bpm_row_times_8_entry
+
+; Same as assp_step_parity_bpm_row_times_8, but BPM values are millionths.
+assp_step_parity_bpm_row_times_micro_8:
+    mov eax, ASSP_TRUE
+
+step_parity_bpm_row_times_8_entry:
     push rbx
     push rsi
     push rdi
@@ -7203,6 +7222,7 @@ assp_step_parity_bpm_row_times_8:
     push rbp
     mov rbp, rsp
     sub rsp, 112
+    mov [rbp - 88], eax
 
     mov rsi, rcx
     lea rbx, [rcx + rdx]
@@ -7474,7 +7494,13 @@ bpm_row_time_seconds4:
     test r14, r14
     jz .start_time
     cvtsi2ss xmm2, qword [r13 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    cmp dword [rbp - 88], 0
+    jne .initial_bpm_micro
     divss xmm2, [rel const_thousand_f32]
+    jmp .initial_bpm_scaled
+.initial_bpm_micro:
+    divss xmm2, [rel const_million_f32]
+.initial_bpm_scaled:
     divss xmm2, [rel const_sixty_f32]
 
 .start_time:
@@ -7504,7 +7530,13 @@ bpm_row_time_seconds4:
     addss xmm0, xmm3
 
     cvtsi2ss xmm2, qword [r13 + r10 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    cmp dword [rbp - 88], 0
+    jne .change_bpm_micro
     divss xmm2, [rel const_thousand_f32]
+    jmp .change_bpm_scaled
+.change_bpm_micro:
+    divss xmm2, [rel const_million_f32]
+.change_bpm_scaled:
     divss xmm2, [rel const_sixty_f32]
     mov edx, r9d
     inc rax
@@ -7537,7 +7569,13 @@ fixed_bpm_row_time_seconds4:
     divss xmm0, [rel rows_per_beat_f32]
     mov rax, [r13 + ASSP_BPM_SEGMENT_BPM_MILLI]
     cvtsi2ss xmm1, rax
+    cmp dword [rbp - 88], 0
+    jne .fixed_bpm_micro
     divss xmm1, [rel const_thousand_f32]
+    jmp .fixed_bpm_scaled
+.fixed_bpm_micro:
+    divss xmm1, [rel const_million_f32]
+.fixed_bpm_scaled:
     divss xmm1, [rel const_sixty_f32]
     divss xmm0, xmm1
     cvtsi2ss xmm2, r15

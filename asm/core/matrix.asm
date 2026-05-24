@@ -326,6 +326,8 @@ matrix_get_difficulty_centi:
     fld qword [rsp + DIFF_DIFF1]
 
 .round_st0:
+    fstp qword [rsp + DIFF_EFFECTIVE]
+    fld qword [rsp + DIFF_EFFECTIVE]
     fmul qword [matrix_hundred]
     fistp qword [rsp + DIFF_TMPQ]
     mov rax, [rsp + DIFF_TMPQ]

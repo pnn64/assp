@@ -87,29 +87,35 @@ section .text
     jmp %%done
 
 %%mine_upper:
+    inc r11d
     mark_phantom_if_active %3
     inc qword [rbx + ASSP_NOTE_STATS_MINES]
     jmp %%done
 
 %%mine:
+    inc r11d
     inc qword [rbx + ASSP_NOTE_STATS_MINES]
     jmp %%done
 
 %%lift_upper:
     mark_phantom_if_active %3
+    bump_arrow %2
     inc qword [rbx + ASSP_NOTE_STATS_LIFTS]
     jmp %%done
 
 %%lift:
+    bump_arrow %2
     inc qword [rbx + ASSP_NOTE_STATS_LIFTS]
     jmp %%done
 
 %%fake_upper:
+    inc r11d
     mark_phantom_if_active %3
     inc qword [rbx + ASSP_NOTE_STATS_FAKES]
     jmp %%done
 
 %%fake:
+    inc r11d
     inc qword [rbx + ASSP_NOTE_STATS_FAKES]
 
 %%done:
@@ -176,14 +182,17 @@ section .text
     jmp %%done
 
 %%mine:
+    inc r11d
     inc qword [rbx + ASSP_NOTE_STATS_MINES]
     jmp %%done
 
 %%lift:
+    bump_masked_arrow %2
     inc qword [rbx + ASSP_NOTE_STATS_LIFTS]
     jmp %%done
 
 %%fake:
+    inc r11d
     inc qword [rbx + ASSP_NOTE_STATS_FAKES]
 
 %%done:
@@ -289,6 +298,7 @@ assp_count_note_stats_4:
     xor r13d, r13d
     xor r14d, r14d
     xor r15d, r15d
+    xor r11d, r11d
 
     count_lane 0, ASSP_NOTE_STATS_LEFT, 24
     count_lane 1, ASSP_NOTE_STATS_DOWN, 32
@@ -323,6 +333,12 @@ assp_count_note_stats_4:
     jmp .skip_line
 
 .row_no_step:
+    test r11d, r11d
+    jz .row_no_step_update
+    cmp r12d, 3
+    jb .row_no_step_update
+    inc qword [rbx + ASSP_NOTE_STATS_HANDS]
+.row_no_step_update:
     mov eax, r12d
     sub eax, r15d
     jns .store_empty_active
@@ -432,6 +448,7 @@ assp_count_note_stats_4:
     xor r13d, r13d
     xor r14d, r14d
     xor r15d, r15d
+    xor r11d, r11d
 
     count_masked_lane 0, ASSP_NOTE_STATS_LEFT
     count_masked_lane 1, ASSP_NOTE_STATS_DOWN
@@ -466,6 +483,12 @@ assp_count_note_stats_4:
     jmp .recount_skip_line
 
 .recount_row_no_step:
+    test r11d, r11d
+    jz .recount_row_no_step_update
+    cmp r12d, 3
+    jb .recount_row_no_step_update
+    inc qword [rbx + ASSP_NOTE_STATS_HANDS]
+.recount_row_no_step_update:
     mov eax, r12d
     sub eax, r15d
     jns .recount_store_empty_active
@@ -497,8 +520,6 @@ assp_count_note_stats_4:
     jmp .recount_line_loop
 
 .recount_success:
-    mov rax, [rsp + 56]
-    mov [rbx + ASSP_NOTE_STATS_STEPS], rax
     mov eax, ASSP_TRUE
     jmp .done
 
@@ -615,6 +636,7 @@ assp_count_note_stats_8:
     xor r13d, r13d
     xor r14d, r14d
     xor r15d, r15d
+    xor r11d, r11d
 
     count_lane 0, ASSP_NOTE_STATS_LEFT, 24
     count_lane 1, ASSP_NOTE_STATS_DOWN, 32
@@ -653,6 +675,12 @@ assp_count_note_stats_8:
     jmp .skip_line
 
 .row_no_step:
+    test r11d, r11d
+    jz .row_no_step_update
+    cmp r12d, 3
+    jb .row_no_step_update
+    inc qword [rbx + ASSP_NOTE_STATS_HANDS]
+.row_no_step_update:
     mov eax, r12d
     sub eax, r15d
     jns .store_empty_active
@@ -773,6 +801,7 @@ assp_count_note_stats_8:
     xor r13d, r13d
     xor r14d, r14d
     xor r15d, r15d
+    xor r11d, r11d
 
     count_masked_lane 0, ASSP_NOTE_STATS_LEFT
     count_masked_lane 1, ASSP_NOTE_STATS_DOWN
@@ -811,6 +840,12 @@ assp_count_note_stats_8:
     jmp .recount_skip_line
 
 .recount_row_no_step:
+    test r11d, r11d
+    jz .recount_row_no_step_update
+    cmp r12d, 3
+    jb .recount_row_no_step_update
+    inc qword [rbx + ASSP_NOTE_STATS_HANDS]
+.recount_row_no_step_update:
     mov eax, r12d
     sub eax, r15d
     jns .recount_store_empty_active
@@ -842,8 +877,6 @@ assp_count_note_stats_8:
     jmp .recount_line_loop
 
 .recount_success:
-    mov rax, [rsp + 88]
-    mov [rbx + ASSP_NOTE_STATS_STEPS], rax
     mov eax, ASSP_TRUE
     jmp .done
 
@@ -1422,21 +1455,38 @@ beat_in_timing_range:
     jz .no
     test rcx, rcx
     jz .no
+    mov r10, rcx
+    mov rcx, r8
+    call note_stats_milli_to_row48_f32_even
+    mov r8, rax
+    cvtsi2ss xmm2, r8
+    divss xmm2, [rel note_stats_const_48_f32]
     xor r9d, r9d
 .loop:
     cmp r9, rdx
     jae .no
     mov rax, r9
     shl rax, 4
-    mov r10, [rcx + rax + ASSP_BPM_SEGMENT_BPM_MILLI]
-    test r10, r10
+    mov rcx, [r10 + rax + ASSP_BPM_SEGMENT_BPM_MILLI]
+    test rcx, rcx
     jle .next
-    mov r11, [rcx + rax + ASSP_BPM_SEGMENT_BEAT_MILLI]
-    cmp r8, r11
-    jl .next
-    add r11, r10
-    cmp r8, r11
-    jl .yes
+    call note_stats_milli_to_row48_f32_even
+    test rax, rax
+    jle .next
+    mov r11, rax
+    mov rax, r9
+    shl rax, 4
+    mov rcx, [r10 + rax + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    call note_stats_milli_to_row48_f32_even
+    cvtsi2ss xmm0, rax
+    divss xmm0, [rel note_stats_const_48_f32]
+    ucomiss xmm2, xmm0
+    jb .next
+    cvtsi2ss xmm1, r11
+    divss xmm1, [rel note_stats_const_48_f32]
+    addss xmm0, xmm1
+    ucomiss xmm2, xmm0
+    jb .yes
 .next:
     inc r9
     jmp .loop
@@ -1445,6 +1495,13 @@ beat_in_timing_range:
     ret
 .no:
     xor eax, eax
+    ret
+
+note_stats_milli_to_row48_f32_even:
+    cvtsi2ss xmm0, rcx
+    divss xmm0, [rel note_stats_const_thousand_f32]
+    mulss xmm0, [rel note_stats_const_48_f32]
+    cvtss2si rax, xmm0
     ret
 
 ; rcx = note-data bytes, rdx = byte length, r8 = warp segments, r9 = warp count,
@@ -2437,11 +2494,6 @@ assp_count_timing_note_stats_4:
     mov r8, [rsp + TS4_OUT]
     mov rax, [rsp + TS4_LIFTS]
     add [r8 + ASSP_NOTE_STATS_LIFTS], rax
-    mov rcx, [rsp + TS4_TEXT_BASE]
-    mov rdx, [rsp + TS4_TOTAL_ROWS]
-    call count_mine_hold_hands_4
-    mov r8, [rsp + TS4_OUT]
-    add [r8 + ASSP_NOTE_STATS_HANDS], rax
 
 .success:
     mov eax, ASSP_TRUE
@@ -2458,149 +2510,6 @@ assp_count_timing_note_stats_4:
     pop r12
     pop rdi
     pop rsi
-    pop rbx
-    ret
-
-%macro count_mine_hold_hand_lane 1
-    mov bl, [r10 + %1]
-    cmp bl, '1'
-    je %%note
-    cmp bl, '2'
-    je %%hold_start
-    cmp bl, '4'
-    je %%hold_start
-    cmp bl, '3'
-    je %%end
-    cmp bl, 'M'
-    je %%mine
-    cmp bl, 'm'
-    je %%mine
-    jmp %%done
-
-%%note:
-    inc r11d
-    jmp %%done
-
-%%hold_start:
-    inc r11d
-    inc r12d
-    jmp %%done
-
-%%end:
-    inc r13d
-    jmp %%done
-
-%%mine:
-    mov r14d, 1
-
-%%done:
-%endmacro
-
-count_mine_hold_hands_4:
-    push rbx
-    push r12
-    push r13
-    push r14
-
-    xor eax, eax
-    xor r8d, r8d
-    xor r9d, r9d
-
-.loop:
-    cmp r9, rdx
-    jae .done
-
-    mov r10, r9
-    imul r10, 5
-    add r10, rcx
-    xor r11d, r11d
-    xor r12d, r12d
-    xor r13d, r13d
-    xor r14d, r14d
-
-    count_mine_hold_hand_lane 0
-    count_mine_hold_hand_lane 1
-    count_mine_hold_hand_lane 2
-    count_mine_hold_hand_lane 3
-
-    test r11d, r11d
-    jnz .update_active
-    test r14d, r14d
-    jz .update_active
-    cmp r8d, 3
-    jl .update_active
-    inc rax
-
-.update_active:
-    add r8d, r12d
-    sub r8d, r13d
-    jge .next
-    xor r8d, r8d
-
-.next:
-    inc r9
-    jmp .loop
-
-.done:
-    pop r14
-    pop r13
-    pop r12
-    pop rbx
-    ret
-
-count_mine_hold_hands_8:
-    push rbx
-    push r12
-    push r13
-    push r14
-
-    xor eax, eax
-    xor r8d, r8d
-    xor r9d, r9d
-
-.loop:
-    cmp r9, rdx
-    jae .done
-
-    mov r10, r9
-    imul r10, 9
-    add r10, rcx
-    xor r11d, r11d
-    xor r12d, r12d
-    xor r13d, r13d
-    xor r14d, r14d
-
-    count_mine_hold_hand_lane 0
-    count_mine_hold_hand_lane 1
-    count_mine_hold_hand_lane 2
-    count_mine_hold_hand_lane 3
-    count_mine_hold_hand_lane 4
-    count_mine_hold_hand_lane 5
-    count_mine_hold_hand_lane 6
-    count_mine_hold_hand_lane 7
-
-    test r11d, r11d
-    jnz .update_active
-    test r14d, r14d
-    jz .update_active
-    cmp r8d, 3
-    jl .update_active
-    inc rax
-
-.update_active:
-    add r8d, r12d
-    sub r8d, r13d
-    jge .next
-    xor r8d, r8d
-
-.next:
-    inc r9
-    jmp .loop
-
-.done:
-    pop r14
-    pop r13
-    pop r12
     pop rbx
     ret
 
@@ -3073,11 +2982,6 @@ assp_count_timing_note_stats_8:
     mov r8, [rsp + TS8_OUT]
     mov rax, [rsp + TS8_LIFTS]
     add [r8 + ASSP_NOTE_STATS_LIFTS], rax
-    mov rcx, [rsp + TS8_TEXT_BASE]
-    mov rdx, [rsp + TS8_TOTAL_ROWS]
-    call count_mine_hold_hands_8
-    mov r8, [rsp + TS8_OUT]
-    add [r8 + ASSP_NOTE_STATS_HANDS], rax
 
 .success:
     mov eax, ASSP_TRUE
@@ -3827,3 +3731,8 @@ row_no_hold_fake_object_count_8:
     jnz .loop
     mov eax, ecx
     ret
+
+section .rdata
+align 4
+note_stats_const_thousand_f32 dd 1000.0
+note_stats_const_48_f32 dd 48.0
