@@ -17,6 +17,33 @@ extern assp_minimize_measure_8
 
 section .text
 
+; base slot, measure-index slot, row-count slot.
+%macro init_beat_walk 3
+    mov rax, [rsp + %2]
+    imul rax, 4000
+    mov [rsp + %1], rax
+    mov eax, 4000
+    xor edx, edx
+    div qword [rsp + %3]
+    mov [rsp + %1 + 8], rax
+    mov [rsp + %1 + 16], rdx
+    mov qword [rsp + %1 + 24], 0
+%endmacro
+
+; base slot, row-count slot.
+%macro advance_beat_walk 2
+    mov rax, [rsp + %1 + 8]
+    add [rsp + %1], rax
+    mov rax, [rsp + %1 + 24]
+    add rax, [rsp + %1 + 16]
+    cmp rax, [rsp + %2]
+    jb %%store_err
+    sub rax, [rsp + %2]
+    inc qword [rsp + %1]
+%%store_err:
+    mov [rsp + %1 + 24], rax
+%endmacro
+
 %macro bump_arrow 1
     inc qword [rbx + ASSP_NOTE_STATS_ARROWS]
     inc qword [rbx + %1]
@@ -1159,6 +1186,7 @@ mines_finalize_measure:
     test rax, rax
     jz .clear
 
+    init_beat_walk 0, 64, 48
     xor r13d, r13d
 .row_loop:
     cmp r13, [rsp + 48]
@@ -1168,14 +1196,7 @@ mines_finalize_measure:
     test eax, eax
     jz .next
 
-    mov rax, [rsp + 64]
-    imul rax, 4000
-    mov r8, rax
-    mov rax, r13
-    imul rax, 4000
-    xor edx, edx
-    div qword [rsp + 48]
-    add r8, rax
+    mov r8, [rsp]
 
     mov rcx, [rsp + 80]
     mov rdx, [rsp + 88]
@@ -1190,6 +1211,7 @@ mines_finalize_measure:
     inc qword [rsp + 56]
 
 .next:
+    advance_beat_walk 0, 48
     inc r13
     jmp .row_loop
 
@@ -1405,6 +1427,7 @@ mines_finalize_measure_8:
     test rax, rax
     jz .clear
 
+    init_beat_walk 0, 64, 48
     xor r13d, r13d
 .row_loop:
     cmp r13, [rsp + 48]
@@ -1414,14 +1437,7 @@ mines_finalize_measure_8:
     test eax, eax
     jz .next
 
-    mov rax, [rsp + 64]
-    imul rax, 4000
-    mov r8, rax
-    mov rax, r13
-    imul rax, 4000
-    xor edx, edx
-    div qword [rsp + 48]
-    add r8, rax
+    mov r8, [rsp]
 
     mov rcx, [rsp + 80]
     mov rdx, [rsp + 88]
@@ -1436,6 +1452,7 @@ mines_finalize_measure_8:
     inc qword [rsp + 56]
 
 .next:
+    advance_beat_walk 0, 48
     inc r13
     jmp .row_loop
 
@@ -1732,19 +1749,13 @@ timing_fakes_finalize_measure:
     test rax, rax
     jz .clear
 
+    init_beat_walk 0, 64, 48
     xor r13d, r13d
 .row_loop:
     cmp r13, [rsp + 48]
     jae .clear
 
-    mov rax, [rsp + 64]
-    imul rax, 4000
-    mov r8, rax
-    mov rax, r13
-    imul rax, 4000
-    xor edx, edx
-    div qword [rsp + 48]
-    add r8, rax
+    mov r8, [rsp]
 
     mov rcx, [rsp + 80]
     mov rdx, [rsp + 88]
@@ -1768,6 +1779,7 @@ timing_fakes_finalize_measure:
     add qword [rsp + 56], rax
 
 .next:
+    advance_beat_walk 0, 48
     inc r13
     jmp .row_loop
 
@@ -2051,19 +2063,13 @@ timing_fakes_finalize_measure_8:
     test rax, rax
     jz .clear
 
+    init_beat_walk 0, 64, 48
     xor r13d, r13d
 .row_loop:
     cmp r13, [rsp + 48]
     jae .clear
 
-    mov rax, [rsp + 64]
-    imul rax, 4000
-    mov r8, rax
-    mov rax, r13
-    imul rax, 4000
-    xor edx, edx
-    div qword [rsp + 48]
-    add r8, rax
+    mov r8, [rsp]
 
     mov rcx, [rsp + 80]
     mov rdx, [rsp + 88]
@@ -2087,6 +2093,7 @@ timing_fakes_finalize_measure_8:
     add qword [rsp + 56], rax
 
 .next:
+    advance_beat_walk 0, 48
     inc r13
     jmp .row_loop
 
@@ -2168,6 +2175,7 @@ row_fake_object_count_8:
 %define TS4_MIN_COUNT 120
 %define TS4_DEPTHS 128
 %define TS4_LIFTS 136
+%define TS4_BEAT_WALK 144
 
 %macro timing_stats_4_finalize_measure 0
     cmp qword [rsp + TS4_RAW_COUNT], 0
@@ -2185,6 +2193,7 @@ row_fake_object_count_8:
     jz %%clear
 
     mov [rsp + TS4_MIN_COUNT], rax
+    init_beat_walk TS4_BEAT_WALK, TS4_MEASURE_INDEX, TS4_MIN_COUNT
     xor r13d, r13d
 %%append_loop:
     cmp r13, [rsp + TS4_MIN_COUNT]
@@ -2199,18 +2208,12 @@ row_fake_object_count_8:
     mov r11, [rsp + TS4_ROWS_BASE]
     mov [r11 + r10 * 4], ecx
 
-    mov rax, [rsp + TS4_MEASURE_INDEX]
-    imul rax, 4000
-    mov r11, rax
-    mov rax, r13
-    imul rax, 4000
-    xor edx, edx
-    div qword [rsp + TS4_MIN_COUNT]
-    add rax, r11
     mov r11, [rsp + TS4_BEATS_BASE]
+    mov rax, [rsp + TS4_BEAT_WALK]
     mov [r11 + r10 * 8], rax
 
     inc qword [rsp + TS4_TOTAL_ROWS]
+    advance_beat_walk TS4_BEAT_WALK, TS4_MIN_COUNT
     inc r13
     jmp %%append_loop
 
@@ -2345,7 +2348,7 @@ assp_count_timing_note_stats_4:
     mov r13, [rsp + 112]
     mov r15, [rsp + 120]
     mov r12, [rsp + 128]
-    sub rsp, 160
+    sub rsp, 176
 
     mov [rsp + TS4_OUT], r13
     mov [rsp + TS4_WARP_PTR], r8
@@ -2567,7 +2570,7 @@ assp_count_timing_note_stats_4:
     xor eax, eax
 
 .done:
-    add rsp, 160
+    add rsp, 176
     pop r15
     pop r14
     pop r13
@@ -2648,6 +2651,7 @@ timing_hold_start_has_end_4:
 %define TS8_MIN_COUNT 120
 %define TS8_DEPTHS 128
 %define TS8_LIFTS 136
+%define TS8_BEAT_WALK 144
 
 %macro timing_stats_8_finalize_measure 0
     cmp qword [rsp + TS8_RAW_COUNT], 0
@@ -2665,6 +2669,7 @@ timing_hold_start_has_end_4:
     jz %%clear
 
     mov [rsp + TS8_MIN_COUNT], rax
+    init_beat_walk TS8_BEAT_WALK, TS8_MEASURE_INDEX, TS8_MIN_COUNT
     xor r13d, r13d
 %%append_loop:
     cmp r13, [rsp + TS8_MIN_COUNT]
@@ -2679,18 +2684,12 @@ timing_hold_start_has_end_4:
     mov r11, [rsp + TS8_ROWS_BASE]
     mov [r11 + r10 * 8], rcx
 
-    mov rax, [rsp + TS8_MEASURE_INDEX]
-    imul rax, 4000
-    mov r11, rax
-    mov rax, r13
-    imul rax, 4000
-    xor edx, edx
-    div qword [rsp + TS8_MIN_COUNT]
-    add rax, r11
     mov r11, [rsp + TS8_BEATS_BASE]
+    mov rax, [rsp + TS8_BEAT_WALK]
     mov [r11 + r10 * 8], rax
 
     inc qword [rsp + TS8_TOTAL_ROWS]
+    advance_beat_walk TS8_BEAT_WALK, TS8_MIN_COUNT
     inc r13
     jmp %%append_loop
 
@@ -2825,7 +2824,7 @@ assp_count_timing_note_stats_8:
     mov r13, [rsp + 112]
     mov r15, [rsp + 120]
     mov r12, [rsp + 128]
-    sub rsp, 160
+    sub rsp, 176
 
     mov [rsp + TS8_OUT], r13
     mov [rsp + TS8_WARP_PTR], r8
@@ -3055,7 +3054,7 @@ assp_count_timing_note_stats_8:
     xor eax, eax
 
 .done:
-    add rsp, 160
+    add rsp, 176
     pop r15
     pop r14
     pop r13
@@ -3299,6 +3298,7 @@ timing_stats_no_holds_finalize_measure:
     test rax, rax
     jz .clear
 
+    init_beat_walk 0, 56, 48
     xor r13d, r13d
 .row_loop:
     cmp r13, [rsp + 48]
@@ -3307,14 +3307,7 @@ timing_stats_no_holds_finalize_measure:
     mov rbx, [rsp + 72]
     inc qword [rbx + ASSP_NOTE_STATS_ROWS]
 
-    mov rax, [rsp + 56]
-    imul rax, 4000
-    mov r8, rax
-    mov rax, r13
-    imul rax, 4000
-    xor edx, edx
-    div qword [rsp + 48]
-    add r8, rax
+    mov r8, [rsp]
 
     mov rcx, [rsp + 80]
     mov rdx, [rsp + 88]
@@ -3337,6 +3330,7 @@ timing_stats_no_holds_finalize_measure:
     add qword [rbx + ASSP_NOTE_STATS_FAKES], rax
 
 .next:
+    advance_beat_walk 0, 48
     inc r13
     jmp .row_loop
 
@@ -3666,6 +3660,7 @@ timing_stats_no_holds_finalize_measure_8:
     test rax, rax
     jz .clear
 
+    init_beat_walk 0, 56, 48
     xor r13d, r13d
 .row_loop:
     cmp r13, [rsp + 48]
@@ -3674,14 +3669,7 @@ timing_stats_no_holds_finalize_measure_8:
     mov rbx, [rsp + 72]
     inc qword [rbx + ASSP_NOTE_STATS_ROWS]
 
-    mov rax, [rsp + 56]
-    imul rax, 4000
-    mov r8, rax
-    mov rax, r13
-    imul rax, 4000
-    xor edx, edx
-    div qword [rsp + 48]
-    add r8, rax
+    mov r8, [rsp]
 
     mov rcx, [rsp + 80]
     mov rdx, [rsp + 88]
@@ -3704,6 +3692,7 @@ timing_stats_no_holds_finalize_measure_8:
     add qword [rbx + ASSP_NOTE_STATS_FAKES], rax
 
 .next:
+    advance_beat_walk 0, 48
     inc r13
     jmp .row_loop
 
