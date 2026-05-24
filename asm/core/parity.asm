@@ -5142,7 +5142,7 @@ assp_step_parity_row_best_candidates_4:
     mulss xmm0, [rel cost_jack_weight]
     movss [rsp + 840], xmm0
 .row_jack_cost_ready:
-    cmp qword [rsp + 1336], 64
+    cmp qword [rsp + 1336], 128
     ja .hash_ready
     pxor xmm0, xmm0
     movdqu [rsp + 960], xmm0
@@ -5276,8 +5276,10 @@ assp_step_parity_row_best_candidates_4:
     mov edx, [rsp + 616]
     mov [rsp + 808], edx
     mov r10, [rsp + 1320]
-    cmp qword [rsp + 1336], 64
+    cmp qword [rsp + 1336], 128
     ja .scan_keys_linear_fast
+    cmp qword [rsp + 784], 128
+    jae .scan_keys_linear_fast
     mov r9d, edx
     imul r9d, r9d, 09e3779b9h
     and r9d, 127
