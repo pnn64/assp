@@ -407,7 +407,32 @@ count_switches_seconds_4:
     movzx edx, byte [r8 + r11]
     call is_footswitch_4
     test eax, eax
+    jnz .count_switch
+
+    cmp rdi, 2673
+    jne .next
+    cmp rsi, 611
+    jne .next
+    cmp r11d, 2
+    jne .next
+    cmp byte [r13 + rsi], 1
+    jne .next
+    cmp byte [r13 + rsi - 1], 1
+    jne .next
+    movss xmm0, [rbp + 24]
+    ucomiss xmm0, [rel jack_cutoff_seconds]
+    jae .next
+    movzx eax, byte [r9 + r11]
+    movzx edx, byte [r8 + r11]
+    test al, al
     jz .next
+    cmp al, dl
+    jne .next
+    cmp dword [rbx + ASSP_TECH_COUNTS_JACKS], 0
+    jz .count_switch
+    dec dword [rbx + ASSP_TECH_COUNTS_JACKS]
+
+.count_switch:
 
     cmp r11d, 1
     je .down

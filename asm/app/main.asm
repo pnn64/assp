@@ -2557,31 +2557,6 @@ tidy_row_segments_in_place:
     mov rbx, rcx
     mov rsi, rdx
     xor r8d, r8d
-
-.quantize_loop:
-    cmp r8, rsi
-    jae .collapse
-    mov r10, r8
-    shl r10, 4
-    mov rcx, [rbx + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI]
-    call milli_to_row48_f32_even
-    imul rax, rax, 1000
-    cqo
-    mov r11d, 48
-    idiv r11
-    mov [rbx + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI], rax
-    mov rcx, [rbx + r10 + ASSP_BPM_SEGMENT_BPM_MILLI]
-    call milli_to_row48_f32_even
-    imul rax, rax, 1000
-    cqo
-    mov r11d, 48
-    idiv r11
-    mov [rbx + r10 + ASSP_BPM_SEGMENT_BPM_MILLI], rax
-    inc r8
-    jmp .quantize_loop
-
-.collapse:
-    xor r8d, r8d
     xor r9d, r9d
 
 .collapse_loop:
@@ -2591,6 +2566,9 @@ tidy_row_segments_in_place:
     shl r10, 4
     mov r12, [rbx + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI]
     mov r13, [rbx + r10 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    mov rcx, r12
+    call milli_to_row48_f32_even
+    mov r14, rax
     inc r8
 
 .same_row_loop:
@@ -2598,8 +2576,11 @@ tidy_row_segments_in_place:
     jae .store_last_for_row
     mov r10, r8
     shl r10, 4
-    cmp [rbx + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI], r12
+    mov rcx, [rbx + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    call milli_to_row48_f32_even
+    cmp rax, r14
     jne .store_last_for_row
+    mov r12, [rbx + r10 + ASSP_BPM_SEGMENT_BEAT_MILLI]
     mov r13, [rbx + r10 + ASSP_BPM_SEGMENT_BPM_MILLI]
     inc r8
     jmp .same_row_loop
@@ -4214,8 +4195,8 @@ prepare_mines_nonfake:
 
     mov rcx, [chart_info + ASSP_CHART_INFO_NOTES_PTR]
     mov rdx, [chart_info + ASSP_CHART_INFO_NOTES_LEN]
-    lea r8, [warp_stats_segment_buffer]
-    mov r9, [warp_stats_segment_count]
+    xor r8d, r8d
+    xor r9d, r9d
     lea rax, [fake_segment_buffer]
     mov [rsp + 32], rax
     mov rax, [fake_segment_count]
@@ -4282,6 +4263,8 @@ prepare_timing_stats:
 
     mov rax, [warp_segment_count]
     or rax, [fake_segment_count]
+    or rax, [note_stats + ASSP_NOTE_STATS_HOLDS]
+    or rax, [note_stats + ASSP_NOTE_STATS_ROLLS]
     jnz .recompute
     jmp .success
 
@@ -4337,6 +4320,28 @@ prepare_timing_stats:
     jz .fail
 
 .success:
+    cmp qword [fake_segment_count], 0
+    je .stats_ready
+    cmp qword [mines_nonfake], 0
+    jne .stats_ready
+    mov rax, [note_stats + ASSP_NOTE_STATS_MINES]
+    mov rcx, [mines_nonfake]
+    cmp rax, rcx
+    je .stats_ready
+    jb .promote_fakes_to_mines
+    sub rax, rcx
+    add [note_stats + ASSP_NOTE_STATS_FAKES], rax
+    mov [note_stats + ASSP_NOTE_STATS_MINES], rcx
+    jmp .stats_ready
+.promote_fakes_to_mines:
+    mov rdx, rcx
+    sub rdx, rax
+    cmp [note_stats + ASSP_NOTE_STATS_FAKES], rdx
+    jb .store_promoted_mines
+    sub [note_stats + ASSP_NOTE_STATS_FAKES], rdx
+.store_promoted_mines:
+    mov [note_stats + ASSP_NOTE_STATS_MINES], rcx
+.stats_ready:
     mov eax, ASSP_TRUE
     jmp .done
 
@@ -5317,10 +5322,6 @@ parity_source_row_is_fake_4:
     movss xmm0, [rax + r13 * 4]
     mulss xmm0, [rel app_const_48_f32]
     cvtss2si rax, xmm0
-    imul rax, rax, 1000
-    cqo
-    mov ecx, 48
-    idiv rcx
     mov r8, rax
 
     lea r9, [fake_segment_buffer]
@@ -5334,11 +5335,18 @@ parity_source_row_is_fake_4:
     mov rcx, [r9 + rax + ASSP_BPM_SEGMENT_BPM_MILLI]
     test rcx, rcx
     jle .next
-    mov rdx, [r9 + rax + ASSP_BPM_SEGMENT_BEAT_MILLI]
-    cmp r8, rdx
+    call milli_to_row48_f32_even
+    test rax, rax
+    jle .next
+    mov rdx, rax
+    mov rax, r11
+    shl rax, 4
+    mov rcx, [r9 + rax + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    call milli_to_row48_f32_even
+    cmp r8, rax
     jl .next
-    add rdx, rcx
-    cmp r8, rdx
+    add rax, rdx
+    cmp r8, rax
     jl .yes
 .next:
     inc r11
@@ -5644,10 +5652,6 @@ parity_source_row_is_fake_8:
     movss xmm0, [rax + r13 * 4]
     mulss xmm0, [rel app_const_48_f32]
     cvtss2si rax, xmm0
-    imul rax, rax, 1000
-    cqo
-    mov ecx, 48
-    idiv rcx
     mov r8, rax
 
     lea r9, [fake_segment_buffer]
@@ -5661,11 +5665,18 @@ parity_source_row_is_fake_8:
     mov rcx, [r9 + rax + ASSP_BPM_SEGMENT_BPM_MILLI]
     test rcx, rcx
     jle .next
-    mov rdx, [r9 + rax + ASSP_BPM_SEGMENT_BEAT_MILLI]
-    cmp r8, rdx
+    call milli_to_row48_f32_even
+    test rax, rax
+    jle .next
+    mov rdx, rax
+    mov rax, r11
+    shl rax, 4
+    mov rcx, [r9 + rax + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    call milli_to_row48_f32_even
+    cmp r8, rax
     jl .next
-    add rdx, rcx
-    cmp r8, rdx
+    add rax, rdx
+    cmp r8, rax
     jl .yes
 .next:
     inc r11

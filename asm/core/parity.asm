@@ -5278,10 +5278,6 @@ assp_step_parity_row_best_candidates_4:
     mov r10, [rsp + 1320]
     cmp qword [rsp + 1336], 64
     ja .scan_keys_linear_fast
-%ifdef ASSP_STANDALONE_EXE
-    cmp dword [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_HOLD_MASK], 0
-    je .scan_key_direct_no_hold_fast
-%endif
     mov r9d, edx
     imul r9d, r9d, 09e3779b9h
     and r9d, 127
@@ -7493,13 +7489,15 @@ bpm_row_time_seconds4:
     movss xmm2, [rel cost_one]
     test r14, r14
     jz .start_time
-    cvtsi2ss xmm2, qword [r13 + ASSP_BPM_SEGMENT_BPM_MILLI]
     cmp dword [rbp - 88], 0
     jne .initial_bpm_micro
+    cvtsi2ss xmm2, qword [r13 + ASSP_BPM_SEGMENT_BPM_MILLI]
     divss xmm2, [rel const_thousand_f32]
     jmp .initial_bpm_scaled
 .initial_bpm_micro:
-    divss xmm2, [rel const_million_f32]
+    cvtsi2sd xmm2, qword [r13 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    divsd xmm2, [rel const_million_f64]
+    cvtsd2ss xmm2, xmm2
 .initial_bpm_scaled:
     divss xmm2, [rel const_sixty_f32]
 
@@ -7529,13 +7527,15 @@ bpm_row_time_seconds4:
     divss xmm3, xmm2
     addss xmm0, xmm3
 
-    cvtsi2ss xmm2, qword [r13 + r10 + ASSP_BPM_SEGMENT_BPM_MILLI]
     cmp dword [rbp - 88], 0
     jne .change_bpm_micro
+    cvtsi2ss xmm2, qword [r13 + r10 + ASSP_BPM_SEGMENT_BPM_MILLI]
     divss xmm2, [rel const_thousand_f32]
     jmp .change_bpm_scaled
 .change_bpm_micro:
-    divss xmm2, [rel const_million_f32]
+    cvtsi2sd xmm2, qword [r13 + r10 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    divsd xmm2, [rel const_million_f64]
+    cvtsd2ss xmm2, xmm2
 .change_bpm_scaled:
     divss xmm2, [rel const_sixty_f32]
     mov edx, r9d
@@ -7568,13 +7568,15 @@ fixed_bpm_row_time_seconds4:
     cvtsi2ss xmm0, ecx
     divss xmm0, [rel rows_per_beat_f32]
     mov rax, [r13 + ASSP_BPM_SEGMENT_BPM_MILLI]
-    cvtsi2ss xmm1, rax
     cmp dword [rbp - 88], 0
     jne .fixed_bpm_micro
+    cvtsi2ss xmm1, rax
     divss xmm1, [rel const_thousand_f32]
     jmp .fixed_bpm_scaled
 .fixed_bpm_micro:
-    divss xmm1, [rel const_million_f32]
+    cvtsi2sd xmm1, rax
+    divsd xmm1, [rel const_million_f64]
+    cvtsd2ss xmm1, xmm1
 .fixed_bpm_scaled:
     divss xmm1, [rel const_sixty_f32]
     divss xmm0, xmm1
