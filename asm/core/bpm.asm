@@ -740,7 +740,6 @@ assp_parse_timing_seconds_map:
 ; rcx = number start, rdx = number end.
 ; rax = absolute millionths, edx = negative flag. ASSP_NOT_FOUND on parse failure.
 parse_dec6:
-    push rbx
     push rsi
     push rdi
     push r12
@@ -809,7 +808,6 @@ parse_dec6:
     xor r10d, r10d
     xor r11d, r11d
     xor r12d, r12d
-    mov ebx, 100000
     jmp .frac_loop
 
 .frac_loop:
@@ -826,13 +824,8 @@ parse_dec6:
     inc r9
     cmp r10d, 6
     jae .round_digit
-    imul eax, ebx
+    imul r11, r11, 10
     add r11, rax
-    xor edx, edx
-    mov eax, ebx
-    mov ecx, 10
-    div ecx
-    mov ebx, eax
     inc r10d
     inc rsi
     jmp .frac_loop
@@ -858,6 +851,13 @@ parse_dec6:
     jmp .frac_loop
 
 .finish_frac:
+    mov ecx, r10d
+    and ecx, 0x7fffffff
+    mov eax, 6
+    cmp ecx, eax
+    cmova ecx, eax
+    lea rdx, [rel bpm_dec6_frac_scale]
+    imul r11, qword [rdx + rcx * 8]
     jmp .trailing
 
 .finish_number:
@@ -911,7 +911,6 @@ parse_dec6:
     pop r12
     pop rdi
     pop rsi
-    pop rbx
     ret
 
 ; rcx = offset bytes, rdx = byte len. rax = signed offset milliseconds.
@@ -2890,13 +2889,14 @@ nps_f32_one dd 1.0
 nps_f64_0_12 dq 0.12
 nps_f64_1000 dq 1000.0
 nps_f64_1000000 dq 1000000.0
+bpm_dec3_frac_scale dq 1000, 100, 10, 1
+bpm_dec6_frac_scale dq 1000000, 100000, 10000, 1000, 100, 10, 1
 
 section .text
 
 ; rcx = number start, rdx = number end.
 ; rax = absolute thousandths, edx = negative flag. ASSP_NOT_FOUND on parse failure.
 parse_dec3:
-    push rbx
     push rsi
     push rdi
     push r12
@@ -2965,7 +2965,6 @@ parse_dec3:
     xor r10d, r10d
     xor r11d, r11d
     xor r12d, r12d
-    mov ebx, 100
     jmp .frac_loop
 
 .frac_loop:
@@ -2982,13 +2981,8 @@ parse_dec3:
     inc r9
     cmp r10d, 3
     jae .round_digit
-    imul eax, ebx
+    imul r11, r11, 10
     add r11, rax
-    xor edx, edx
-    mov eax, ebx
-    mov ecx, 10
-    div ecx
-    mov ebx, eax
     inc r10d
     inc rsi
     jmp .frac_loop
@@ -3014,6 +3008,13 @@ parse_dec3:
     jmp .frac_loop
 
 .finish_frac:
+    mov ecx, r10d
+    and ecx, 0x7fffffff
+    mov eax, 3
+    cmp ecx, eax
+    cmova ecx, eax
+    lea rdx, [rel bpm_dec3_frac_scale]
+    imul r11, qword [rdx + rcx * 8]
     jmp .trailing
 
 .finish_number:
@@ -3067,7 +3068,6 @@ parse_dec3:
     pop r12
     pop rdi
     pop rsi
-    pop rbx
     ret
 
 ; rax = absolute thousandths, edx = negative flag.

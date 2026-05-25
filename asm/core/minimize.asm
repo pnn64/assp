@@ -227,6 +227,7 @@ assp_minimize_chart_4:
     mov rbx, r8
     mov r12, r9
     xor r13d, r13d
+    xor r14d, r14d
 
 .line_loop:
     cmp rsi, rdi
@@ -273,6 +274,12 @@ assp_minimize_chart_4:
     jae .invalid
     mov eax, [rsi]
     mov [r10 + r11 * 4], eax
+    test r14b, 1
+    jnz .fast_row_track_done
+    cmp eax, 0x30303030
+    je .fast_row_track_done
+    or r14, r11
+.fast_row_track_done:
     inc qword [rsp + 16]
     jmp .line_done
 
@@ -304,23 +311,23 @@ assp_minimize_chart_4:
     jmp .comma
 
 .find_line_end_slow:
-    mov r14, rsi
+    mov r10, rsi
 .find_line_end:
-    cmp r14, rdi
+    cmp r10, rdi
     jae .line_end_found
-    cmp byte [r14], 10
+    cmp byte [r10], 10
     je .line_end_found
-    inc r14
+    inc r10
     jmp .find_line_end
 
 .line_end_found:
-    mov r15, r14
+    mov r15, r10
     cmp r15, rdi
     jae .trim_left
     inc r15
 
 .trim_left:
-    cmp rsi, r14
+    cmp rsi, r10
     jae .line_done
     mov al, [rsi]
     cmp al, ' '
@@ -345,7 +352,7 @@ assp_minimize_chart_4:
     je .semi
 
     lea rax, [rsi + 4]
-    cmp rax, r14
+    cmp rax, r10
     ja .line_done
 
     mov r10, [rsp]
@@ -356,6 +363,12 @@ assp_minimize_chart_4:
     jae .invalid
     mov eax, [rsi]
     mov [r10 + r11 * 4], eax
+    test r14b, 1
+    jnz .slow_row_track_done
+    cmp eax, 0x30303030
+    je .slow_row_track_done
+    or r14, r11
+.slow_row_track_done:
     inc qword [rsp + 16]
     jmp .line_done
 
@@ -403,27 +416,40 @@ chart_finalize_measure:
     cmp qword [rsp + 24], 0
     je .done
 
-    ; Safe in place: minimized rows are copied from a nondecreasing source index.
-    sub rsp, 32
-    mov rcx, [rsp + 40]
-    mov rdx, [rsp + 56]
-    mov r8, rcx
-    mov r9, [rsp + 48]
-    call assp_minimize_measure_4
-    add rsp, 32
-    mov [rsp + 40], rax
+    xor ecx, ecx
+    mov rax, r14
+    mov r14, [rsp + 24]
+    test al, 1
+    jnz .reduce_ready
+    cmp r14, 2
+    jb .reduce_ready
+    bsf rcx, r14
+    test rax, rax
+    jz .reduce_ready
+    bsf rax, rax
+    cmp rax, rcx
+    cmovb rcx, rax
+
+.reduce_ready:
+    mov edx, 1
+    shl rdx, cl
+    mov rax, r14
+    shr rax, cl
+    mov r14, rax
 
     xor r10d, r10d
 .row_loop:
-    cmp r10, [rsp + 40]
-    jae .clear
+    test r14, r14
+    jz .clear
     mov r11, [rsp + 8]
     ASSP_APPEND_ROW 4
-    inc r10
+    add r10, rdx
+    dec r14
     jmp .row_loop
 
 .clear:
     mov qword [rsp + 24], 0
+    xor r14d, r14d
 
 .done:
     ret
@@ -459,6 +485,7 @@ assp_minimize_chart_8:
     mov rbx, r8
     mov r12, r9
     xor r13d, r13d
+    xor r14d, r14d
 
 .line_loop:
     cmp rsi, rdi
@@ -505,6 +532,13 @@ assp_minimize_chart_8:
     jae .invalid
     mov rax, [rsi]
     mov [r10 + r11 * 8], rax
+    test r14b, 1
+    jnz .fast_row_track_done
+    mov rcx, 0x3030303030303030
+    cmp rax, rcx
+    je .fast_row_track_done
+    or r14, r11
+.fast_row_track_done:
     inc qword [rsp + 16]
     jmp .line_done
 
@@ -536,23 +570,23 @@ assp_minimize_chart_8:
     jmp .comma
 
 .find_line_end_slow:
-    mov r14, rsi
+    mov r10, rsi
 .find_line_end:
-    cmp r14, rdi
+    cmp r10, rdi
     jae .line_end_found
-    cmp byte [r14], 10
+    cmp byte [r10], 10
     je .line_end_found
-    inc r14
+    inc r10
     jmp .find_line_end
 
 .line_end_found:
-    mov r15, r14
+    mov r15, r10
     cmp r15, rdi
     jae .trim_left
     inc r15
 
 .trim_left:
-    cmp rsi, r14
+    cmp rsi, r10
     jae .line_done
     mov al, [rsi]
     cmp al, ' '
@@ -577,7 +611,7 @@ assp_minimize_chart_8:
     je .semi
 
     lea rax, [rsi + 8]
-    cmp rax, r14
+    cmp rax, r10
     ja .line_done
 
     mov r10, [rsp]
@@ -588,6 +622,13 @@ assp_minimize_chart_8:
     jae .invalid
     mov rax, [rsi]
     mov [r10 + r11 * 8], rax
+    test r14b, 1
+    jnz .slow_row_track_done
+    mov rcx, 0x3030303030303030
+    cmp rax, rcx
+    je .slow_row_track_done
+    or r14, r11
+.slow_row_track_done:
     inc qword [rsp + 16]
     jmp .line_done
 
@@ -635,27 +676,40 @@ chart_finalize_measure_8:
     cmp qword [rsp + 24], 0
     je .done
 
-    ; Safe in place: minimized rows are copied from a nondecreasing source index.
-    sub rsp, 32
-    mov rcx, [rsp + 40]
-    mov rdx, [rsp + 56]
-    mov r8, rcx
-    mov r9, [rsp + 48]
-    call assp_minimize_measure_8
-    add rsp, 32
-    mov [rsp + 40], rax
+    xor ecx, ecx
+    mov rax, r14
+    mov r14, [rsp + 24]
+    test al, 1
+    jnz .reduce_ready
+    cmp r14, 2
+    jb .reduce_ready
+    bsf rcx, r14
+    test rax, rax
+    jz .reduce_ready
+    bsf rax, rax
+    cmp rax, rcx
+    cmovb rcx, rax
+
+.reduce_ready:
+    mov edx, 1
+    shl rdx, cl
+    mov rax, r14
+    shr rax, cl
+    mov r14, rax
 
     xor r10d, r10d
 .row_loop:
-    cmp r10, [rsp + 40]
-    jae .clear
+    test r14, r14
+    jz .clear
     mov r11, [rsp + 8]
     ASSP_APPEND_ROW 8
-    inc r10
+    add r10, rdx
+    dec r14
     jmp .row_loop
 
 .clear:
     mov qword [rsp + 24], 0
+    xor r14d, r14d
 
 .done:
     ret

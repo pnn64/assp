@@ -222,7 +222,6 @@ parse_dec6_signed:
     xor r11d, r11d
     xor r13d, r13d
     xor r14d, r14d
-    mov r12d, 100000
     jmp .frac_loop
 
 .frac_loop:
@@ -237,13 +236,8 @@ parse_dec6_signed:
     inc r9
     cmp r10d, 6
     jae .extra_digit
-    imul eax, r12d
+    imul r11, r11, 10
     add r11, rax
-    mov eax, r12d
-    xor edx, edx
-    mov ecx, 10
-    div ecx
-    mov r12d, eax
     inc r10d
     inc rsi
     jmp .frac_loop
@@ -258,6 +252,12 @@ parse_dec6_signed:
     jmp .frac_loop
 
 .finish_frac:
+    mov ecx, r10d
+    mov eax, 6
+    cmp ecx, eax
+    cmova ecx, eax
+    lea rdx, [rel scan_dec6_frac_scale]
+    imul r11, qword [rdx + rcx * 8]
     jmp .trailing
 
 .finish_number:
@@ -349,3 +349,7 @@ assp_count_timing_segments:
 
 .done:
     ret
+
+section .rdata
+align 8
+scan_dec6_frac_scale dq 1000000, 100000, 10000, 1000, 100, 10, 1
