@@ -16,14 +16,39 @@ assp_find_byte:
     test rcx, rcx
     jz .not_found
 
+    movd xmm1, r8d
+    punpcklbw xmm1, xmm1
+    punpcklwd xmm1, xmm1
+    pshufd xmm1, xmm1, 0
     xor rax, rax
 
-.loop:
+.wide_loop:
+    cmp rdx, 16
+    jb .tail
+    movdqu xmm0, [rcx + rax]
+    pcmpeqb xmm0, xmm1
+    pmovmskb r10d, xmm0
+    test r10d, r10d
+    jnz .wide_hit
+    add rax, 16
+    sub rdx, 16
+    jmp .wide_loop
+
+.wide_hit:
+    bsf r10d, r10d
+    add rax, r10
+    ret
+
+.tail:
+    test rdx, rdx
+    jz .not_found
+
+.tail_loop:
     cmp byte [rcx + rax], r8b
     je .done
     inc rax
-    cmp rax, rdx
-    jb .loop
+    dec rdx
+    jnz .tail_loop
 
 .not_found:
     mov rax, ASSP_NOT_FOUND

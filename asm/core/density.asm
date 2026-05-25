@@ -8,6 +8,48 @@ global assp_measure_equally_spaced_minimized_8
 
 section .text
 
+%macro ASSP_ROW_STEP_FLAG4 2
+    cmp dword [%1], 30303030h
+    jne %%check
+    xor eax, eax
+    jmp %%done
+
+%%check:
+    movzx eax, byte [%1]
+    movzx ecx, byte [%1 + 1]
+    movzx edx, byte [%1 + 2]
+    movzx r10d, byte [%1 + 3]
+    movzx eax, byte [%2 + rax]
+    or al, [%2 + rcx]
+    or al, [%2 + rdx]
+    or al, [%2 + r10]
+    movzx eax, al
+
+%%done:
+%endmacro
+
+%macro ASSP_ROW_STEP_FLAG 3
+%if %2 == 4
+    ASSP_ROW_STEP_FLAG4 %1, %3
+%else
+    cmp dword [%1], 30303030h
+    jne %%check_both
+    cmp dword [%1 + 4], 30303030h
+    jne %%check_hi
+    xor eax, eax
+    jmp %%done
+%%check_hi:
+    ASSP_ROW_STEP_FLAG4 %1 + 4, %3
+    jmp %%done
+%%check_both:
+    ASSP_ROW_STEP_FLAG4 %1, %3
+    test eax, eax
+    jnz %%done
+    ASSP_ROW_STEP_FLAG4 %1 + 4, %3
+%endif
+%%done:
+%endmacro
+
 %macro ASSP_JMP_IF_STEP4 2
     mov eax, dword [%1]
     mov ecx, eax
@@ -84,6 +126,7 @@ section .text
 %macro ASSP_EQUALLY_SPACED_MINIMIZED 2
 ; rcx = minimized note-data bytes, rdx = len, r8 = optional u8 output, r9 = output cap.
 ; rax = total measure count. Writes 1 for equally spaced measures and 0 otherwise.
+align 32
 %1:
     push rbx
     push rsi
@@ -103,6 +146,7 @@ section .text
     xor r13d, r13d
     xor r14d, r14d
     xor r15d, r15d
+    lea r8, [rel density_note_step_table]
 
 %%line_loop:
     cmp rsi, rdi
@@ -172,11 +216,8 @@ section .text
 
 %%fast_row_lf:
     inc r14
-    ASSP_JMP_IF_ROW_STEP rsi, %2, %%fast_row_lf_note
-    lea rsi, [rsi + %2 + 1]
-    jmp %%line_loop
-%%fast_row_lf_note:
-    inc r15
+    ASSP_ROW_STEP_FLAG rsi, %2, r8
+    add r15, rax
     lea rsi, [rsi + %2 + 1]
     jmp %%line_loop
 
@@ -187,11 +228,8 @@ section .text
     cmp byte [rsi + %2 + 1], 10
     jne %%slow_line
     inc r14
-    ASSP_JMP_IF_ROW_STEP rsi, %2, %%fast_row_cr_note
-    lea rsi, [rsi + %2 + 2]
-    jmp %%line_loop
-%%fast_row_cr_note:
-    inc r15
+    ASSP_ROW_STEP_FLAG rsi, %2, r8
+    add r15, rax
     lea rsi, [rsi + %2 + 2]
     jmp %%line_loop
 
@@ -232,11 +270,8 @@ section .text
     ja %%line_done
 
     inc r14
-    ASSP_JMP_IF_ROW_STEP rsi, %2, %%note_row
-    jmp %%line_done
-
-%%note_row:
-    inc r15
+    ASSP_ROW_STEP_FLAG rsi, %2, r8
+    add r15, rax
     jmp %%line_done
 
 %%comma:
@@ -280,6 +315,7 @@ ASSP_EQUALLY_SPACED_MINIMIZED assp_measure_equally_spaced_minimized_8, 8
 
 ; rcx = note-data bytes, rdx = len, r8 = optional u32 output, r9 = output cap.
 ; rax = total measure count. Writes up to out_cap densities when out is non-null.
+align 32
 assp_measure_densities_4:
     push rbx
     push rsi
@@ -470,8 +506,24 @@ assp_measure_densities_4:
     pop rbx
     ret
 
+section .rdata
+align 64
+density_note_step_table:
+%assign i 0
+%rep 256
+%if i = '1' || i = '2' || i = '4'
+    db 1
+%else
+    db 0
+%endif
+%assign i i+1
+%endrep
+
+section .text
+
 ; rcx = note-data bytes, rdx = len, r8 = optional u32 output, r9 = output cap.
 ; rax = total measure count. Writes up to out_cap densities when out is non-null.
+align 32
 assp_measure_densities_8:
     push rbx
     push rsi
