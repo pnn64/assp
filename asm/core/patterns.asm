@@ -931,7 +931,10 @@ assp_count_basic_patterns_minimized_4:
     push rsi
     push rdi
     push r12
-    sub rsp, 32
+    push r13
+    push r14
+    push r15
+    sub rsp, 40
 
     test r8, r8
     jz .basic_fail
@@ -949,9 +952,10 @@ assp_count_basic_patterns_minimized_4:
     mov rsi, rcx
     lea rdi, [rcx + rdx]
     xor r12d, r12d
-    mov dword [rsp + 0], 0
-    mov dword [rsp + 4], 0
-    mov dword [rsp + 8], 0
+    lea r13, [default_pattern_dfa_goto]
+    lea r14, [default_pattern_dfa_output_lens]
+    lea r15, [default_pattern_dfa_output_starts]
+    lea r9, [basic_pattern_offset_table]
 
 .basic_line_loop:
     cmp rsi, rdi
@@ -1007,194 +1011,30 @@ assp_count_basic_patterns_minimized_4:
     shl eax, 3
     or ecx, eax
 
-    cmp r12, 2
-    jb .basic_boxes
+    movzx ecx, cl
+    mov r10d, r12d
+    shl r10d, 4
+    add r10d, ecx
+    movzx r12d, word [r13 + r10 * 2]
 
-    mov eax, [rsp + 4]
-    mov edx, [rsp + 8]
-    cmp eax, 4
-    jne .basic_candle_dlu
-    cmp edx, 1
-    jne .basic_candle_dlu
-    cmp ecx, 2
-    jne .basic_candle_right_urd
-    inc dword [rbx + ASSP_BASIC_PATTERNS_CANDLE_LEFT]
-    jmp .basic_candle_right_urd
+    movzx ecx, byte [r14 + r12]
+    test ecx, ecx
+    jz .basic_line_done
 
-.basic_candle_dlu:
-    cmp eax, 2
-    jne .basic_candle_right_urd
-    cmp edx, 1
-    jne .basic_candle_right_urd
-    cmp ecx, 4
-    jne .basic_candle_right_urd
-    inc dword [rbx + ASSP_BASIC_PATTERNS_CANDLE_LEFT]
-
-.basic_candle_right_urd:
-    cmp eax, 4
-    jne .basic_candle_right_dru
-    cmp edx, 8
-    jne .basic_candle_right_dru
-    cmp ecx, 2
-    jne .basic_boxes
-    inc dword [rbx + ASSP_BASIC_PATTERNS_CANDLE_RIGHT]
-    jmp .basic_boxes
-
-.basic_candle_right_dru:
-    cmp eax, 2
-    jne .basic_boxes
-    cmp edx, 8
-    jne .basic_boxes
-    cmp ecx, 4
-    jne .basic_boxes
-    inc dword [rbx + ASSP_BASIC_PATTERNS_CANDLE_RIGHT]
-
-.basic_boxes:
-    cmp r12, 3
-    jb .basic_shift
-
-    mov eax, [rsp + 0]
-    mov edx, [rsp + 4]
-    mov r10d, [rsp + 8]
-
-    cmp eax, 1
-    jne .basic_box_lr_rev
-    cmp edx, 8
-    jne .basic_box_lr_rev
-    cmp r10d, 1
-    jne .basic_box_lr_rev
-    cmp ecx, 8
-    jne .basic_box_ud
-    inc dword [rbx + ASSP_BASIC_PATTERNS_BOX_LR]
-    jmp .basic_box_ud
-.basic_box_lr_rev:
-    cmp eax, 8
-    jne .basic_box_ud
-    cmp edx, 1
-    jne .basic_box_ud
-    cmp r10d, 8
-    jne .basic_box_ud
-    cmp ecx, 1
-    jne .basic_box_ud
-    inc dword [rbx + ASSP_BASIC_PATTERNS_BOX_LR]
-
-.basic_box_ud:
-    cmp eax, 4
-    jne .basic_box_ud_rev
-    cmp edx, 2
-    jne .basic_box_ud_rev
-    cmp r10d, 4
-    jne .basic_box_ud_rev
-    cmp ecx, 2
-    jne .basic_box_ld
-    inc dword [rbx + ASSP_BASIC_PATTERNS_BOX_UD]
-    jmp .basic_box_ld
-.basic_box_ud_rev:
-    cmp eax, 2
-    jne .basic_box_ld
-    cmp edx, 4
-    jne .basic_box_ld
-    cmp r10d, 2
-    jne .basic_box_ld
-    cmp ecx, 4
-    jne .basic_box_ld
-    inc dword [rbx + ASSP_BASIC_PATTERNS_BOX_UD]
-
-.basic_box_ld:
-    cmp eax, 1
-    jne .basic_box_ld_rev
-    cmp edx, 2
-    jne .basic_box_ld_rev
-    cmp r10d, 1
-    jne .basic_box_ld_rev
-    cmp ecx, 2
-    jne .basic_box_lu
-    inc dword [rbx + ASSP_BASIC_PATTERNS_BOX_LD]
-    jmp .basic_box_lu
-.basic_box_ld_rev:
-    cmp eax, 2
-    jne .basic_box_lu
-    cmp edx, 1
-    jne .basic_box_lu
-    cmp r10d, 2
-    jne .basic_box_lu
-    cmp ecx, 1
-    jne .basic_box_lu
-    inc dword [rbx + ASSP_BASIC_PATTERNS_BOX_LD]
-
-.basic_box_lu:
-    cmp eax, 1
-    jne .basic_box_lu_rev
-    cmp edx, 4
-    jne .basic_box_lu_rev
-    cmp r10d, 1
-    jne .basic_box_lu_rev
-    cmp ecx, 4
-    jne .basic_box_rd
-    inc dword [rbx + ASSP_BASIC_PATTERNS_BOX_LU]
-    jmp .basic_box_rd
-.basic_box_lu_rev:
-    cmp eax, 4
-    jne .basic_box_rd
-    cmp edx, 1
-    jne .basic_box_rd
-    cmp r10d, 4
-    jne .basic_box_rd
-    cmp ecx, 1
-    jne .basic_box_rd
-    inc dword [rbx + ASSP_BASIC_PATTERNS_BOX_LU]
-
-.basic_box_rd:
-    cmp eax, 8
-    jne .basic_box_rd_rev
-    cmp edx, 2
-    jne .basic_box_rd_rev
-    cmp r10d, 8
-    jne .basic_box_rd_rev
-    cmp ecx, 2
-    jne .basic_box_ru
-    inc dword [rbx + ASSP_BASIC_PATTERNS_BOX_RD]
-    jmp .basic_box_ru
-.basic_box_rd_rev:
-    cmp eax, 2
-    jne .basic_box_ru
-    cmp edx, 8
-    jne .basic_box_ru
-    cmp r10d, 2
-    jne .basic_box_ru
-    cmp ecx, 8
-    jne .basic_box_ru
-    inc dword [rbx + ASSP_BASIC_PATTERNS_BOX_RD]
-
-.basic_box_ru:
-    cmp eax, 8
-    jne .basic_box_ru_rev
-    cmp edx, 4
-    jne .basic_box_ru_rev
-    cmp r10d, 8
-    jne .basic_box_ru_rev
-    cmp ecx, 4
-    jne .basic_shift
-    inc dword [rbx + ASSP_BASIC_PATTERNS_BOX_RU]
-    jmp .basic_shift
-.basic_box_ru_rev:
-    cmp eax, 4
-    jne .basic_shift
-    cmp edx, 8
-    jne .basic_shift
-    cmp r10d, 4
-    jne .basic_shift
-    cmp ecx, 8
-    jne .basic_shift
-    inc dword [rbx + ASSP_BASIC_PATTERNS_BOX_RU]
-
-.basic_shift:
-    mov edx, [rsp + 4]
-    mov [rsp + 0], edx
-    mov edx, [rsp + 8]
-    mov [rsp + 4], edx
-    mov [rsp + 8], ecx
-    inc r12
+    movzx edx, word [r15 + r12 * 2]
+    lea r11, [default_pattern_dfa_outputs]
+    add r11, rdx
+.basic_output_loop:
+    movzx eax, byte [r11]
+    sub eax, ASSP_PATTERN_BOX_LR
+    cmp eax, ASSP_PATTERN_CANDLE_RIGHT - ASSP_PATTERN_BOX_LR
+    ja .basic_output_next
+    movzx eax, byte [r9 + rax]
+    inc dword [rbx + rax]
+.basic_output_next:
+    inc r11
+    dec ecx
+    jnz .basic_output_loop
 
 .basic_line_done:
     mov rsi, [rsp + 16]
@@ -1208,7 +1048,10 @@ assp_count_basic_patterns_minimized_4:
     xor eax, eax
 
 .basic_done:
-    add rsp, 32
+    add rsp, 40
+    pop r15
+    pop r14
+    pop r13
     pop r12
     pop rdi
     pop rsi
@@ -1493,11 +1336,23 @@ section .rdata
 
 patterns_f64_100 dq 100.0
 
+basic_pattern_offset_table:
+    db ASSP_BASIC_PATTERNS_BOX_LR
+    db ASSP_BASIC_PATTERNS_BOX_UD
+    db ASSP_BASIC_PATTERNS_BOX_LD
+    db ASSP_BASIC_PATTERNS_BOX_LU
+    db ASSP_BASIC_PATTERNS_BOX_RD
+    db ASSP_BASIC_PATTERNS_BOX_RU
+    db ASSP_BASIC_PATTERNS_CANDLE_LEFT
+    db ASSP_BASIC_PATTERNS_CANDLE_RIGHT
+
+align 64
 note_active_table:
     times 49 db 0
     db 1, 1, 0, 1
     times 203 db 0
 
+align 64
 %include "default_pattern_dfa.inc"
 
 facing_mask_to_arrow:
