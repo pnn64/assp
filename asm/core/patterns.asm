@@ -41,6 +41,29 @@ assp_collect_bitmasks_minimized_4:
     cmp rsi, rdi
     jae .collect_success
 
+    mov al, [rsi]
+    cmp al, ';'
+    je .collect_success
+    cmp al, ','
+    je .collect_fast_separator
+    lea rax, [rsi + 5]
+    cmp rax, rdi
+    ja .collect_slow_line
+    cmp byte [rsi + 4], 10
+    jne .collect_slow_line
+    mov [rsp], rax
+    jmp .collect_row
+
+.collect_fast_separator:
+    lea rax, [rsi + 2]
+    cmp rax, rdi
+    ja .collect_slow_line
+    cmp byte [rsi + 1], 10
+    jne .collect_slow_line
+    mov rsi, rax
+    jmp .collect_line_loop
+
+.collect_slow_line:
     mov r10, rsi
 .collect_find_line_end:
     cmp r10, rdi
@@ -76,6 +99,7 @@ assp_collect_bitmasks_minimized_4:
     cmp rax, r11
     ja .collect_line_done
 
+.collect_row:
     cmp r13, r12
     jae .collect_fail
 
@@ -282,6 +306,29 @@ assp_count_anchors_minimized_4:
     cmp rsi, rdi
     jae .success
 
+    mov al, [rsi]
+    cmp al, ';'
+    je .success
+    cmp al, ','
+    je .fast_separator
+    lea rax, [rsi + 5]
+    cmp rax, rdi
+    ja .slow_line
+    cmp byte [rsi + 4], 10
+    jne .slow_line
+    mov r9, rax
+    jmp .row_mask
+
+.fast_separator:
+    lea rax, [rsi + 2]
+    cmp rax, rdi
+    ja .slow_line
+    cmp byte [rsi + 1], 10
+    jne .slow_line
+    mov rsi, rax
+    jmp .line_loop
+
+.slow_line:
     mov r10, rsi
 .find_line_end:
     cmp r10, rdi
@@ -317,6 +364,7 @@ assp_count_anchors_minimized_4:
     cmp rax, r11
     ja .line_done
 
+.row_mask:
     lea r11, [rel note_active_pair_table]
     movzx eax, word [rsi]
     movzx ecx, byte [r11 + rax]
@@ -412,6 +460,29 @@ assp_count_facing_steps_minimized_4:
     cmp rsi, rdi
     jae .facing_eof
 
+    mov al, [rsi]
+    cmp al, ';'
+    je .facing_eof
+    cmp al, ','
+    je .facing_fast_separator
+    lea rax, [rsi + 5]
+    cmp rax, rdi
+    ja .facing_slow_line
+    cmp byte [rsi + 4], 10
+    jne .facing_slow_line
+    mov [rsp + 8], rax
+    jmp .facing_row_mask
+
+.facing_fast_separator:
+    lea rax, [rsi + 2]
+    cmp rax, rdi
+    ja .facing_slow_line
+    cmp byte [rsi + 1], 10
+    jne .facing_slow_line
+    mov rsi, rax
+    jmp .facing_line_loop
+
+.facing_slow_line:
     mov r10, rsi
 .facing_find_line_end:
     cmp r10, rdi
@@ -447,6 +518,7 @@ assp_count_facing_steps_minimized_4:
     cmp rax, r11
     ja .facing_line_done
 
+.facing_row_mask:
     lea r10, [note_active_pair_table]
     movzx eax, word [rsi]
     movzx ecx, byte [r10 + rax]
@@ -779,6 +851,29 @@ assp_count_basic_patterns_minimized_4:
     cmp rsi, rdi
     jae .basic_success
 
+    mov al, [rsi]
+    cmp al, ';'
+    je .basic_success
+    cmp al, ','
+    je .basic_fast_separator
+    lea rax, [rsi + 5]
+    cmp rax, rdi
+    ja .basic_slow_line
+    cmp byte [rsi + 4], 10
+    jne .basic_slow_line
+    mov [rsp + 16], rax
+    jmp .basic_row_mask
+
+.basic_fast_separator:
+    lea rax, [rsi + 2]
+    cmp rax, rdi
+    ja .basic_slow_line
+    cmp byte [rsi + 1], 10
+    jne .basic_slow_line
+    mov rsi, rax
+    jmp .basic_line_loop
+
+.basic_slow_line:
     mov r10, rsi
 .basic_find_line_end:
     cmp r10, rdi
@@ -814,6 +909,7 @@ assp_count_basic_patterns_minimized_4:
     cmp rax, r11
     ja .basic_line_done
 
+.basic_row_mask:
     lea r11, [rel note_active_pair_table]
     movzx eax, word [rsi]
     movzx ecx, byte [r11 + rax]
@@ -992,6 +1088,29 @@ assp_count_default_patterns_minimized_4:
     cmp rsi, rdi
     jae .default_success
 
+    mov al, [rsi]
+    cmp al, ';'
+    je .default_success
+    cmp al, ','
+    je .default_fast_separator
+    lea rax, [rsi + 5]
+    cmp rax, rdi
+    ja .default_slow_line
+    cmp byte [rsi + 4], 10
+    jne .default_slow_line
+    mov [rsp + 16], rax
+    jmp .default_row_mask
+
+.default_fast_separator:
+    lea rax, [rsi + 2]
+    cmp rax, rdi
+    ja .default_slow_line
+    cmp byte [rsi + 1], 10
+    jne .default_slow_line
+    mov rsi, rax
+    jmp .default_line_loop
+
+.default_slow_line:
     mov r10, rsi
 .default_find_line_end:
     cmp r10, rdi
@@ -1027,6 +1146,7 @@ assp_count_default_patterns_minimized_4:
     cmp rax, r11
     ja .default_line_done
 
+.default_row_mask:
     lea r11, [rel note_active_pair_table]
     movzx eax, word [rsi]
     movzx ecx, byte [r11 + rax]
