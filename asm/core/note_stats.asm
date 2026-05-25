@@ -317,6 +317,12 @@ assp_count_note_stats_4:
 
     cmp dword [rsi], 30303030h
     je .zero_row
+    mov eax, [rsi]
+    mov ecx, eax
+    and ecx, 0fefefefeh
+    cmp ecx, 30303030h
+    je .tap_only_row
+
     invalid_lane_break 0, .malformed_row
     invalid_lane_break 1, .malformed_row
     invalid_lane_break 2, .malformed_row
@@ -381,6 +387,84 @@ assp_count_note_stats_4:
 
 .malformed_row:
     inc qword [rbx + ASSP_NOTE_STATS_MALFORMED_ROWS]
+    jmp .skip_line
+
+.tap_only_row:
+    xor eax, 30303030h
+    mov ecx, eax
+    and ecx, 1
+    mov edx, eax
+    shr edx, 7
+    and edx, 2
+    or ecx, edx
+    mov edx, eax
+    shr edx, 14
+    and edx, 4
+    or ecx, edx
+    mov edx, eax
+    shr edx, 21
+    and edx, 8
+    or ecx, edx
+
+    inc qword [rbx + ASSP_NOTE_STATS_ROWS]
+    inc qword [rbx + ASSP_NOTE_STATS_STEPS]
+
+    test cl, 1
+    jz .tap_only_down
+    inc qword [rbx + ASSP_NOTE_STATS_LEFT]
+.tap_only_down:
+    test cl, 2
+    jz .tap_only_up
+    inc qword [rbx + ASSP_NOTE_STATS_DOWN]
+.tap_only_up:
+    test cl, 4
+    jz .tap_only_right
+    inc qword [rbx + ASSP_NOTE_STATS_UP]
+.tap_only_right:
+    test cl, 8
+    jz .tap_only_count
+    inc qword [rbx + ASSP_NOTE_STATS_RIGHT]
+
+.tap_only_count:
+    lea r10, [rel note_stats_popcount4]
+    movzx eax, byte [r10 + rcx]
+    add qword [rbx + ASSP_NOTE_STATS_ARROWS], rax
+    cmp eax, 2
+    jb .tap_only_hand
+    inc qword [rbx + ASSP_NOTE_STATS_JUMPS]
+
+.tap_only_hand:
+    mov edx, r12d
+    add edx, eax
+    cmp edx, 3
+    jb .tap_only_phantom_check
+    inc qword [rbx + ASSP_NOTE_STATS_HANDS]
+
+.tap_only_phantom_check:
+    test r12d, r12d
+    jz .skip_line
+    test cl, 1
+    jz .tap_only_phantom_down
+    cmp qword [rsp + 24], 0
+    jne .tap_only_mark_phantom
+.tap_only_phantom_down:
+    test cl, 2
+    jz .tap_only_phantom_up
+    cmp qword [rsp + 32], 0
+    jne .tap_only_mark_phantom
+.tap_only_phantom_up:
+    test cl, 4
+    jz .tap_only_phantom_right
+    cmp qword [rsp + 40], 0
+    jne .tap_only_mark_phantom
+.tap_only_phantom_right:
+    test cl, 8
+    jz .skip_line
+    cmp qword [rsp + 48], 0
+    je .skip_line
+
+.tap_only_mark_phantom:
+    mov qword [rsp + 16], 1
     jmp .skip_line
 
 .consume_one:
@@ -3786,6 +3870,8 @@ row_no_hold_fake_object_count_8:
     ret
 
 section .rdata
+align 16
+note_stats_popcount4 db 0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4
 align 4
 note_stats_const_thousand_f32 dd 1000.0
 note_stats_const_48_f32 dd 48.0
