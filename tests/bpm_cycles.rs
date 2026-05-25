@@ -1,7 +1,7 @@
 use std::arch::x86_64::{_mm_lfence, _rdtsc};
 use std::hint::black_box;
 
-use assp::BpmSegment;
+use assp::{measure_nps_milli_with_events, BpmSegment};
 
 unsafe extern "C" {
     fn assp_bpm_display_range(
@@ -62,10 +62,22 @@ fn variable_bpms() -> Vec<BpmSegment> {
         .collect()
 }
 
+fn timing_events(count: usize, step_beat_milli: i64, value: i64) -> Vec<BpmSegment> {
+    (0..count)
+        .map(|i| BpmSegment {
+            beat_milli: (i as i64 + 1) * step_beat_milli,
+            bpm_milli: value,
+        })
+        .collect()
+}
+
 #[test]
 #[ignore]
 fn bpm_nps_cycles() {
     let bpms = variable_bpms();
+    let stops = timing_events(24, 28_000, 125);
+    let delays = timing_events(16, 36_000, 80);
+    let warps = timing_events(8, 52_000, 2_000);
     let single_bpm = [BpmSegment {
         beat_milli: 0,
         bpm_milli: 175_000,
@@ -75,6 +87,10 @@ fn bpm_nps_cycles() {
     let nps_values: Vec<u32> = (0..4096)
         .map(|i| ((i * 17 + (i / 3) * 29) % 48_000) as u32)
         .collect();
+
+    let event_nps =
+        measure_nps_milli_with_events(&densities, &bpms, &stops, &delays, &warps).unwrap();
+    assert_eq!(event_nps.len(), densities.len());
 
     bench(
         || unsafe {
@@ -89,6 +105,21 @@ fn bpm_nps_cycles() {
         },
         "measure_nps_variable_bpms",
         100,
+        densities.len(),
+    );
+
+    bench(
+        || {
+            black_box(measure_nps_milli_with_events(
+                black_box(&densities),
+                black_box(&bpms),
+                black_box(&stops),
+                black_box(&delays),
+                black_box(&warps),
+            ));
+        },
+        "measure_nps_with_events",
+        10,
         densities.len(),
     );
 

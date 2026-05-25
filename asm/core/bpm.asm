@@ -77,6 +77,19 @@ section .text
 %define NPS_INDEX -104
 %define NPS_START_MS -112
 %define NPS_END_MS -120
+%define NPS_EVT_TARGET -128
+%define NPS_EVT_TIME -136
+%define NPS_EVT_BEAT -144
+%define NPS_EVT_BPM -152
+%define NPS_EVT_WARP_END -160
+%define NPS_EVT_I_BPM -168
+%define NPS_EVT_I_STOP -176
+%define NPS_EVT_I_DELAY -184
+%define NPS_EVT_I_WARP -192
+%define NPS_EVT_BEST_BEAT -200
+%define NPS_EVT_BEST_VAL -208
+%define NPS_EVT_BEST_TYPE -216
+%define NPS_EVT_BEST_PRI -224
 
 %macro ASSP_CONSIDER_TIMING_EVENT 0
     cmp qword [rbp + EVT_BEST_TYPE], -1
@@ -91,6 +104,22 @@ section .text
     mov [rbp + EVT_BEST_VAL], r9
     mov [rbp + EVT_BEST_PRI], r10
     mov [rbp + EVT_BEST_TYPE], r11
+%%done:
+%endmacro
+
+%macro ASSP_NPS_CONSIDER_TIMING_EVENT 0
+    cmp qword [rbp + NPS_EVT_BEST_TYPE], -1
+    je %%store
+    cmp r8, [rbp + NPS_EVT_BEST_BEAT]
+    jl %%store
+    jg %%done
+    cmp r10, [rbp + NPS_EVT_BEST_PRI]
+    jge %%done
+%%store:
+    mov [rbp + NPS_EVT_BEST_BEAT], r8
+    mov [rbp + NPS_EVT_BEST_VAL], r9
+    mov [rbp + NPS_EVT_BEST_PRI], r10
+    mov [rbp + NPS_EVT_BEST_TYPE], r11
 %%done:
 %endmacro
 
@@ -2746,7 +2775,7 @@ assp_measure_nps_milli_with_events:
     push r13
     push r14
     push r15
-    sub rsp, 168
+    sub rsp, 264
 
     mov [rbp + NPS_DENSITIES], rcx
     mov [rbp + NPS_DENSITY_LEN], rdx
@@ -2789,13 +2818,33 @@ assp_measure_nps_milli_with_events:
     je .invalid
 .check_warps:
     cmp qword [rbp + NPS_WARP_LEN], 0
-    je .init
+    je .check_output
     cmp qword [rbp + NPS_WARPS], 0
     je .invalid
+.check_output:
+    cmp qword [rbp + NPS_OUT], 0
+    je .done
 
 .init:
     mov qword [rbp + NPS_INDEX], 0
     mov qword [rbp + NPS_START_MS], 0
+    mov qword [rbp + NPS_EVT_TIME], 0
+    mov qword [rbp + NPS_EVT_BEAT], 0
+    mov qword [rbp + NPS_EVT_BPM], 60000
+    mov qword [rbp + NPS_EVT_WARP_END], 0
+    mov qword [rbp + NPS_EVT_I_BPM], 0
+    mov qword [rbp + NPS_EVT_I_STOP], 0
+    mov qword [rbp + NPS_EVT_I_DELAY], 0
+    mov qword [rbp + NPS_EVT_I_WARP], 0
+
+    cmp qword [rbp + NPS_BPM_LEN], 0
+    je .loop
+    mov rbx, [rbp + NPS_BPMS]
+    mov rax, [rbx + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    cmp rax, 0
+    jg .loop
+    mov rax, [rbx + ASSP_BPM_SEGMENT_BPM_MILLI]
+    mov [rbp + NPS_EVT_BPM], rax
 
 .loop:
     mov r15, [rbp + NPS_INDEX]
@@ -2805,21 +2854,183 @@ assp_measure_nps_milli_with_events:
     mov rax, r15
     inc rax
     imul rax, rax, 4000
+    mov [rbp + NPS_EVT_TARGET], rax
+    jmp .event_select_loop
 
-    mov rcx, [rbp + NPS_BPMS]
-    mov rdx, [rbp + NPS_BPM_LEN]
-    mov r8, [rbp + NPS_STOPS]
-    mov r9, [rbp + NPS_STOP_LEN]
-    mov r10, [rbp + NPS_DELAYS]
-    mov [rsp + 32], r10
-    mov r10, [rbp + NPS_DELAY_LEN]
-    mov [rsp + 40], r10
-    mov r10, [rbp + NPS_WARPS]
-    mov [rsp + 48], r10
-    mov r10, [rbp + NPS_WARP_LEN]
-    mov [rsp + 56], r10
-    mov [rsp + 64], rax
-    call assp_elapsed_ms_with_events
+.event_select_loop:
+    mov qword [rbp + NPS_EVT_BEST_TYPE], -1
+    mov qword [rbp + NPS_EVT_BEST_PRI], 4
+
+.event_check_bpm:
+    mov rax, [rbp + NPS_EVT_I_BPM]
+    cmp rax, [rbp + NPS_BPM_LEN]
+    jae .event_check_stop
+    mov rbx, [rbp + NPS_BPMS]
+    mov rdx, rax
+    shl rdx, 4
+    mov r8, [rbx + rdx + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    mov r9, [rbx + rdx + ASSP_BPM_SEGMENT_BPM_MILLI]
+    xor r10d, r10d
+    xor r11d, r11d
+    ASSP_NPS_CONSIDER_TIMING_EVENT
+
+.event_check_stop:
+    mov rax, [rbp + NPS_EVT_I_STOP]
+    cmp rax, [rbp + NPS_STOP_LEN]
+    jae .event_check_delay
+    mov rbx, [rbp + NPS_STOPS]
+    mov rdx, rax
+    shl rdx, 4
+    mov r8, [rbx + rdx + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    mov r9, [rbx + rdx + ASSP_BPM_SEGMENT_BPM_MILLI]
+    mov r10d, 3
+    mov r11d, 1
+    ASSP_NPS_CONSIDER_TIMING_EVENT
+
+.event_check_delay:
+    mov rax, [rbp + NPS_EVT_I_DELAY]
+    cmp rax, [rbp + NPS_DELAY_LEN]
+    jae .event_check_warp
+    mov rbx, [rbp + NPS_DELAYS]
+    mov rdx, rax
+    shl rdx, 4
+    mov r8, [rbx + rdx + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    mov r9, [rbx + rdx + ASSP_BPM_SEGMENT_BPM_MILLI]
+    mov r10d, 1
+    mov r11d, 2
+    ASSP_NPS_CONSIDER_TIMING_EVENT
+
+.event_check_warp:
+    mov rax, [rbp + NPS_EVT_I_WARP]
+    cmp rax, [rbp + NPS_WARP_LEN]
+    jae .event_selected
+    mov rbx, [rbp + NPS_WARPS]
+    mov rdx, rax
+    shl rdx, 4
+    mov r8, [rbx + rdx + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    mov r9, [rbx + rdx + ASSP_BPM_SEGMENT_BPM_MILLI]
+    mov r10d, 4
+    mov r11d, 3
+    ASSP_NPS_CONSIDER_TIMING_EVENT
+
+.event_selected:
+    cmp qword [rbp + NPS_EVT_BEST_TYPE], -1
+    je .event_tail
+
+    mov r8, [rbp + NPS_EVT_BEST_BEAT]
+    mov rax, [rbp + NPS_EVT_TARGET]
+    cmp r8, rax
+    jl .event_advance_to_event
+    jg .event_tail
+    mov rax, [rbp + NPS_EVT_BEST_TYPE]
+    cmp rax, 1
+    je .event_tail
+    cmp rax, 3
+    je .event_tail
+    jmp .event_advance_to_event
+
+.event_advance_to_event:
+    mov rax, [rbp + NPS_EVT_BEAT]
+    cmp r8, rax
+    jle .event_apply
+
+    mov r10, rax
+    mov r11, [rbp + NPS_EVT_WARP_END]
+    cmp r10, r11
+    jge .event_have_effective_beat
+    mov r10, r11
+.event_have_effective_beat:
+    cmp r8, r10
+    jle .event_store_beat
+    mov r11, [rbp + NPS_EVT_BPM]
+    test r11, r11
+    jle .event_store_beat
+    mov rax, r8
+    sub rax, r10
+    imul rax, rax, 60000000
+    cqo
+    idiv r11
+    add [rbp + NPS_EVT_TIME], rax
+
+.event_store_beat:
+    mov [rbp + NPS_EVT_BEAT], r8
+
+.event_apply:
+    mov rax, [rbp + NPS_EVT_BEST_TYPE]
+    test rax, rax
+    jz .event_apply_bpm
+    cmp rax, 1
+    je .event_apply_stop
+    cmp rax, 2
+    je .event_apply_delay
+    jmp .event_apply_warp
+
+.event_apply_bpm:
+    mov rax, [rbp + NPS_EVT_BEST_VAL]
+    mov [rbp + NPS_EVT_BPM], rax
+    inc qword [rbp + NPS_EVT_I_BPM]
+    jmp .event_select_loop
+
+.event_apply_stop:
+    mov rax, [rbp + NPS_EVT_BEST_VAL]
+    imul rax, 1000
+    add [rbp + NPS_EVT_TIME], rax
+    inc qword [rbp + NPS_EVT_I_STOP]
+    jmp .event_select_loop
+
+.event_apply_delay:
+    mov rax, [rbp + NPS_EVT_BEST_VAL]
+    imul rax, 1000
+    add [rbp + NPS_EVT_TIME], rax
+    inc qword [rbp + NPS_EVT_I_DELAY]
+    jmp .event_select_loop
+
+.event_apply_warp:
+    mov rax, [rbp + NPS_EVT_BEST_BEAT]
+    add rax, [rbp + NPS_EVT_BEST_VAL]
+    cmp rax, [rbp + NPS_EVT_WARP_END]
+    jle .event_warp_done
+    mov [rbp + NPS_EVT_WARP_END], rax
+.event_warp_done:
+    inc qword [rbp + NPS_EVT_I_WARP]
+    jmp .event_select_loop
+
+.event_tail:
+    mov r8, [rbp + NPS_EVT_TARGET]
+    mov r10, [rbp + NPS_EVT_BEAT]
+    mov r11, [rbp + NPS_EVT_WARP_END]
+    cmp r10, r11
+    jge .event_tail_have_effective
+    mov r10, r11
+.event_tail_have_effective:
+    cmp r8, r10
+    jle .event_store_target_beat
+    mov r11, [rbp + NPS_EVT_BPM]
+    test r11, r11
+    jle .event_store_target_beat
+    mov rax, r8
+    sub rax, r10
+    imul rax, rax, 60000000
+    cqo
+    idiv r11
+    add [rbp + NPS_EVT_TIME], rax
+
+.event_store_target_beat:
+    mov rax, [rbp + NPS_EVT_TARGET]
+    mov [rbp + NPS_EVT_BEAT], rax
+    mov rax, [rbp + NPS_EVT_TIME]
+    test rax, rax
+    jle .event_zero
+    add rax, 500
+    xor edx, edx
+    mov r9d, 1000
+    div r9
+    jmp .event_elapsed_done
+
+.event_zero:
+    xor eax, eax
+
+.event_elapsed_done:
     mov [rbp + NPS_END_MS], rax
 
     xor eax, eax
@@ -2867,7 +3078,7 @@ assp_measure_nps_milli_with_events:
     mov rax, ASSP_NOT_FOUND
 
 .pop_done:
-    add rsp, 168
+    add rsp, 264
     pop r15
     pop r14
     pop r13

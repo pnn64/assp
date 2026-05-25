@@ -165,6 +165,20 @@ fn computes_measure_nps_with_timing_events() {
 }
 
 #[test]
+fn computes_measure_nps_with_many_timing_events() {
+    let densities: Vec<u32> = (0..96)
+        .map(|i| if i % 2 == 0 { 16 } else { 32 })
+        .collect();
+    assert_event_nps_match(
+        &densities,
+        b"0=60",
+        b"2=4,18=4,34=4,50=4,66=4",
+        b"10=4,26=4,42=4,58=4,74=4",
+        b"",
+    );
+}
+
+#[test]
 fn computes_median_nps_from_fixed_point_vector() {
     assert_nps_median_match(&[]);
     assert_nps_median_match(&[0, 8000, 16000]);
