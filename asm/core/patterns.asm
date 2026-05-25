@@ -79,19 +79,12 @@ assp_collect_bitmasks_minimized_4:
     cmp r13, r12
     jae .collect_fail
 
-    lea r11, [rel note_active_table]
-    movzx eax, byte [rsi + 0]
+    lea r11, [rel note_active_pair_table]
+    movzx eax, word [rsi]
     movzx ecx, byte [r11 + rax]
-    movzx eax, byte [rsi + 1]
-    movzx eax, byte [r11 + rax]
-    lea ecx, [ecx + eax * 2]
-    movzx eax, byte [rsi + 2]
+    movzx eax, word [rsi + 2]
     movzx eax, byte [r11 + rax]
     shl eax, 2
-    or ecx, eax
-    movzx eax, byte [rsi + 3]
-    movzx eax, byte [r11 + rax]
-    shl eax, 3
     or ecx, eax
     mov [rbx + r13], cl
     inc r13
@@ -143,7 +136,7 @@ assp_collect_bitmasks_compact_4:
     mov rbx, r8
     mov r12, r9
     xor r13d, r13d
-    lea r11, [note_active_table]
+    lea r11, [note_active_pair_table]
 
 .compact_loop:
     cmp rsi, rdi
@@ -166,18 +159,11 @@ assp_collect_bitmasks_compact_4:
     cmp r13, r12
     jae .compact_fail
 
-    movzx eax, byte [rsi + 0]
+    movzx eax, word [rsi]
     movzx ecx, byte [r11 + rax]
-    movzx eax, byte [rsi + 1]
-    movzx eax, byte [r11 + rax]
-    lea ecx, [ecx + eax * 2]
-    movzx eax, byte [rsi + 2]
+    movzx eax, word [rsi + 2]
     movzx eax, byte [r11 + rax]
     shl eax, 2
-    or ecx, eax
-    movzx eax, byte [rsi + 3]
-    movzx eax, byte [r11 + rax]
-    shl eax, 3
     or ecx, eax
     mov [rbx + r13], cl
     inc r13
@@ -331,15 +317,13 @@ assp_count_anchors_minimized_4:
     cmp rax, r11
     ja .line_done
 
-    xor ecx, ecx
-    mov al, [rsi + 0]
-    call .note_bit_0
-    mov al, [rsi + 1]
-    call .note_bit_1
-    mov al, [rsi + 2]
-    call .note_bit_2
-    mov al, [rsi + 3]
-    call .note_bit_3
+    lea r11, [rel note_active_pair_table]
+    movzx eax, word [rsi]
+    movzx ecx, byte [r11 + rax]
+    movzx eax, word [rsi + 2]
+    movzx eax, byte [r11 + rax]
+    shl eax, 2
+    or ecx, eax
 
     mov rax, [rsp + 16]
     cmp rax, 4
@@ -390,51 +374,6 @@ assp_count_anchors_minimized_4:
     pop r12
     pop rdi
     pop rsi
-    ret
-
-.note_bit_0:
-    cmp al, '1'
-    je .set_0
-    cmp al, '2'
-    je .set_0
-    cmp al, '4'
-    jne .bit_ret
-.set_0:
-    or ecx, 1
-    ret
-
-.note_bit_1:
-    cmp al, '1'
-    je .set_1
-    cmp al, '2'
-    je .set_1
-    cmp al, '4'
-    jne .bit_ret
-.set_1:
-    or ecx, 2
-    ret
-
-.note_bit_2:
-    cmp al, '1'
-    je .set_2
-    cmp al, '2'
-    je .set_2
-    cmp al, '4'
-    jne .bit_ret
-.set_2:
-    or ecx, 4
-    ret
-
-.note_bit_3:
-    cmp al, '1'
-    je .set_3
-    cmp al, '2'
-    je .set_3
-    cmp al, '4'
-    jne .bit_ret
-.set_3:
-    or ecx, 8
-.bit_ret:
     ret
 
 ; rcx = minimized 4-panel note-data bytes, rdx = len, r8 = mono threshold,
@@ -508,71 +447,16 @@ assp_count_facing_steps_minimized_4:
     cmp rax, r11
     ja .facing_line_done
 
-    xor ecx, ecx
-    mov al, [rsi + 0]
-    cmp al, '1'
-    je .facing_set_0
-    cmp al, '2'
-    je .facing_set_0
-    cmp al, '4'
-    jne .facing_col_1
-.facing_set_0:
-    or ecx, 1
-.facing_col_1:
-    mov al, [rsi + 1]
-    cmp al, '1'
-    je .facing_set_1
-    cmp al, '2'
-    je .facing_set_1
-    cmp al, '4'
-    jne .facing_col_2
-.facing_set_1:
-    or ecx, 2
-.facing_col_2:
-    mov al, [rsi + 2]
-    cmp al, '1'
-    je .facing_set_2
-    cmp al, '2'
-    je .facing_set_2
-    cmp al, '4'
-    jne .facing_col_3
-.facing_set_2:
-    or ecx, 4
-.facing_col_3:
-    mov al, [rsi + 3]
-    cmp al, '1'
-    je .facing_set_3
-    cmp al, '2'
-    je .facing_set_3
-    cmp al, '4'
-    jne .facing_mask_done
-.facing_set_3:
-    or ecx, 8
+    lea r10, [note_active_pair_table]
+    movzx eax, word [rsi]
+    movzx ecx, byte [r10 + rax]
+    movzx eax, word [rsi + 2]
+    movzx eax, byte [r10 + rax]
+    shl eax, 2
+    or ecx, eax
 
-.facing_mask_done:
-    cmp ecx, 1
-    je .facing_arrow_left
-    cmp ecx, 2
-    je .facing_arrow_down
-    cmp ecx, 4
-    je .facing_arrow_up
-    cmp ecx, 8
-    je .facing_arrow_right
-    xor ecx, ecx
-    jmp .facing_apply_arrow
-.facing_arrow_left:
-    mov ecx, 1
-    jmp .facing_apply_arrow
-.facing_arrow_down:
-    mov ecx, 2
-    jmp .facing_apply_arrow
-.facing_arrow_up:
-    mov ecx, 3
-    jmp .facing_apply_arrow
-.facing_arrow_right:
-    mov ecx, 4
-
-.facing_apply_arrow:
+    lea r10, [facing_mask_to_arrow]
+    movzx ecx, byte [r10 + rcx]
     test ecx, ecx
     jnz .facing_has_arrow
     test r15, r15
@@ -590,85 +474,33 @@ assp_count_facing_steps_minimized_4:
     xor r13d, r13d
     mov r14d, 1
     mov r15, rcx
-    call .facing_forced_foot
+    lea r10, [facing_forced_foot_table]
+    movzx eax, byte [r10 + rcx]
     mov [rsp + 0], rax
     jmp .facing_line_done
 
 .facing_continue_sequence:
-    xor edx, edx
-    cmp r15, 1
-    je .facing_prev_left
-    cmp r15, 2
-    je .facing_prev_down
-    cmp r15, 3
-    je .facing_prev_up
-    jmp .facing_prev_right
+    mov eax, r15d
+    lea eax, [rax + rax * 4]
+    add eax, ecx
+    lea r10, [facing_dir_table]
+    movzx edx, byte [r10 + rax]
 
-.facing_prev_left:
-    cmp ecx, 3
-    je .facing_dir_left
-    cmp ecx, 2
-    je .facing_dir_right
-    jmp .facing_dir_done
-.facing_prev_down:
-    cmp ecx, 4
-    je .facing_dir_left
-    cmp ecx, 1
-    je .facing_dir_right
-    jmp .facing_dir_done
-.facing_prev_up:
-    cmp ecx, 1
-    je .facing_dir_left
-    cmp ecx, 4
-    je .facing_dir_right
-    jmp .facing_dir_done
-.facing_prev_right:
-    cmp ecx, 2
-    je .facing_dir_left
-    cmp ecx, 3
-    je .facing_dir_right
-    jmp .facing_dir_done
-.facing_dir_left:
-    mov edx, 1
-    jmp .facing_dir_done
-.facing_dir_right:
-    mov edx, 2
-
-.facing_dir_done:
-    mov [rsp + 16], rcx
-    call .facing_forced_foot
-    mov r10, rax
-    mov rax, [rsp + 0]
-    test rax, rax
-    jz .facing_store_new_foot
-    test r10, r10
-    jz .facing_use_opposite
-    cmp rax, 1
-    je .facing_expected_right
-    mov r11d, 1
-    jmp .facing_check_expected
-.facing_expected_right:
-    mov r11d, 2
-.facing_check_expected:
-    cmp r10, r11
-    je .facing_store_new_foot
+    mov eax, [rsp + 0]
+    lea eax, [rax + rax * 4]
+    add eax, ecx
+    lea r10, [facing_foot_table]
+    movzx eax, byte [r10 + rax]
+    mov r10d, eax
+    and r10d, 3
+    mov [rsp + 0], r10
+    test al, 4
+    jz .facing_step
     call .facing_finalize
     xor r13d, r13d
     xor r14d, r14d
-    jmp .facing_store_new_foot
 
-.facing_use_opposite:
-    cmp rax, 1
-    je .facing_opp_right
-    mov r10d, 1
-    jmp .facing_store_new_foot
-.facing_opp_right:
-    mov r10d, 2
-
-.facing_store_new_foot:
-    mov [rsp + 0], r10
-    mov rcx, [rsp + 16]
-
+.facing_step:
     test r13, r13
     jz .facing_state_wait
     cmp r13, 1
@@ -746,20 +578,6 @@ assp_count_facing_steps_minimized_4:
 .facing_finalize_left:
     add dword [rbx + 0], r14d
 .facing_finalize_done:
-    ret
-
-.facing_forced_foot:
-    cmp ecx, 1
-    je .facing_force_left
-    cmp ecx, 4
-    je .facing_force_right
-    xor eax, eax
-    ret
-.facing_force_left:
-    mov eax, 1
-    ret
-.facing_force_right:
-    mov eax, 2
     ret
 
 ; rcx = bitmask bytes, rdx = count, r8 = mono threshold,
@@ -996,19 +814,12 @@ assp_count_basic_patterns_minimized_4:
     cmp rax, r11
     ja .basic_line_done
 
-    lea r11, [rel note_active_table]
-    movzx eax, byte [rsi + 0]
+    lea r11, [rel note_active_pair_table]
+    movzx eax, word [rsi]
     movzx ecx, byte [r11 + rax]
-    movzx eax, byte [rsi + 1]
-    movzx eax, byte [r11 + rax]
-    lea ecx, [ecx + eax * 2]
-    movzx eax, byte [rsi + 2]
+    movzx eax, word [rsi + 2]
     movzx eax, byte [r11 + rax]
     shl eax, 2
-    or ecx, eax
-    movzx eax, byte [rsi + 3]
-    movzx eax, byte [r11 + rax]
-    shl eax, 3
     or ecx, eax
 
     movzx ecx, cl
@@ -1216,19 +1027,12 @@ assp_count_default_patterns_minimized_4:
     cmp rax, r11
     ja .default_line_done
 
-    lea r11, [rel note_active_table]
-    movzx eax, byte [rsi + 0]
+    lea r11, [rel note_active_pair_table]
+    movzx eax, word [rsi]
     movzx ecx, byte [r11 + rax]
-    movzx eax, byte [rsi + 1]
-    movzx eax, byte [r11 + rax]
-    lea ecx, [ecx + eax * 2]
-    movzx eax, byte [rsi + 2]
+    movzx eax, word [rsi + 2]
     movzx eax, byte [r11 + rax]
     shl eax, 2
-    or ecx, eax
-    movzx eax, byte [rsi + 3]
-    movzx eax, byte [r11 + rax]
-    shl eax, 3
     or ecx, eax
 
     movzx ecx, cl
@@ -1347,10 +1151,21 @@ basic_pattern_offset_table:
     db ASSP_BASIC_PATTERNS_CANDLE_RIGHT
 
 align 64
-note_active_table:
-    times 49 db 0
-    db 1, 1, 0, 1
-    times 203 db 0
+note_active_pair_table:
+%assign i 0
+%rep 65536
+%assign lo (i & 0ffh)
+%assign hi ((i >> 8) & 0ffh)
+%assign mask 0
+%if lo = '1' || lo = '2' || lo = '4'
+%assign mask mask | 1
+%endif
+%if hi = '1' || hi = '2' || hi = '4'
+%assign mask mask | 2
+%endif
+    db mask
+%assign i i+1
+%endrep
 
 align 64
 %include "default_pattern_dfa.inc"

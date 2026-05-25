@@ -5,6 +5,13 @@ use std::os::raw::c_int;
 use assp::{BasicPatterns, PATTERN_COUNT, find_chart_by_index, minimize_chart_4};
 
 unsafe extern "C" {
+    fn assp_count_anchors_minimized_4(data: *const u8, len: usize, out: *mut u32) -> c_int;
+    fn assp_count_facing_steps_minimized_4(
+        data: *const u8,
+        len: usize,
+        mono_threshold: usize,
+        out: *mut u32,
+    ) -> c_int;
     fn assp_count_basic_patterns_minimized_4(
         data: *const u8,
         len: usize,
@@ -80,6 +87,8 @@ fn patterns_cycles() {
 
     let mut basic = BasicPatterns::default();
     let mut default = [0u32; PATTERN_COUNT];
+    let mut anchors = [0u32; 4];
+    let mut facing = [0u32; 2];
 
     bench(
         || unsafe {
@@ -129,6 +138,33 @@ fn patterns_cycles() {
             ));
         },
         "basic_patterns_min_4_camellia",
+        300,
+        camellia_min.len(),
+    );
+
+    bench(
+        || unsafe {
+            black_box(assp_count_anchors_minimized_4(
+                black_box(camellia_min.as_ptr()),
+                black_box(camellia_min.len()),
+                black_box(anchors.as_mut_ptr()),
+            ));
+        },
+        "anchors_min_4_camellia",
+        300,
+        camellia_min.len(),
+    );
+
+    bench(
+        || unsafe {
+            black_box(assp_count_facing_steps_minimized_4(
+                black_box(camellia_min.as_ptr()),
+                black_box(camellia_min.len()),
+                black_box(0),
+                black_box(facing.as_mut_ptr()),
+            ));
+        },
+        "facing_min_4_camellia",
         300,
         camellia_min.len(),
     );
