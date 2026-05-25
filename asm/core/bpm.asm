@@ -275,7 +275,7 @@ assp_parse_speed_map:
     push r13
     push r14
     push r15
-    sub rsp, 80
+    sub rsp, 96
 
     test rdx, rdx
     jz .empty
@@ -287,6 +287,8 @@ assp_parse_speed_map:
     mov rdi, r8
     mov r13, r9
     xor r14d, r14d
+    mov qword [rsp + 72], 0
+    mov qword [rsp + 80], 0
 
 .entry_loop:
     cmp rsi, r12
@@ -457,6 +459,15 @@ assp_parse_speed_map:
     mov rax, [rsp + 56]
     mov [rdi + r10 + ASSP_SPEED_SEGMENT_UNIT], rax
 
+    mov rax, [rsp + 32]
+    test r14, r14
+    jz .store_last_beat
+    cmp rax, [rsp + 72]
+    jge .store_last_beat
+    mov qword [rsp + 80], 1
+.store_last_beat:
+    mov [rsp + 72], rax
+
 .inc_count:
     inc r14
 
@@ -477,6 +488,8 @@ assp_parse_speed_map:
     jb .done
     cmp r14, r13
     ja .done
+    cmp qword [rsp + 80], 0
+    je .done
 
     mov r8d, 1
 .sort_outer:
@@ -538,7 +551,7 @@ assp_parse_speed_map:
     mov rax, ASSP_NOT_FOUND
 
 .pop_done:
-    add rsp, 80
+    add rsp, 96
     pop r15
     pop r14
     pop r13
@@ -560,7 +573,7 @@ assp_parse_timing_seconds_map:
     push r13
     push r14
     push r15
-    sub rsp, 64
+    sub rsp, 80
 
     test rdx, rdx
     jz .empty
@@ -572,6 +585,8 @@ assp_parse_timing_seconds_map:
     mov rdi, r8
     mov r13, r9
     xor r14d, r14d
+    mov qword [rsp + 56], 0
+    mov qword [rsp + 64], 0
 
 .entry_loop:
     cmp rsi, r12
@@ -687,6 +702,15 @@ assp_parse_timing_seconds_map:
     mov rax, [rsp + 32]
     mov [rdi + r10 + ASSP_BPM_SEGMENT_BPM_MILLI], rax
 
+    mov rax, [rsp + 24]
+    test r14, r14
+    jz .store_last_beat
+    cmp rax, [rsp + 56]
+    jge .store_last_beat
+    mov qword [rsp + 64], 1
+.store_last_beat:
+    mov [rsp + 56], rax
+
 .inc_count:
     inc r14
 
@@ -707,6 +731,8 @@ assp_parse_timing_seconds_map:
     jb .done
     cmp r14, r13
     ja .done
+    cmp qword [rsp + 64], 0
+    je .done
 
     mov r8d, 1
 .sort_outer:
@@ -756,7 +782,7 @@ assp_parse_timing_seconds_map:
     mov rax, ASSP_NOT_FOUND
 
 .pop_done:
-    add rsp, 64
+    add rsp, 80
     pop r15
     pop r14
     pop r13
@@ -3395,7 +3421,7 @@ assp_parse_bpm_map:
     push r13
     push r14
     push r15
-    sub rsp, 64
+    sub rsp, 80
 
     test rdx, rdx
     jz .empty
@@ -3407,6 +3433,8 @@ assp_parse_bpm_map:
     mov rdi, r8
     mov r13, r9
     xor r14d, r14d
+    mov qword [rsp + 56], 0
+    mov qword [rsp + 64], 0
 
 .entry_loop:
     cmp rsi, r12
@@ -3522,6 +3550,15 @@ assp_parse_bpm_map:
     mov rax, [rsp + 32]
     mov [rdi + r10 + ASSP_BPM_SEGMENT_BPM_MILLI], rax
 
+    mov rax, [rsp + 24]
+    test r14, r14
+    jz .store_last_beat
+    cmp rax, [rsp + 56]
+    jge .store_last_beat
+    mov qword [rsp + 64], 1
+.store_last_beat:
+    mov [rsp + 56], rax
+
 .inc_count:
     inc r14
 
@@ -3542,6 +3579,8 @@ assp_parse_bpm_map:
     jb .done
     cmp r14, r13
     ja .done
+    cmp qword [rsp + 64], 0
+    je .done
 
     mov r8d, 1
 .sort_outer:
@@ -3591,7 +3630,7 @@ assp_parse_bpm_map:
     mov rax, ASSP_NOT_FOUND
 
 .pop_done:
-    add rsp, 64
+    add rsp, 80
     pop r15
     pop r14
     pop r13
