@@ -3,11 +3,32 @@ use std::hint::black_box;
 
 use assp::BpmSegment;
 
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+struct SpeedSegment {
+    beat_milli: i64,
+    ratio_micro: i64,
+    delay_micro: i64,
+    unit: i64,
+}
+
 unsafe extern "C" {
     fn assp_parse_bpm_map(
         data: *const u8,
         len: usize,
         out: *mut BpmSegment,
+        out_cap: usize,
+    ) -> usize;
+    fn assp_parse_timing_seconds_map(
+        data: *const u8,
+        len: usize,
+        out: *mut BpmSegment,
+        out_cap: usize,
+    ) -> usize;
+    fn assp_parse_speed_map(
+        data: *const u8,
+        len: usize,
+        out: *mut SpeedSegment,
         out_cap: usize,
     ) -> usize;
     fn assp_parse_offset_ms(data: *const u8, len: usize) -> i64;
@@ -72,6 +93,19 @@ fn scroll_map(entries: usize) -> Vec<u8> {
     data
 }
 
+fn seconds_map(entries: usize) -> Vec<u8> {
+    let mut data = Vec::with_capacity(entries * 24);
+    for i in 0..entries {
+        if i != 0 {
+            data.push(b',');
+        }
+        let beat = i * 3;
+        let value = if i % 9 == 0 { "-0.125000" } else { "0.250001" };
+        data.extend_from_slice(format!("{beat}.{:03}={value}", i % 1000).as_bytes());
+    }
+    data
+}
+
 fn speed_map(entries: usize) -> Vec<u8> {
     let mut data = Vec::with_capacity(entries * 32);
     for i in 0..entries {
@@ -89,11 +123,13 @@ fn speed_map(entries: usize) -> Vec<u8> {
 #[ignore]
 fn parse_cycles() {
     let bpm = bpm_map(256);
+    let seconds = seconds_map(256);
     let scrolls = scroll_map(256);
     let speeds = speed_map(256);
     let offset_ms = b"-12345.6789";
     let offset_us = b"-12345.6789019";
     let mut out = vec![BpmSegment::default(); 256];
+    let mut speed_out = vec![SpeedSegment::default(); 256];
 
     bench(
         || unsafe {
@@ -105,6 +141,34 @@ fn parse_cycles() {
             ));
         },
         "parse_bpm_map_256",
+        10_000,
+        256,
+    );
+
+    bench(
+        || unsafe {
+            black_box(assp_parse_timing_seconds_map(
+                black_box(seconds.as_ptr()),
+                black_box(seconds.len()),
+                black_box(out.as_mut_ptr()),
+                black_box(out.len()),
+            ));
+        },
+        "parse_timing_seconds_map_256",
+        10_000,
+        256,
+    );
+
+    bench(
+        || unsafe {
+            black_box(assp_parse_speed_map(
+                black_box(speeds.as_ptr()),
+                black_box(speeds.len()),
+                black_box(speed_out.as_mut_ptr()),
+                black_box(speed_out.len()),
+            ));
+        },
+        "parse_speed_map_256",
         10_000,
         256,
     );

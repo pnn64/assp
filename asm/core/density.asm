@@ -50,54 +50,6 @@ section .text
 %%done:
 %endmacro
 
-%macro ASSP_JMP_IF_STEP4 2
-    mov eax, dword [%1]
-    mov ecx, eax
-    xor ecx, 0x31313131
-    mov edx, ecx
-    sub edx, 0x01010101
-    not ecx
-    and edx, ecx
-    and edx, 0x80808080
-    jnz %2
-
-    mov ecx, eax
-    xor ecx, 0x32323232
-    mov edx, ecx
-    sub edx, 0x01010101
-    not ecx
-    and edx, ecx
-    and edx, 0x80808080
-    jnz %2
-
-    xor eax, 0x34343434
-    mov edx, eax
-    sub edx, 0x01010101
-    not eax
-    and edx, eax
-    and edx, 0x80808080
-    jnz %2
-%endmacro
-
-%macro ASSP_JMP_IF_ROW_STEP 3
-%if %2 == 4
-    cmp dword [%1], 30303030h
-    je %%done
-    ASSP_JMP_IF_STEP4 %1, %3
-%else
-    cmp dword [%1], 30303030h
-    jne %%check_both
-    cmp dword [%1 + 4], 30303030h
-    je %%done
-    ASSP_JMP_IF_STEP4 %1 + 4, %3
-    jmp %%done
-%%check_both:
-    ASSP_JMP_IF_STEP4 %1, %3
-    ASSP_JMP_IF_STEP4 %1 + 4, %3
-%endif
-%%done:
-%endmacro
-
 %macro ASSP_STORE_DENSITY 0
     test rbx, rbx
     jz %%count
@@ -334,6 +286,7 @@ assp_measure_densities_4:
     mov r12, r9
     xor r13d, r13d
     xor r14d, r14d
+    lea r8, [rel density_note_step_table]
 
 .line_loop:
     cmp rsi, rdi
@@ -404,11 +357,8 @@ assp_measure_densities_4:
     jmp .done
 
 .fast_row_lf:
-    ASSP_JMP_IF_ROW_STEP rsi, 4, .fast_row_lf_note
-    lea rsi, [rsi + 5]
-    jmp .line_loop
-.fast_row_lf_note:
-    inc r14d
+    ASSP_ROW_STEP_FLAG rsi, 4, r8
+    add r14d, eax
     lea rsi, [rsi + 5]
     jmp .line_loop
 
@@ -418,11 +368,8 @@ assp_measure_densities_4:
     jae .slow_line
     cmp byte [rsi + 5], 10
     jne .slow_line
-    ASSP_JMP_IF_ROW_STEP rsi, 4, .fast_row_cr_note
-    lea rsi, [rsi + 6]
-    jmp .line_loop
-.fast_row_cr_note:
-    inc r14d
+    ASSP_ROW_STEP_FLAG rsi, 4, r8
+    add r14d, eax
     lea rsi, [rsi + 6]
     jmp .line_loop
 
@@ -465,11 +412,8 @@ assp_measure_densities_4:
     cmp rax, r11
     ja .line_done
 
-    ASSP_JMP_IF_ROW_STEP rsi, 4, .step_row
-    jmp .line_done
-
-.step_row:
-    inc r14d
+    ASSP_ROW_STEP_FLAG rsi, 4, r8
+    add r14d, eax
     jmp .line_done
 
 .comma:
@@ -542,6 +486,7 @@ assp_measure_densities_8:
     mov r12, r9
     xor r13d, r13d
     xor r14d, r14d
+    lea r8, [rel density_note_step_table]
 
 .line_loop:
     cmp rsi, rdi
@@ -612,11 +557,8 @@ assp_measure_densities_8:
     jmp .done
 
 .fast_row_lf:
-    ASSP_JMP_IF_ROW_STEP rsi, 8, .fast_row_lf_note
-    lea rsi, [rsi + 9]
-    jmp .line_loop
-.fast_row_lf_note:
-    inc r14d
+    ASSP_ROW_STEP_FLAG rsi, 8, r8
+    add r14d, eax
     lea rsi, [rsi + 9]
     jmp .line_loop
 
@@ -626,11 +568,8 @@ assp_measure_densities_8:
     jae .slow_line
     cmp byte [rsi + 9], 10
     jne .slow_line
-    ASSP_JMP_IF_ROW_STEP rsi, 8, .fast_row_cr_note
-    lea rsi, [rsi + 10]
-    jmp .line_loop
-.fast_row_cr_note:
-    inc r14d
+    ASSP_ROW_STEP_FLAG rsi, 8, r8
+    add r14d, eax
     lea rsi, [rsi + 10]
     jmp .line_loop
 
@@ -673,11 +612,8 @@ assp_measure_densities_8:
     cmp rax, r11
     ja .line_done
 
-    ASSP_JMP_IF_ROW_STEP rsi, 8, .step_row
-    jmp .line_done
-
-.step_row:
-    inc r14d
+    ASSP_ROW_STEP_FLAG rsi, 8, r8
+    add r14d, eax
     jmp .line_done
 
 .comma:

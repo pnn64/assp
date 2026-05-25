@@ -447,7 +447,7 @@ assp_parse_speed_map:
     cmp r14, r13
     jae .inc_count
     mov r10, r14
-    imul r10, ASSP_SPEED_SEGMENT_SIZE
+    shl r10, 5
     mov rax, [rsp + 32]
     mov [rdi + r10 + ASSP_SPEED_SEGMENT_BEAT_MILLI], rax
     mov rax, [rsp + 40]
@@ -483,7 +483,7 @@ assp_parse_speed_map:
     cmp r8, r14
     jae .done
     mov r10, r8
-    imul r10, ASSP_SPEED_SEGMENT_SIZE
+    shl r10, 5
     mov rax, [rdi + r10 + ASSP_SPEED_SEGMENT_BEAT_MILLI]
     mov [rsp + 32], rax
     mov rax, [rdi + r10 + ASSP_SPEED_SEGMENT_RATIO_MICRO]
@@ -499,13 +499,13 @@ assp_parse_speed_map:
     jz .sort_place
     mov r10, r9
     dec r10
-    imul r10, ASSP_SPEED_SEGMENT_SIZE
+    shl r10, 5
     mov rax, [rdi + r10 + ASSP_SPEED_SEGMENT_BEAT_MILLI]
     cmp rax, [rsp + 32]
     jle .sort_place
 
     mov r11, r9
-    imul r11, ASSP_SPEED_SEGMENT_SIZE
+    shl r11, 5
     mov [rdi + r11 + ASSP_SPEED_SEGMENT_BEAT_MILLI], rax
     mov rax, [rdi + r10 + ASSP_SPEED_SEGMENT_RATIO_MICRO]
     mov [rdi + r11 + ASSP_SPEED_SEGMENT_RATIO_MICRO], rax
@@ -518,7 +518,7 @@ assp_parse_speed_map:
 
 .sort_place:
     mov r11, r9
-    imul r11, ASSP_SPEED_SEGMENT_SIZE
+    shl r11, 5
     mov rax, [rsp + 32]
     mov [rdi + r11 + ASSP_SPEED_SEGMENT_BEAT_MILLI], rax
     mov rax, [rsp + 40]
