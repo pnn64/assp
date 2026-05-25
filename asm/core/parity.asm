@@ -4386,12 +4386,31 @@ assp_step_parity_row_best_candidates_8:
     test qword [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_ELAPSED_SECONDS], -1
     jz .fail_no_stack
 
-    sub rsp, 1216
+    sub rsp, 1344
     mov [rsp + 104], r10
     mov [rsp + 112], r11
     mov [rsp + 120], rax
     mov qword [rsp + 136], 0
     mov qword [rsp + 144], 0
+    mov byte [rsp + 1312], 0
+    mov ecx, [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_NOTE_MASK]
+    or ecx, [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_HOLD_MASK]
+    and ecx, 0ffh
+    lea r10, [rel step_parity_perm8_counts]
+    movzx eax, byte [r10 + rcx]
+    cmp eax, 8
+    jbe .hash_ready
+    mov byte [rsp + 1312], 1
+    pxor xmm0, xmm0
+    movdqu [rsp + 1056], xmm0
+    movdqu [rsp + 1072], xmm0
+    movdqu [rsp + 1088], xmm0
+    movdqu [rsp + 1104], xmm0
+    movdqu [rsp + 1120], xmm0
+    movdqu [rsp + 1136], xmm0
+    movdqu [rsp + 1152], xmm0
+    movdqu [rsp + 1168], xmm0
+.hash_ready:
 
 .state_loop:
     mov rax, [rsp + 144]
@@ -4536,7 +4555,6 @@ assp_step_parity_row_best_candidates_8:
     jmp .fail
 
 .action_cost_ready:
-
     mov eax, [rsp + 232]
     movss xmm0, [r13 + rax * 4]
     addss xmm0, [rsp + 160 + ASSP_STEP_PARITY_ACTION_COSTS4_TOTAL]
@@ -4546,16 +4564,47 @@ assp_step_parity_row_best_candidates_8:
     mov eax, [rsp + 960 + rax * 4]
     mov [rsp + 236], eax
 
+    mov r10, [rsp + 104]
+    cmp byte [rsp + 1312], 0
+    je .search_linear
+    cmp qword [rsp + 136], 128
+    jae .search_linear
+    mov edx, [rsp + 236]
+    mov r9d, edx
+    imul r9d, r9d, 09e3779b9h
+    and r9d, 127
+
+.search_hash:
+    cmp byte [rsp + r9 + 1056], 0
+    je .append_hash_candidate
+    movzx r11d, byte [rsp + r9 + 1184]
+    cmp [r10 + r11 * 4], edx
+    je .found_key
+    inc r9d
+    and r9d, 127
+    jmp .search_hash
+
+.search_linear:
     xor r11d, r11d
 .search_loop:
     cmp r11, [rsp + 136]
     jae .append_candidate
-    mov r10, [rsp + 104]
     mov eax, [r10 + r11 * 4]
     cmp eax, [rsp + 236]
     je .found_key
     inc r11
     jmp .search_loop
+
+.append_hash_candidate:
+    mov r11, [rsp + 136]
+    cmp r11, [rsp + 120]
+    jb .append_hash_candidate_ready
+    jmp .fail
+
+.append_hash_candidate_ready:
+    mov [rsp + 244], r9d
+    mov byte [rsp + 240], 2
+    jmp .store_candidate
 
 .found_key:
     mov r10, [rsp + 112]
@@ -4609,6 +4658,13 @@ assp_step_parity_row_best_candidates_8:
 
     cmp byte [rsp + 240], 0
     je .next_candidate
+    cmp byte [rsp + 240], 2
+    jne .increment_unique
+    mov edx, [rsp + 244]
+    mov byte [rsp + rdx + 1056], 1
+    mov [rsp + rdx + 1184], r11b
+
+.increment_unique:
     inc qword [rsp + 136]
 
 .next_candidate:
@@ -4621,7 +4677,7 @@ assp_step_parity_row_best_candidates_8:
 
 .success:
     mov rax, [rsp + 136]
-    add rsp, 1216
+    add rsp, 1344
     pop rbp
     pop r15
     pop r14
@@ -4633,7 +4689,7 @@ assp_step_parity_row_best_candidates_8:
     ret
 
 .fail:
-    add rsp, 1216
+    add rsp, 1344
 .fail_no_stack:
     mov rax, ASSP_NOT_FOUND
     pop rbp
