@@ -317,12 +317,15 @@ assp_count_note_stats_4:
 
     cmp dword [rsi], 30303030h
     je .zero_row
+    test r12d, r12d
+    jnz .full_row
     mov eax, [rsi]
-    mov ecx, eax
-    and ecx, 0fefefefeh
-    cmp ecx, 30303030h
+    mov r10d, eax
+    and r10d, 0fefefefeh
+    cmp r10d, 30303030h
     je .tap_only_row
 
+.full_row:
     invalid_lane_break 0, .malformed_row
     invalid_lane_break 1, .malformed_row
     invalid_lane_break 2, .malformed_row
@@ -391,80 +394,56 @@ assp_count_note_stats_4:
 
 .tap_only_row:
     xor eax, 30303030h
-    mov ecx, eax
-    and ecx, 1
-    mov edx, eax
-    shr edx, 7
-    and edx, 2
-    or ecx, edx
-    mov edx, eax
-    shr edx, 14
-    and edx, 4
-    or ecx, edx
-    mov edx, eax
-    shr edx, 21
-    and edx, 8
-    or ecx, edx
+    mov r10d, eax
+    and r10d, 1
+    mov r11d, eax
+    shr r11d, 7
+    and r11d, 2
+    or r10d, r11d
+    mov r11d, eax
+    shr r11d, 14
+    and r11d, 4
+    or r10d, r11d
+    mov r11d, eax
+    shr r11d, 21
+    and r11d, 8
+    or r10d, r11d
 
     inc qword [rbx + ASSP_NOTE_STATS_ROWS]
     inc qword [rbx + ASSP_NOTE_STATS_STEPS]
 
-    test cl, 1
+    test r10b, 1
     jz .tap_only_down
     inc qword [rbx + ASSP_NOTE_STATS_LEFT]
 .tap_only_down:
-    test cl, 2
+    test r10b, 2
     jz .tap_only_up
     inc qword [rbx + ASSP_NOTE_STATS_DOWN]
 .tap_only_up:
-    test cl, 4
+    test r10b, 4
     jz .tap_only_right
     inc qword [rbx + ASSP_NOTE_STATS_UP]
 .tap_only_right:
-    test cl, 8
+    test r10b, 8
     jz .tap_only_count
     inc qword [rbx + ASSP_NOTE_STATS_RIGHT]
 
 .tap_only_count:
-    lea r10, [rel note_stats_popcount4]
-    movzx eax, byte [r10 + rcx]
+    lea r11, [rel note_stats_popcount4]
+    movzx eax, byte [r11 + r10]
     add qword [rbx + ASSP_NOTE_STATS_ARROWS], rax
     cmp eax, 2
     jb .tap_only_hand
     inc qword [rbx + ASSP_NOTE_STATS_JUMPS]
 
 .tap_only_hand:
-    mov edx, r12d
-    add edx, eax
-    cmp edx, 3
+    mov r11d, r12d
+    add r11d, eax
+    cmp r11d, 3
     jb .tap_only_phantom_check
     inc qword [rbx + ASSP_NOTE_STATS_HANDS]
 
 .tap_only_phantom_check:
-    test r12d, r12d
-    jz .skip_line
-    test cl, 1
-    jz .tap_only_phantom_down
-    cmp qword [rsp + 24], 0
-    jne .tap_only_mark_phantom
-.tap_only_phantom_down:
-    test cl, 2
-    jz .tap_only_phantom_up
-    cmp qword [rsp + 32], 0
-    jne .tap_only_mark_phantom
-.tap_only_phantom_up:
-    test cl, 4
-    jz .tap_only_phantom_right
-    cmp qword [rsp + 40], 0
-    jne .tap_only_mark_phantom
-.tap_only_phantom_right:
-    test cl, 8
-    jz .skip_line
-    cmp qword [rsp + 48], 0
-    je .skip_line
-
-.tap_only_mark_phantom:
-    mov qword [rsp + 16], 1
     jmp .skip_line
 
 .consume_one:
