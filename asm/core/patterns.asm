@@ -1330,7 +1330,9 @@ assp_count_default_patterns_minimized_4:
     mov rsi, rcx
     lea rdi, [rcx + rdx]
     xor r12d, r12d
-    xor r13d, r13d
+    lea r13, [default_pattern_dfa_goto]
+    lea r14, [default_pattern_dfa_output_lens]
+    lea r15, [default_pattern_dfa_output_starts]
 
 .default_line_loop:
     cmp rsi, rdi
@@ -1386,32 +1388,25 @@ assp_count_default_patterns_minimized_4:
     shl eax, 3
     or ecx, eax
 
-    shl r13, 4
     movzx ecx, cl
-    or r13, rcx
-    inc r12
+    mov r10d, r12d
+    shl r10d, 4
+    add r10d, ecx
+    movzx r12d, word [r13 + r10 * 2]
 
-    lea r14, [default_pattern_table]
-    lea r15, [default_pattern_table_end]
-.default_pattern_loop:
-    cmp r14, r15
-    jae .default_line_done
-    movzx eax, byte [r14 + 1]
-    cmp r12, rax
-    jb .default_next_pattern
+    movzx ecx, byte [r14 + r12]
+    test ecx, ecx
+    jz .default_line_done
 
-    mov r11, r13
-    lea r10, [default_pattern_len_masks]
-    and r11, [r10 + rax * 8]
-    cmp r11, [r14 + 4]
-    jne .default_next_pattern
-
-    movzx eax, byte [r14]
+    movzx edx, word [r15 + r12 * 2]
+    lea r11, [default_pattern_dfa_outputs]
+    add r11, rdx
+.default_output_loop:
+    movzx eax, byte [r11]
     inc dword [rbx + rax * 4]
-
-.default_next_pattern:
-    add r14, 16
-    jmp .default_pattern_loop
+    inc r11
+    dec ecx
+    jnz .default_output_loop
 
 .default_line_done:
     mov rsi, [rsp + 16]
