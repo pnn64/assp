@@ -32,6 +32,37 @@ assp_find_byte:
     jnz .wide_hit
     add rax, 16
     sub rdx, 16
+    cmp rdx, 64
+    jb .tail_or_32
+    jmp .wide64_loop
+
+.wide64_loop:
+    movdqu xmm0, [rcx + rax]
+    pcmpeqb xmm0, xmm1
+    pmovmskb r10d, xmm0
+    test r10d, r10d
+    jnz .wide_hit
+    movdqu xmm0, [rcx + rax + 16]
+    pcmpeqb xmm0, xmm1
+    pmovmskb r10d, xmm0
+    test r10d, r10d
+    jnz .wide_hit_hi
+    movdqu xmm0, [rcx + rax + 32]
+    pcmpeqb xmm0, xmm1
+    pmovmskb r10d, xmm0
+    test r10d, r10d
+    jnz .wide_hit_32
+    movdqu xmm0, [rcx + rax + 48]
+    pcmpeqb xmm0, xmm1
+    pmovmskb r10d, xmm0
+    test r10d, r10d
+    jnz .wide_hit_48
+    add rax, 64
+    sub rdx, 64
+    cmp rdx, 64
+    jae .wide64_loop
+
+.tail_or_32:
     cmp rdx, 32
     jb .tail_or_16
     jmp .wide32_loop
@@ -61,6 +92,16 @@ assp_find_byte:
 .wide_hit_hi:
     bsf r10d, r10d
     lea rax, [rax + r10 + 16]
+    ret
+
+.wide_hit_32:
+    bsf r10d, r10d
+    lea rax, [rax + r10 + 32]
+    ret
+
+.wide_hit_48:
+    bsf r10d, r10d
+    lea rax, [rax + r10 + 48]
     ret
 
 .tail_or_16:
