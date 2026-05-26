@@ -1681,43 +1681,23 @@ mines_finalize_measure:
     ret
 
 row_has_mine:
-    cmp al, 'M'
-    je .yes
-    cmp al, 'm'
-    je .yes
-    cmp al, 'F'
-    je .yes
-    cmp al, 'f'
-    je .yes
-    cmp ah, 'M'
-    je .yes
-    cmp ah, 'm'
-    je .yes
-    cmp ah, 'F'
-    je .yes
-    cmp ah, 'f'
-    je .yes
-    shr eax, 16
-    cmp al, 'M'
-    je .yes
-    cmp al, 'm'
-    je .yes
-    cmp al, 'F'
-    je .yes
-    cmp al, 'f'
-    je .yes
-    cmp ah, 'M'
-    je .yes
-    cmp ah, 'm'
-    je .yes
-    cmp ah, 'F'
-    je .yes
-    cmp ah, 'f'
-    je .yes
-    xor eax, eax
-    ret
-.yes:
-    mov eax, ASSP_TRUE
+    movd xmm0, eax
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_M]
+    pmovmskb eax, xmm1
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_m]
+    pmovmskb ecx, xmm1
+    or eax, ecx
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_F]
+    pmovmskb ecx, xmm1
+    or eax, ecx
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_f]
+    pmovmskb ecx, xmm1
+    or eax, ecx
+    and eax, 0fh
     ret
 
 ; rcx = note-data bytes, rdx = byte length, r8 = warp segments, r9 = warp count,
@@ -1937,25 +1917,23 @@ mines_finalize_measure_8:
     ret
 
 row_has_mine_8:
-    mov rdx, rax
-    mov ecx, 8
-.loop:
-    mov al, dl
-    cmp al, 'M'
-    je .yes
-    cmp al, 'm'
-    je .yes
-    cmp al, 'F'
-    je .yes
-    cmp al, 'f'
-    je .yes
-    shr rdx, 8
-    dec ecx
-    jnz .loop
-    xor eax, eax
-    ret
-.yes:
-    mov eax, ASSP_TRUE
+    movq xmm0, rax
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_M]
+    pmovmskb eax, xmm1
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_m]
+    pmovmskb ecx, xmm1
+    or eax, ecx
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_F]
+    pmovmskb ecx, xmm1
+    or eax, ecx
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_f]
+    pmovmskb ecx, xmm1
+    or eax, ecx
+    and eax, 0ffh
     ret
 
 ; rcx = segments, rdx = count, r8 = beat row48, xmm2 = beat as beat,
@@ -2299,111 +2277,59 @@ timing_fakes_finalize_measure:
     ret
 
 row_literal_fake_count:
-    xor ecx, ecx
-    cmp al, 'F'
-    je .lane0
-    cmp al, 'f'
-    jne .check1
-.lane0:
-    inc ecx
-.check1:
-    cmp ah, 'F'
-    je .lane1
-    cmp ah, 'f'
-    jne .check2
-.lane1:
-    inc ecx
-.check2:
-    shr eax, 16
-    cmp al, 'F'
-    je .lane2
-    cmp al, 'f'
-    jne .check3
-.lane2:
-    inc ecx
-.check3:
-    cmp ah, 'F'
-    je .lane3
-    cmp ah, 'f'
-    jne .done
-.lane3:
-    inc ecx
-.done:
-    mov eax, ecx
+    movd xmm0, eax
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_F]
+    pmovmskb eax, xmm1
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_f]
+    pmovmskb ecx, xmm1
+    or eax, ecx
+    and eax, 0fh
+    lea r10, [rel note_stats_popcount4]
+    movzx eax, byte [r10 + rax]
     ret
 
 row_fake_object_count:
-    xor ecx, ecx
-    call fake_object_lane_low
-    cmp ah, '1'
-    je .lane1
-    cmp ah, '2'
-    je .lane1
-    cmp ah, '4'
-    je .lane1
-    cmp ah, 'M'
-    je .lane1
-    cmp ah, 'm'
-    je .lane1
-    cmp ah, 'L'
-    je .lane1
-    cmp ah, 'l'
-    je .lane1
-    cmp ah, 'F'
-    je .lane1
-    cmp ah, 'f'
-    jne .upper
-.lane1:
-    inc ecx
-.upper:
-    shr eax, 16
-    call fake_object_lane_low
-    cmp ah, '1'
-    je .lane3
-    cmp ah, '2'
-    je .lane3
-    cmp ah, '4'
-    je .lane3
-    cmp ah, 'M'
-    je .lane3
-    cmp ah, 'm'
-    je .lane3
-    cmp ah, 'L'
-    je .lane3
-    cmp ah, 'l'
-    je .lane3
-    cmp ah, 'F'
-    je .lane3
-    cmp ah, 'f'
-    jne .done
-.lane3:
-    inc ecx
-.done:
-    mov eax, ecx
-    ret
-
-fake_object_lane_low:
-    cmp al, '1'
-    je .yes
-    cmp al, '2'
-    je .yes
-    cmp al, '4'
-    je .yes
-    cmp al, 'M'
-    je .yes
-    cmp al, 'm'
-    je .yes
-    cmp al, 'L'
-    je .yes
-    cmp al, 'l'
-    je .yes
-    cmp al, 'F'
-    je .yes
-    cmp al, 'f'
-    jne .no
-.yes:
-    inc ecx
-.no:
+    movd xmm0, eax
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_1]
+    pmovmskb eax, xmm1
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_2]
+    pmovmskb ecx, xmm1
+    or eax, ecx
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_4]
+    pmovmskb ecx, xmm1
+    or eax, ecx
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_L]
+    pmovmskb ecx, xmm1
+    or eax, ecx
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_l]
+    pmovmskb ecx, xmm1
+    or eax, ecx
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_M]
+    pmovmskb ecx, xmm1
+    or eax, ecx
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_m]
+    pmovmskb ecx, xmm1
+    or eax, ecx
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_F]
+    pmovmskb ecx, xmm1
+    or eax, ecx
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_f]
+    pmovmskb ecx, xmm1
+    or eax, ecx
+    and eax, 0fh
+    lea r10, [rel note_stats_popcount4]
+    movzx eax, byte [r10 + rax]
     ret
 
 ; rcx = note-data bytes, rdx = byte length, r8 = warp segments, r9 = warp count,
@@ -2628,55 +2554,71 @@ timing_fakes_finalize_measure_8:
     ret
 
 row_literal_fake_count_8:
-    mov rdx, rax
-    xor ecx, ecx
-    mov r8d, 8
-.loop:
-    mov al, dl
-    cmp al, 'F'
-    je .count
-    cmp al, 'f'
-    jne .next
-.count:
-    inc ecx
-.next:
-    shr rdx, 8
-    dec r8d
-    jnz .loop
-    mov eax, ecx
+    movq xmm0, rax
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_F]
+    pmovmskb eax, xmm1
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_f]
+    pmovmskb ecx, xmm1
+    or eax, ecx
+    and eax, 0ffh
+    lea r10, [rel note_stats_popcount4]
+    mov ecx, eax
+    and eax, 0fh
+    movzx eax, byte [r10 + rax]
+    shr ecx, 4
+    and ecx, 0fh
+    movzx ecx, byte [r10 + rcx]
+    add eax, ecx
     ret
 
 row_fake_object_count_8:
-    mov rdx, rax
-    xor ecx, ecx
-    mov r8d, 8
-.loop:
-    mov al, dl
-    cmp al, '1'
-    je .count
-    cmp al, '2'
-    je .count
-    cmp al, '4'
-    je .count
-    cmp al, 'M'
-    je .count
-    cmp al, 'm'
-    je .count
-    cmp al, 'L'
-    je .count
-    cmp al, 'l'
-    je .count
-    cmp al, 'F'
-    je .count
-    cmp al, 'f'
-    jne .next
-.count:
-    inc ecx
-.next:
-    shr rdx, 8
-    dec r8d
-    jnz .loop
-    mov eax, ecx
+    movq xmm0, rax
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_1]
+    pmovmskb eax, xmm1
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_2]
+    pmovmskb ecx, xmm1
+    or eax, ecx
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_4]
+    pmovmskb ecx, xmm1
+    or eax, ecx
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_L]
+    pmovmskb ecx, xmm1
+    or eax, ecx
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_l]
+    pmovmskb ecx, xmm1
+    or eax, ecx
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_M]
+    pmovmskb ecx, xmm1
+    or eax, ecx
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_m]
+    pmovmskb ecx, xmm1
+    or eax, ecx
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_F]
+    pmovmskb ecx, xmm1
+    or eax, ecx
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_f]
+    pmovmskb ecx, xmm1
+    or eax, ecx
+    and eax, 0ffh
+    lea r10, [rel note_stats_popcount4]
+    mov ecx, eax
+    and eax, 0fh
+    movzx eax, byte [r10 + rax]
+    shr ecx, 4
+    and ecx, 0fh
+    movzx ecx, byte [r10 + rcx]
+    add eax, ecx
     ret
 
 %define TS4_RAW_COUNT 0
@@ -4437,6 +4379,8 @@ align 16
 note_stats_popcount4 db 0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4
 align 16
 note_stats_byte_1 times 16 db '1'
+note_stats_byte_2 times 16 db '2'
+note_stats_byte_4 times 16 db '4'
 note_stats_byte_L times 16 db 'L'
 note_stats_byte_l times 16 db 'l'
 note_stats_byte_M times 16 db 'M'
