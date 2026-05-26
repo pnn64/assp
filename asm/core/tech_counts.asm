@@ -766,21 +766,86 @@ fill_hit_positions_8:
     mov dword [r8], 0ffffffffh
     mov byte [r8 + 4], 0ffh
 
-    xor r9d, r9d
-.col_loop:
-    bt ecx, r9d
-    jnc .next
-    movzx eax, byte [rdx + r9]
+    test cl, 1
+    jz .col1
+    movzx eax, byte [rdx]
     test eax, eax
-    jz .next
+    jz .col1
     cmp eax, 4
-    ja .next
-    mov byte [r8 + rax], r9b
+    ja .col1
+    mov byte [r8 + rax], 0
 
-.next:
-    inc r9d
-    cmp r9d, 8
-    jb .col_loop
+.col1:
+    test cl, 2
+    jz .col2
+    movzx eax, byte [rdx + 1]
+    test eax, eax
+    jz .col2
+    cmp eax, 4
+    ja .col2
+    mov byte [r8 + rax], 1
+
+.col2:
+    test cl, 4
+    jz .col3
+    movzx eax, byte [rdx + 2]
+    test eax, eax
+    jz .col3
+    cmp eax, 4
+    ja .col3
+    mov byte [r8 + rax], 2
+
+.col3:
+    test cl, 8
+    jz .col4
+    movzx eax, byte [rdx + 3]
+    test eax, eax
+    jz .col4
+    cmp eax, 4
+    ja .col4
+    mov byte [r8 + rax], 3
+
+.col4:
+    test ecx, 16
+    jz .col5
+    movzx eax, byte [rdx + 4]
+    test eax, eax
+    jz .col5
+    cmp eax, 4
+    ja .col5
+    mov byte [r8 + rax], 4
+
+.col5:
+    test ecx, 32
+    jz .col6
+    movzx eax, byte [rdx + 5]
+    test eax, eax
+    jz .col6
+    cmp eax, 4
+    ja .col6
+    mov byte [r8 + rax], 5
+
+.col6:
+    test ecx, 64
+    jz .col7
+    movzx eax, byte [rdx + 6]
+    test eax, eax
+    jz .col7
+    cmp eax, 4
+    ja .col7
+    mov byte [r8 + rax], 6
+
+.col7:
+    test ecx, 128
+    jz .done
+    movzx eax, byte [rdx + 7]
+    test eax, eax
+    jz .done
+    cmp eax, 4
+    ja .done
+    mov byte [r8 + rax], 7
+
+.done:
     ret
 
 count_jacks_doublesteps_8:
