@@ -1577,13 +1577,13 @@ match_tag_at:
 ; r10 = scan start, r11 = scan end. r10 is advanced to the next '#'.
 ; eax = 1 when found, 0 otherwise.
 find_hash:
-    movdqu xmm1, [hash_bytes]
+    movdqa xmm1, [hash_bytes]
     find_range_byte r10, '#'
 
 ; rdx = scan start, r11 = scan end. rdx is advanced to the next ';'.
 ; eax = 1 when found, 0 otherwise.
 find_semicolon:
-    movdqu xmm1, [semicolon_bytes]
+    movdqa xmm1, [semicolon_bytes]
     find_range_byte rdx, ';'
 
 ; rdx = scan start, r11 = scan end. rdx is advanced to a line break
@@ -1591,8 +1591,8 @@ find_semicolon:
 ; broken one-line metadata tags without truncating multiline timing tags.
 ; eax = 1 when found, 0 otherwise.
 find_line_tag_terminator:
-    movdqu xmm1, [lf_bytes]
-    movdqu xmm3, [cr_bytes]
+    movdqa xmm1, [lf_bytes]
+    movdqa xmm3, [cr_bytes]
 
 .scan:
     cmp rdx, r11
@@ -1877,44 +1877,68 @@ parse_chart_meta:
     lea rax, [r10 + tag_description_end - tag_description]
     cmp rax, r11
     ja .meta_next
-    lea r12, [tag_description]
-    mov r13, tag_description_end - tag_description
-    call match_tag_at
-    test eax, eax
-    jz .meta_next
+    mov rax, [r10]
+    mov rdx, 2020202020202000h
+    or rax, rdx
+    mov rdx, 7069726373656423h
+    cmp rax, rdx
+    jne .meta_next
+    mov eax, [r10 + 8]
+    or eax, 20202020h
+    cmp eax, 6e6f6974h
+    jne .meta_next
+    cmp byte [r10 + 12], ':'
+    jne .meta_next
     store_tag tag_description_end - tag_description, ASSP_CHART_INFO_DESC_PTR, ASSP_CHART_INFO_DESC_LEN
 
 .check_difficulty:
     lea rax, [r10 + tag_difficulty_end - tag_difficulty]
     cmp rax, r11
     ja .meta_next
-    lea r12, [tag_difficulty]
-    mov r13, tag_difficulty_end - tag_difficulty
-    call match_tag_at
-    test eax, eax
-    jz .meta_next
+    mov rax, [r10]
+    mov rdx, 2020202020202000h
+    or rax, rdx
+    mov rdx, 7563696666696423h
+    cmp rax, rdx
+    jne .meta_next
+    mov eax, [r10 + 8]
+    or eax, 00202020h
+    cmp eax, 3a79746ch
+    jne .meta_next
     store_tag tag_difficulty_end - tag_difficulty, ASSP_CHART_INFO_DIFFICULTY_PTR, ASSP_CHART_INFO_DIFFICULTY_LEN
 
 .check_step_type:
     lea rax, [r10 + tag_step_type_end - tag_step_type]
     cmp rax, r11
     ja .meta_next
-    lea r12, [tag_step_type]
-    mov r13, tag_step_type_end - tag_step_type
-    call match_tag_at
-    test eax, eax
-    jz .meta_next
+    mov rax, [r10]
+    mov rdx, 2020202020202000h
+    or rax, rdx
+    mov rdx, 7974737065747323h
+    cmp rax, rdx
+    jne .meta_next
+    movzx eax, word [r10 + 8]
+    or ax, 2020h
+    cmp ax, 6570h
+    jne .meta_next
+    cmp byte [r10 + 10], ':'
+    jne .meta_next
     store_tag tag_step_type_end - tag_step_type, ASSP_CHART_INFO_STEP_TYPE_PTR, ASSP_CHART_INFO_STEP_TYPE_LEN
 
 .check_meter:
     lea rax, [r10 + tag_meter_end - tag_meter]
     cmp rax, r11
     ja .meta_next
-    lea r12, [tag_meter]
-    mov r13, tag_meter_end - tag_meter
-    call match_tag_at
-    test eax, eax
-    jz .meta_next
+    mov eax, [r10]
+    or eax, 20202000h
+    cmp eax, 74656d23h
+    jne .meta_next
+    movzx eax, word [r10 + 4]
+    or ax, 2020h
+    cmp ax, 7265h
+    jne .meta_next
+    cmp byte [r10 + 6], ':'
+    jne .meta_next
     store_tag tag_meter_end - tag_meter, ASSP_CHART_INFO_METER_PTR, ASSP_CHART_INFO_METER_LEN
 
 .meta_next:
