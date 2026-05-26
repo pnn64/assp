@@ -2905,59 +2905,43 @@ timing_fakes_finalize_measure:
     ret
 
 row_literal_fake_count:
-    movd xmm0, eax
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_F]
-    pmovmskb eax, xmm1
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_f]
-    pmovmskb ecx, xmm1
-    or eax, ecx
-    and eax, 0fh
-    lea r10, [rel note_stats_popcount4]
-    movzx eax, byte [r10 + rax]
+    mov r11d, eax
+    lea r10, [rel note_stats_literal_fake_char_count]
+    movzx ecx, al
+    movzx eax, byte [r10 + rcx]
+    mov ecx, r11d
+    shr ecx, 8
+    and ecx, 0ffh
+    movzx ecx, byte [r10 + rcx]
+    add eax, ecx
+    mov ecx, r11d
+    shr ecx, 16
+    and ecx, 0ffh
+    movzx ecx, byte [r10 + rcx]
+    add eax, ecx
+    shr r11d, 24
+    movzx ecx, byte [r10 + r11]
+    add eax, ecx
     ret
 
 row_fake_object_count:
-    movd xmm0, eax
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_1]
-    pmovmskb eax, xmm1
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_2]
-    pmovmskb ecx, xmm1
-    or eax, ecx
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_4]
-    pmovmskb ecx, xmm1
-    or eax, ecx
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_L]
-    pmovmskb ecx, xmm1
-    or eax, ecx
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_l]
-    pmovmskb ecx, xmm1
-    or eax, ecx
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_M]
-    pmovmskb ecx, xmm1
-    or eax, ecx
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_m]
-    pmovmskb ecx, xmm1
-    or eax, ecx
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_F]
-    pmovmskb ecx, xmm1
-    or eax, ecx
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_f]
-    pmovmskb ecx, xmm1
-    or eax, ecx
-    and eax, 0fh
-    lea r10, [rel note_stats_popcount4]
-    movzx eax, byte [r10 + rax]
+    mov r11d, eax
+    lea r10, [rel note_stats_fake_object_char_count]
+    movzx ecx, al
+    movzx eax, byte [r10 + rcx]
+    mov ecx, r11d
+    shr ecx, 8
+    and ecx, 0ffh
+    movzx ecx, byte [r10 + rcx]
+    add eax, ecx
+    mov ecx, r11d
+    shr ecx, 16
+    and ecx, 0ffh
+    movzx ecx, byte [r10 + rcx]
+    add eax, ecx
+    shr r11d, 24
+    movzx ecx, byte [r10 + r11]
+    add eax, ecx
     ret
 
 ; rcx = note-data bytes, rdx = byte length, r8 = warp segments, r9 = warp count,
@@ -4575,37 +4559,23 @@ process_no_hold_judgable_row:
     ret
 
 row_no_hold_fake_object_count:
-    movd xmm0, eax
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_1]
-    pmovmskb eax, xmm1
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_L]
-    pmovmskb ecx, xmm1
-    or eax, ecx
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_l]
-    pmovmskb ecx, xmm1
-    or eax, ecx
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_M]
-    pmovmskb ecx, xmm1
-    or eax, ecx
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_m]
-    pmovmskb ecx, xmm1
-    or eax, ecx
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_F]
-    pmovmskb ecx, xmm1
-    or eax, ecx
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_f]
-    pmovmskb ecx, xmm1
-    or eax, ecx
-    and eax, 0fh
-    lea r10, [rel note_stats_popcount4]
-    movzx eax, byte [r10 + rax]
+    mov r11d, eax
+    lea r10, [rel note_stats_no_hold_fake_char_count]
+    movzx ecx, al
+    movzx eax, byte [r10 + rcx]
+    mov ecx, r11d
+    shr ecx, 8
+    and ecx, 0ffh
+    movzx ecx, byte [r10 + rcx]
+    add eax, ecx
+    mov ecx, r11d
+    shr ecx, 16
+    and ecx, 0ffh
+    movzx ecx, byte [r10 + rcx]
+    add eax, ecx
+    shr r11d, 24
+    movzx ecx, byte [r10 + r11]
+    add eax, ecx
     ret
 
 ; rcx = note-data bytes, rdx = byte length, r8 = warp segments, r9 = warp count,
@@ -5053,5 +5023,41 @@ note_stats_tap_row_stats4:
 %assign tap_hand 0
 %endif
     dq tap_l | (tap_d << 8) | (tap_u << 16) | (tap_r << 24) | (tap_n << 32) | (tap_jump << 40) | (tap_hand << 48)
+%assign i i+1
+%endrep
+
+align 64
+note_stats_literal_fake_char_count:
+%assign i 0
+%rep 256
+%if i = 'F' || i = 'f'
+    db 1
+%else
+    db 0
+%endif
+%assign i i+1
+%endrep
+
+align 64
+note_stats_fake_object_char_count:
+%assign i 0
+%rep 256
+%if i = '1' || i = '2' || i = '4' || i = 'L' || i = 'l' || i = 'M' || i = 'm' || i = 'F' || i = 'f'
+    db 1
+%else
+    db 0
+%endif
+%assign i i+1
+%endrep
+
+align 64
+note_stats_no_hold_fake_char_count:
+%assign i 0
+%rep 256
+%if i = '1' || i = 'L' || i = 'l' || i = 'M' || i = 'm' || i = 'F' || i = 'f'
+    db 1
+%else
+    db 0
+%endif
 %assign i i+1
 %endrep
