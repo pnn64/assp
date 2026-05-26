@@ -295,54 +295,49 @@ assp_parse_speed_map:
     cmp rsi, r12
     jae .sort
 
-    mov r10, rsi
-.find_comma:
-    cmp r10, r12
-    jae .entry_bounds
-    cmp byte [r10], ','
-    je .entry_bounds
-    inc r10
-    jmp .find_comma
-
-.entry_bounds:
-    mov [rsp], r10
-
-    mov rax, rsi
-.find_eq1:
-    cmp rax, [rsp]
-    jae .skip_entry
-    cmp byte [rax], '='
-    je .found_eq1
-    inc rax
-    jmp .find_eq1
-.found_eq1:
-    mov [rsp + 8], rax
-    inc rax
-
-.find_eq2:
-    cmp rax, [rsp]
-    jae .skip_entry
-    cmp byte [rax], '='
-    je .found_eq2
-    inc rax
-    jmp .find_eq2
-.found_eq2:
-    mov [rsp + 16], rax
-    inc rax
-
-    mov r11, [rsp]
-    mov [rsp + 64], r11
+    mov qword [rsp + 8], 0
+    mov qword [rsp + 16], 0
     mov qword [rsp + 24], 0
-.find_eq3:
-    cmp rax, [rsp]
-    jae .parse_fields
-    cmp byte [rax], '='
-    je .found_eq3
-    inc rax
-    jmp .find_eq3
-.found_eq3:
-    mov [rsp + 24], rax
+    mov r10, rsi
+
+.scan_entry:
+    cmp r10, r12
+    jae .entry_scanned
+    mov al, [r10]
+    cmp al, ','
+    je .entry_scanned
+    cmp al, '='
+    jne .scan_entry_next
+    cmp qword [rsp + 8], 0
+    jne .scan_eq2
+    mov [rsp + 8], r10
+    jmp .scan_entry_next
+.scan_eq2:
+    cmp qword [rsp + 16], 0
+    jne .scan_eq3
+    mov [rsp + 16], r10
+    jmp .scan_entry_next
+.scan_eq3:
+    cmp qword [rsp + 24], 0
+    jne .scan_entry_next
+    mov [rsp + 24], r10
+.scan_entry_next:
+    inc r10
+    jmp .scan_entry
+
+.entry_scanned:
+    mov [rsp], r10
+    cmp qword [rsp + 8], 0
+    je .skip_entry
+    cmp qword [rsp + 16], 0
+    je .skip_entry
+
+    mov r11, r10
+    mov rax, [rsp + 24]
+    test rax, rax
+    jz .store_delay_end
     mov r11, rax
+.store_delay_end:
     mov [rsp + 64], r11
 
 .parse_fields:
@@ -593,17 +588,28 @@ assp_parse_timing_seconds_map:
     cmp rsi, r12
     jae .sort
 
+    mov qword [rsp + 8], 0
     mov r10, rsi
-.find_comma:
-    cmp r10, r12
-    jae .entry_bounds
-    cmp byte [r10], ','
-    je .entry_bounds
-    inc r10
-    jmp .find_comma
 
-.entry_bounds:
+.scan_entry:
+    cmp r10, r12
+    jae .entry_scanned
+    mov al, [r10]
+    cmp al, ','
+    je .entry_scanned
+    cmp al, '='
+    jne .scan_entry_next
+    cmp qword [rsp + 8], 0
+    jne .scan_entry_next
+    mov [rsp + 8], r10
+.scan_entry_next:
+    inc r10
+    jmp .scan_entry
+
+.entry_scanned:
     mov [rsp], r10
+    cmp qword [rsp + 8], 0
+    je .skip_entry
     mov rbx, rsi
     mov r11, r10
 
@@ -619,22 +625,12 @@ assp_parse_timing_seconds_map:
     cmp r11, rbx
     jbe .skip_entry
     cmp byte [r11 - 1], ' '
-    ja .find_equal
+    ja .parse_beat
     dec r11
     jmp .trim_right
 
-.find_equal:
-    mov rax, rbx
-.equal_loop:
-    cmp rax, r11
-    jae .skip_entry
-    cmp byte [rax], '='
-    je .parse_beat
-    inc rax
-    jmp .equal_loop
-
 .parse_beat:
-    mov [rsp + 8], rax
+    mov rax, [rsp + 8]
     mov [rsp + 16], r11
     mov rdx, rax
     xor r15d, r15d
@@ -3450,17 +3446,28 @@ assp_parse_bpm_map:
     cmp rsi, r12
     jae .sort
 
+    mov qword [rsp + 8], 0
     mov r10, rsi
-.find_comma:
-    cmp r10, r12
-    jae .entry_bounds
-    cmp byte [r10], ','
-    je .entry_bounds
-    inc r10
-    jmp .find_comma
 
-.entry_bounds:
+.scan_entry:
+    cmp r10, r12
+    jae .entry_scanned
+    mov al, [r10]
+    cmp al, ','
+    je .entry_scanned
+    cmp al, '='
+    jne .scan_entry_next
+    cmp qword [rsp + 8], 0
+    jne .scan_entry_next
+    mov [rsp + 8], r10
+.scan_entry_next:
+    inc r10
+    jmp .scan_entry
+
+.entry_scanned:
     mov [rsp], r10
+    cmp qword [rsp + 8], 0
+    je .skip_entry
     mov rbx, rsi
     mov r11, r10
 
@@ -3476,22 +3483,12 @@ assp_parse_bpm_map:
     cmp r11, rbx
     jbe .skip_entry
     cmp byte [r11 - 1], ' '
-    ja .find_equal
+    ja .parse_beat
     dec r11
     jmp .trim_right
 
-.find_equal:
-    mov rax, rbx
-.equal_loop:
-    cmp rax, r11
-    jae .skip_entry
-    cmp byte [rax], '='
-    je .parse_beat
-    inc rax
-    jmp .equal_loop
-
 .parse_beat:
-    mov [rsp + 8], rax
+    mov rax, [rsp + 8]
     mov [rsp + 16], r11
     mov rdx, rax
     xor r15d, r15d
