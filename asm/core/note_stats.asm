@@ -3171,71 +3171,27 @@ timing_fakes_finalize_measure_8:
     ret
 
 row_literal_fake_count_8:
-    movq xmm0, rax
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_F]
-    pmovmskb eax, xmm1
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_f]
-    pmovmskb ecx, xmm1
-    or eax, ecx
-    and eax, 0ffh
-    lea r10, [rel note_stats_popcount4]
-    mov ecx, eax
-    and eax, 0fh
-    movzx eax, byte [r10 + rax]
-    shr ecx, 4
-    and ecx, 0fh
+    mov rdx, rax
+    lea r10, [rel note_stats_literal_fake_char_count]
+    xor eax, eax
+%rep 8
+    movzx ecx, dl
     movzx ecx, byte [r10 + rcx]
     add eax, ecx
+    shr rdx, 8
+%endrep
     ret
 
 row_fake_object_count_8:
-    movq xmm0, rax
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_1]
-    pmovmskb eax, xmm1
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_2]
-    pmovmskb ecx, xmm1
-    or eax, ecx
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_4]
-    pmovmskb ecx, xmm1
-    or eax, ecx
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_L]
-    pmovmskb ecx, xmm1
-    or eax, ecx
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_l]
-    pmovmskb ecx, xmm1
-    or eax, ecx
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_M]
-    pmovmskb ecx, xmm1
-    or eax, ecx
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_m]
-    pmovmskb ecx, xmm1
-    or eax, ecx
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_F]
-    pmovmskb ecx, xmm1
-    or eax, ecx
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_f]
-    pmovmskb ecx, xmm1
-    or eax, ecx
-    and eax, 0ffh
-    lea r10, [rel note_stats_popcount4]
-    mov ecx, eax
-    and eax, 0fh
-    movzx eax, byte [r10 + rax]
-    shr ecx, 4
-    and ecx, 0fh
+    mov rdx, rax
+    lea r10, [rel note_stats_fake_object_char_count]
+    xor eax, eax
+%rep 8
+    movzx ecx, dl
     movzx ecx, byte [r10 + rcx]
     add eax, ecx
+    shr rdx, 8
+%endrep
     ret
 
 %define TS4_RAW_COUNT 0
@@ -4946,43 +4902,15 @@ process_no_hold_judgable_row_8:
     ret
 
 row_no_hold_fake_object_count_8:
-    movq xmm0, rax
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_1]
-    pmovmskb eax, xmm1
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_L]
-    pmovmskb ecx, xmm1
-    or eax, ecx
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_l]
-    pmovmskb ecx, xmm1
-    or eax, ecx
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_M]
-    pmovmskb ecx, xmm1
-    or eax, ecx
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_m]
-    pmovmskb ecx, xmm1
-    or eax, ecx
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_F]
-    pmovmskb ecx, xmm1
-    or eax, ecx
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_f]
-    pmovmskb ecx, xmm1
-    or eax, ecx
-    and eax, 0ffh
-    lea r10, [rel note_stats_popcount4]
-    mov ecx, eax
-    and eax, 0fh
-    movzx eax, byte [r10 + rax]
-    shr ecx, 4
-    and ecx, 0fh
+    mov rdx, rax
+    lea r10, [rel note_stats_no_hold_fake_char_count]
+    xor eax, eax
+%rep 8
+    movzx ecx, dl
     movzx ecx, byte [r10 + rcx]
     add eax, ecx
+    shr rdx, 8
+%endrep
     ret
 
 section .rdata
