@@ -167,10 +167,38 @@ align 32
     jmp %%done
 
 %%fast_row_lf:
+%if %2 = 4
+    cmp dword [rsi], 30303030h
+%elif %2 = 8
+    cmp qword [rsi], 3030303030303030h
+%endif
+    je %%zero_run_lf
     inc r14
     ASSP_ROW_STEP_FLAG rsi, %2, r8
     add r15, rax
     lea rsi, [rsi + %2 + 1]
+    jmp %%line_loop
+
+%%zero_run_lf:
+    xor r11d, r11d
+%%zero_run_loop:
+    inc r11
+    lea rsi, [rsi + %2 + 1]
+    cmp rsi, rdi
+    jae %%zero_run_done
+    lea rax, [rsi + %2]
+    cmp rax, rdi
+    jae %%zero_run_done
+%if %2 = 4
+    cmp dword [rsi], 30303030h
+%elif %2 = 8
+    cmp qword [rsi], 3030303030303030h
+%endif
+    jne %%zero_run_done
+    cmp byte [rax], 10
+    je %%zero_run_loop
+%%zero_run_done:
+    add r14, r11
     jmp %%line_loop
 
 %%fast_row_cr:
@@ -357,9 +385,24 @@ assp_measure_densities_4:
     jmp .done
 
 .fast_row_lf:
+    cmp dword [rsi], 30303030h
+    je .zero_run_lf
     ASSP_ROW_STEP_FLAG rsi, 4, r8
     add r14d, eax
     lea rsi, [rsi + 5]
+    jmp .line_loop
+
+.zero_run_lf:
+    lea rsi, [rsi + 5]
+    cmp rsi, rdi
+    jae .line_loop
+    lea rax, [rsi + 4]
+    cmp rax, rdi
+    jae .line_loop
+    cmp dword [rsi], 30303030h
+    jne .line_loop
+    cmp byte [rax], 10
+    je .zero_run_lf
     jmp .line_loop
 
 .fast_row_cr:
@@ -557,9 +600,24 @@ assp_measure_densities_8:
     jmp .done
 
 .fast_row_lf:
+    cmp qword [rsi], 3030303030303030h
+    je .zero_run_lf
     ASSP_ROW_STEP_FLAG rsi, 8, r8
     add r14d, eax
     lea rsi, [rsi + 9]
+    jmp .line_loop
+
+.zero_run_lf:
+    lea rsi, [rsi + 9]
+    cmp rsi, rdi
+    jae .line_loop
+    lea rax, [rsi + 8]
+    cmp rax, rdi
+    jae .line_loop
+    cmp qword [rsi], 3030303030303030h
+    jne .line_loop
+    cmp byte [rax], 10
+    je .zero_run_lf
     jmp .line_loop
 
 .fast_row_cr:

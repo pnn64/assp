@@ -52,6 +52,20 @@ fn synthetic_4_panel_spacing_matches_rssp_core() {
 ;
 ",
     );
+    assert_equally_spaced_4(
+        b"
+0000
+0000
+1000
+0000
+,
+0000
+0000
+0010
+0000
+;
+",
+    );
 }
 
 #[test]
@@ -76,6 +90,20 @@ fn synthetic_8_panel_spacing_matches_rssp_core() {
 01000000
 00100000
 00010000
+;
+",
+    );
+    assert_equally_spaced_8(
+        b"
+00000000
+00000000
+10000000
+00000000
+,
+00000000
+00000000
+00000001
+00000000
 ;
 ",
     );

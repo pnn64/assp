@@ -34,6 +34,20 @@ fn simple_measure_densities_match_rssp_core() {
 ;
 ",
     );
+    assert_density_match(
+        b"
+0000
+0000
+0000
+1000
+,
+0000
+0000
+0010
+0000
+;
+",
+    );
 }
 
 #[test]
@@ -48,6 +62,18 @@ fn simple_8_panel_measure_densities_match_rssp_core() {
 00000000
 00000011
 0000000M
+;
+",
+    );
+    assert_density_match_8(
+        b"
+00000000
+00000000
+10000000
+,
+00000000
+00000000
+00000001
 ;
 ",
     );
