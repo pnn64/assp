@@ -10,6 +10,7 @@ unsafe extern "C" {
         out_min: *mut i64,
         out_max: *mut i64,
     ) -> i32;
+    fn assp_bpm_median_centi(segments: *const BpmSegment, len: usize) -> i64;
     fn assp_measure_nps_milli_from_bpms(
         densities: *const u32,
         density_len: usize,
@@ -53,13 +54,17 @@ fn bench(mut f: impl FnMut(), name: &str, iters: usize, work_units: usize) {
     println!("{name}: {median:.0} cycles/call, {cycles_per_unit:.3} cycles/unit");
 }
 
-fn variable_bpms() -> Vec<BpmSegment> {
-    (0..256)
+fn variable_bpms_len(count: usize) -> Vec<BpmSegment> {
+    (0..count)
         .map(|i| BpmSegment {
-            beat_milli: i * 16_000,
-            bpm_milli: 90_000 + (i % 13) * 7_500,
+            beat_milli: i as i64 * 16_000,
+            bpm_milli: 90_000 + (i as i64 % 13) * 7_500,
         })
         .collect()
+}
+
+fn variable_bpms() -> Vec<BpmSegment> {
+    variable_bpms_len(256)
 }
 
 fn timing_events(count: usize, step_beat_milli: i64, value: i64) -> Vec<BpmSegment> {
@@ -75,6 +80,7 @@ fn timing_events(count: usize, step_beat_milli: i64, value: i64) -> Vec<BpmSegme
 #[ignore]
 fn bpm_nps_cycles() {
     let bpms = variable_bpms();
+    let large_bpms = variable_bpms_len(2048);
     let stops = timing_events(24, 28_000, 125);
     let delays = timing_events(16, 36_000, 80);
     let warps = timing_events(8, 52_000, 2_000);
@@ -180,5 +186,29 @@ fn bpm_nps_cycles() {
         "bpm_display_range_256",
         10_000,
         bpms.len(),
+    );
+
+    bench(
+        || unsafe {
+            black_box(assp_bpm_median_centi(
+                black_box(bpms.as_ptr()),
+                black_box(bpms.len()),
+            ));
+        },
+        "bpm_median_256",
+        1_000,
+        bpms.len(),
+    );
+
+    bench(
+        || unsafe {
+            black_box(assp_bpm_median_centi(
+                black_box(large_bpms.as_ptr()),
+                black_box(large_bpms.len()),
+            ));
+        },
+        "bpm_median_2048",
+        100,
+        large_bpms.len(),
     );
 }
