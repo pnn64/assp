@@ -15,14 +15,10 @@ section .text
     jmp %%done
 
 %%check:
-    movzx eax, byte [%1]
-    movzx ecx, byte [%1 + 1]
-    movzx edx, byte [%1 + 2]
-    movzx r10d, byte [%1 + 3]
+    movzx eax, word [%1]
+    movzx ecx, word [%1 + 2]
     movzx eax, byte [%2 + rax]
     or al, [%2 + rcx]
-    or al, [%2 + rdx]
-    or al, [%2 + r10]
     movzx eax, al
 
 %%done:
@@ -98,7 +94,7 @@ align 32
     xor r13d, r13d
     xor r14d, r14d
     xor r15d, r15d
-    lea r8, [rel density_note_step_table]
+    lea r8, [rel density_note_step_pair_table]
 
 %%line_loop:
     cmp rsi, rdi
@@ -314,7 +310,7 @@ assp_measure_densities_4:
     mov r12, r9
     xor r13d, r13d
     xor r14d, r14d
-    lea r8, [rel density_note_step_table]
+    lea r8, [rel density_note_step_pair_table]
 
 .line_loop:
     cmp rsi, rdi
@@ -495,10 +491,12 @@ assp_measure_densities_4:
 
 section .rdata
 align 64
-density_note_step_table:
+density_note_step_pair_table:
 %assign i 0
-%rep 256
-%if i = '1' || i = '2' || i = '4'
+%rep 65536
+%assign lo (i & 0ffh)
+%assign hi ((i >> 8) & 0ffh)
+%if lo = '1' || lo = '2' || lo = '4' || hi = '1' || hi = '2' || hi = '4'
     db 1
 %else
     db 0
@@ -529,7 +527,7 @@ assp_measure_densities_8:
     mov r12, r9
     xor r13d, r13d
     xor r14d, r14d
-    lea r8, [rel density_note_step_table]
+    lea r8, [rel density_note_step_pair_table]
 
 .line_loop:
     cmp rsi, rdi
