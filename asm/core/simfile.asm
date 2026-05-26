@@ -1787,36 +1787,52 @@ parse_chart_meta:
     test eax, eax
     jz .done
 
+    lea rax, [r10 + 3]
+    cmp rax, r11
+    ja .meta_next
+    movzx eax, word [r10 + 1]
+    or ax, 2020h
+    cmp ax, 6564h
+    je .check_description
+    cmp ax, 6964h
+    je .check_difficulty
+    cmp ax, 7473h
+    je .check_step_type
+    cmp ax, 656dh
+    je .check_meter
+    jmp .meta_next
+
+.check_description:
     lea rax, [r10 + tag_description_end - tag_description]
     cmp rax, r11
-    ja .check_difficulty
+    ja .meta_next
     lea r12, [tag_description]
     mov r13, tag_description_end - tag_description
     call match_tag_at
     test eax, eax
-    jz .check_difficulty
+    jz .meta_next
     store_tag tag_description_end - tag_description, ASSP_CHART_INFO_DESC_PTR, ASSP_CHART_INFO_DESC_LEN
 
 .check_difficulty:
     lea rax, [r10 + tag_difficulty_end - tag_difficulty]
     cmp rax, r11
-    ja .check_step_type
+    ja .meta_next
     lea r12, [tag_difficulty]
     mov r13, tag_difficulty_end - tag_difficulty
     call match_tag_at
     test eax, eax
-    jz .check_step_type
+    jz .meta_next
     store_tag tag_difficulty_end - tag_difficulty, ASSP_CHART_INFO_DIFFICULTY_PTR, ASSP_CHART_INFO_DIFFICULTY_LEN
 
 .check_step_type:
     lea rax, [r10 + tag_step_type_end - tag_step_type]
     cmp rax, r11
-    ja .check_meter
+    ja .meta_next
     lea r12, [tag_step_type]
     mov r13, tag_step_type_end - tag_step_type
     call match_tag_at
     test eax, eax
-    jz .check_meter
+    jz .meta_next
     store_tag tag_step_type_end - tag_step_type, ASSP_CHART_INFO_STEP_TYPE_PTR, ASSP_CHART_INFO_STEP_TYPE_LEN
 
 .check_meter:
