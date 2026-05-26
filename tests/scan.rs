@@ -30,6 +30,10 @@ fn counts_nondefault_speed_segments() {
     assert_eq!(count_gimmick_speed_segments(b""), Some(0));
     assert_eq!(count_gimmick_speed_segments(b"0=1.000"), Some(0));
     assert_eq!(
+        count_gimmick_speed_segments(b"0=1.,4=1.000000,8=1.0000009,12=1.000002"),
+        Some(1)
+    );
+    assert_eq!(
         count_gimmick_speed_segments(b"0=1.000,4=2.000,8=1.000=4=0,12=0.250=0=0,16=bad"),
         Some(2)
     );

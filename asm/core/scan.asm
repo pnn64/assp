@@ -209,6 +209,30 @@ assp_count_gimmick_speed_segments:
 
 .parse_value:
     mov rdx, rcx
+    sub rdx, rbx
+    test rdx, rdx
+    jz .parse_value_slow
+    cmp rdx, 8
+    ja .parse_value_slow
+    cmp byte [rbx], '1'
+    jne .parse_value_slow
+    cmp rdx, 1
+    je .next_segment
+    cmp byte [rbx + 1], '.'
+    jne .parse_value_slow
+    cmp rdx, 2
+    je .next_segment
+    lea r10, [rbx + 2]
+.default_frac_loop:
+    cmp r10, rcx
+    jae .next_segment
+    cmp byte [r10], '0'
+    jne .parse_value_slow
+    inc r10
+    jmp .default_frac_loop
+
+.parse_value_slow:
+    mov rdx, rcx
     mov rcx, rbx
     call parse_dec6_signed
     jc .next_segment
@@ -385,8 +409,6 @@ parse_dec6_signed:
     push rbx
     push rsi
     push rdi
-    push r12
-    push r13
     push r14
 
     mov rsi, rcx
@@ -445,7 +467,6 @@ parse_dec6_signed:
     inc rsi
     xor r10d, r10d
     xor r11d, r11d
-    xor r13d, r13d
     xor r14d, r14d
     jmp .frac_loop
 
@@ -518,8 +539,6 @@ parse_dec6_signed:
 
 .done:
     pop r14
-    pop r13
-    pop r12
     pop rdi
     pop rsi
     pop rbx
