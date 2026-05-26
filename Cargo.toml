@@ -9,7 +9,16 @@ publish = false
 name = "assp"
 path = "src/lib.rs"
 
+[features]
+asmssp-bin = ["dep:rssp-core"]
+
+[[bin]]
+name = "asmssp"
+path = "src/bin/asmssp.rs"
+required-features = ["asmssp-bin"]
+
 [dependencies]
+rssp-core = { path = "../rssp/crates/rssp-core", optional = true }
 
 [dev-dependencies]
 rssp-core = { path = "../rssp/crates/rssp-core" }

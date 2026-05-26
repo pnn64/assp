@@ -3,7 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use asmssp::{NoteStats, count_note_stats_4};
+use assp::{NoteStats, count_note_stats_4};
 use rssp_core::parse::{decode_bytes, extract_sections};
 use rssp_core::stats::{ArrowStats, minimize_chart_and_count_with_lanes};
 
