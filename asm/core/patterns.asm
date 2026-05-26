@@ -453,7 +453,6 @@ assp_count_facing_steps_minimized_4:
     push r13
     push r14
     push r15
-    sub rsp, 32
 
     test r9, r9
     jz .facing_fail
@@ -469,10 +468,10 @@ assp_count_facing_steps_minimized_4:
     mov rsi, rcx
     lea rdi, [rcx + rdx]
     mov r12, r8
+    xor r8d, r8d
     xor r13d, r13d
     xor r14d, r14d
     xor r15d, r15d
-    mov qword [rsp + 0], 0
 
 .facing_line_loop:
     cmp rsi, rdi
@@ -488,7 +487,7 @@ assp_count_facing_steps_minimized_4:
     ja .facing_slow_line
     cmp byte [rsi + 4], 10
     jne .facing_slow_line
-    mov [rsp + 8], rax
+    mov r9, rax
     jmp .facing_row_mask
 
 .facing_fast_separator:
@@ -522,7 +521,7 @@ assp_count_facing_steps_minimized_4:
     jae .facing_next_is_end
     inc r10
 .facing_next_is_end:
-    mov [rsp + 8], r10
+    mov r9, r10
 
     cmp rsi, r11
     jae .facing_line_done
@@ -555,7 +554,7 @@ assp_count_facing_steps_minimized_4:
     xor r13d, r13d
     xor r14d, r14d
     xor r15d, r15d
-    mov qword [rsp + 0], 0
+    xor r8d, r8d
     jmp .facing_line_done
 
 .facing_has_arrow:
@@ -566,7 +565,7 @@ assp_count_facing_steps_minimized_4:
     mov r15, rcx
     lea r10, [facing_forced_foot_table]
     movzx eax, byte [r10 + rcx]
-    mov [rsp + 0], rax
+    mov r8d, eax
     jmp .facing_line_done
 
 .facing_continue_sequence:
@@ -576,14 +575,14 @@ assp_count_facing_steps_minimized_4:
     lea r10, [facing_dir_table]
     movzx edx, byte [r10 + rax]
 
-    mov eax, [rsp + 0]
+    mov eax, r8d
     lea eax, [rax + rax * 4]
     add eax, ecx
     lea r10, [facing_foot_table]
     movzx eax, byte [r10 + rax]
     mov r10d, eax
     and r10d, 3
-    mov [rsp + 0], r10
+    mov r8d, r10d
     test al, 4
     jz .facing_step
     ASSP_FACING_FINALIZE_MIN_4
@@ -630,7 +629,7 @@ assp_count_facing_steps_minimized_4:
     mov r15, rcx
 
 .facing_line_done:
-    mov rsi, [rsp + 8]
+    mov rsi, r9
     jmp .facing_line_loop
 
 .facing_eof:
@@ -646,7 +645,6 @@ assp_count_facing_steps_minimized_4:
     xor eax, eax
 
 .facing_done:
-    add rsp, 32
     pop r15
     pop r14
     pop r13
@@ -828,7 +826,6 @@ assp_count_basic_patterns_minimized_4:
     push r13
     push r14
     push r15
-    sub rsp, 40
 
     test r8, r8
     jz .basic_fail
@@ -865,7 +862,7 @@ assp_count_basic_patterns_minimized_4:
     ja .basic_slow_line
     cmp byte [rsi + 4], 10
     jne .basic_slow_line
-    mov [rsp + 16], rax
+    mov r8, rax
     jmp .basic_row_mask
 
 .basic_fast_separator:
@@ -899,7 +896,7 @@ assp_count_basic_patterns_minimized_4:
     jae .basic_next_is_end
     inc r10
 .basic_next_is_end:
-    mov [rsp + 16], r10
+    mov r8, r10
 
     cmp rsi, r11
     jae .basic_line_done
@@ -948,7 +945,7 @@ assp_count_basic_patterns_minimized_4:
     jnz .basic_output_loop
 
 .basic_line_done:
-    mov rsi, [rsp + 16]
+    mov rsi, r8
     jmp .basic_line_loop
 
 .basic_success:
@@ -959,7 +956,6 @@ assp_count_basic_patterns_minimized_4:
     xor eax, eax
 
 .basic_done:
-    add rsp, 40
     pop r15
     pop r14
     pop r13
@@ -1061,7 +1057,6 @@ assp_count_default_patterns_minimized_4:
     push r13
     push r14
     push r15
-    sub rsp, 40
 
     test r8, r8
     jz .default_fail
@@ -1102,7 +1097,7 @@ assp_count_default_patterns_minimized_4:
     ja .default_slow_line
     cmp byte [rsi + 4], 10
     jne .default_slow_line
-    mov [rsp + 16], rax
+    mov r8, rax
     jmp .default_row_mask
 
 .default_fast_separator:
@@ -1136,7 +1131,7 @@ assp_count_default_patterns_minimized_4:
     jae .default_next_is_end
     inc r10
 .default_next_is_end:
-    mov [rsp + 16], r10
+    mov r8, r10
 
     cmp rsi, r11
     jae .default_line_done
@@ -1180,7 +1175,7 @@ assp_count_default_patterns_minimized_4:
     jnz .default_output_loop
 
 .default_line_done:
-    mov rsi, [rsp + 16]
+    mov rsi, r8
     jmp .default_line_loop
 
 .default_success:
@@ -1191,7 +1186,6 @@ assp_count_default_patterns_minimized_4:
     xor eax, eax
 
 .default_done:
-    add rsp, 40
     pop r15
     pop r14
     pop r13
