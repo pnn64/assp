@@ -53,10 +53,11 @@ section .text
 %define F32_BEST_ROW -124
 %define F32_BEST_TYPE -128
 
-%define NPS_DENSITIES -8
-%define NPS_DENSITY_LEN -16
-%define NPS_BPMS -24
-%define NPS_BPM_LEN -32
+; NPS rbp frames save seven nonvolatile registers at -8..-56.
+%define NPS_DENSITIES -64
+%define NPS_DENSITY_LEN -72
+%define NPS_BPMS -80
+%define NPS_BPM_LEN -88
 
 %define TIER_MAX_BPM 0
 %define TIER_MAX_E 8
@@ -66,30 +67,30 @@ section .text
 %define TIER_BPM_IDX 40
 %define TIER_CUR_BPM 48
 %define TIER_NEXT_BEAT 56
-%define NPS_STOPS -40
-%define NPS_STOP_LEN -48
-%define NPS_DELAYS -56
-%define NPS_DELAY_LEN -64
-%define NPS_WARPS -72
-%define NPS_WARP_LEN -80
-%define NPS_OUT -88
-%define NPS_OUT_CAP -96
-%define NPS_INDEX -104
-%define NPS_START_MS -112
-%define NPS_END_MS -120
-%define NPS_EVT_TARGET -128
-%define NPS_EVT_TIME -136
-%define NPS_EVT_BEAT -144
-%define NPS_EVT_BPM -152
-%define NPS_EVT_WARP_END -160
-%define NPS_EVT_I_BPM -168
-%define NPS_EVT_I_STOP -176
-%define NPS_EVT_I_DELAY -184
-%define NPS_EVT_I_WARP -192
-%define NPS_EVT_BEST_BEAT -200
-%define NPS_EVT_BEST_VAL -208
-%define NPS_EVT_BEST_TYPE -216
-%define NPS_EVT_BEST_PRI -224
+%define NPS_STOPS -96
+%define NPS_STOP_LEN -104
+%define NPS_DELAYS -112
+%define NPS_DELAY_LEN -120
+%define NPS_WARPS -128
+%define NPS_WARP_LEN -136
+%define NPS_OUT -144
+%define NPS_OUT_CAP -152
+%define NPS_INDEX -160
+%define NPS_START_MS -168
+%define NPS_END_MS -176
+%define NPS_EVT_TARGET -184
+%define NPS_EVT_TIME -192
+%define NPS_EVT_BEAT -200
+%define NPS_EVT_BPM -208
+%define NPS_EVT_WARP_END -216
+%define NPS_EVT_I_BPM -224
+%define NPS_EVT_I_STOP -232
+%define NPS_EVT_I_DELAY -240
+%define NPS_EVT_I_WARP -248
+%define NPS_EVT_BEST_BEAT -256
+%define NPS_EVT_BEST_VAL -264
+%define NPS_EVT_BEST_TYPE -272
+%define NPS_EVT_BEST_PRI -280
 
 %macro ASSP_CONSIDER_TIMING_EVENT 0
     cmp qword [rbp + EVT_BEST_TYPE], -1
@@ -1634,75 +1635,84 @@ assp_nps_median_centi:
 ; rsi = u32 NPS values, rdi = count, r8 = kth index. rax = kth value.
 kth_nps_milli_value:
     push rbx
+    push rdi
     push r12
     push r13
     push r14
     push r15
+    sub rsp, 2048
 
     test rdi, rdi
     jz .zero
 
-    mov r10d, [rsi]
-    mov r11d, r10d
-    mov r12d, 1
-.range_loop:
-    cmp r12, rdi
-    jae .search
-    mov eax, [rsi + r12 * 4]
-    cmp eax, r10d
-    jae .range_check_max
-    mov r10d, eax
-.range_check_max:
-    cmp eax, r11d
-    jbe .range_next
-    mov r11d, eax
-.range_next:
-    inc r12
-    jmp .range_loop
-
-.search:
-    cmp r10d, r11d
-    jae .found
-    mov eax, r11d
-    sub eax, r10d
-    shr eax, 1
-    add eax, r10d
-
+    mov rbx, rdi
+    mov r14, r8
     xor r12d, r12d
-    xor r13d, r13d
+    mov r13d, 24
+
+.pass_loop:
+    lea rdi, [rsp]
+    xor eax, eax
+    mov ecx, 256
+    rep stosq
+
+    xor r15d, r15d
 .count_loop:
-    cmp r12, rdi
-    jae .count_done
-    mov ebx, [rsi + r12 * 4]
-    cmp ebx, eax
-    ja .count_next
-    inc r13
+    cmp r15, rbx
+    jae .select_bucket
+
+    mov eax, [rsi + r15 * 4]
+    cmp r13d, 24
+    je .count_value
+    mov ecx, r13d
+    add ecx, 8
+    mov edx, eax
+    shr edx, cl
+    cmp edx, r12d
+    jne .count_next
+
+.count_value:
+    mov ecx, r13d
+    mov edx, eax
+    shr edx, cl
+    and edx, 255
+    inc qword [rsp + rdx * 8]
+
 .count_next:
-    inc r12
+    inc r15
     jmp .count_loop
 
-.count_done:
-    cmp r13, r8
-    ja .set_high
-    lea r10d, [rax + 1]
-    jmp .search
+.select_bucket:
+    xor r15d, r15d
+.select_loop:
+    mov rax, [rsp + r15 * 8]
+    cmp r14, rax
+    jb .bucket_found
+    sub r14, rax
+    inc r15d
+    cmp r15d, 256
+    jb .select_loop
+    xor eax, eax
+    jmp .done
 
-.set_high:
-    mov r11d, eax
-    jmp .search
-
-.found:
-    mov eax, r10d
+.bucket_found:
+    shl r12d, 8
+    or r12d, r15d
+    sub r13d, 8
+    jns .pass_loop
+    mov eax, r12d
     jmp .done
 
 .zero:
     xor eax, eax
 
 .done:
+    add rsp, 2048
     pop r15
     pop r14
     pop r13
     pop r12
+    pop rdi
     pop rbx
     ret
 
