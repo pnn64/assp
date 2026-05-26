@@ -2782,8 +2782,68 @@ assp_measure_nps_milli_from_bpms:
     cmp rax, 120000
     jbe .zero_fill
     mov [rsp + 40], rax
-    xor r15d, r15d
+    test r12, r12
+    jz .done
 
+    xor r15d, r15d
+    xor r10d, r10d
+.single_scan_loop:
+    cmp r15, rdi
+    jae .single_build_table
+    mov eax, [rsi + r15 * 4]
+    cmp eax, 1023
+    ja .single_loop_init
+    cmp eax, r10d
+    cmova r10d, eax
+    inc r15
+    jmp .single_scan_loop
+
+.single_build_table:
+    mov r13d, r10d
+    mov r14, r13
+    inc r14
+    shl r14, 2
+    add r14, 15
+    and r14, -16
+    sub rsp, r14
+    mov r10, [rsp + r14 + 40]
+    xor r15d, r15d
+.single_table_loop:
+    cmp r15, r13
+    ja .single_lookup_loop_init
+    xor eax, eax
+    test r15d, r15d
+    jz .single_table_store
+    mov rax, r15
+    imul rax, rax, 1000000000
+    mov r9, r10
+    shr r9, 1
+    add rax, r9
+    xor edx, edx
+    div r10
+.single_table_store:
+    mov [rsp + r15 * 4], eax
+    inc r15
+    jmp .single_table_loop
+
+.single_lookup_loop_init:
+    xor r15d, r15d
+.single_lookup_loop:
+    cmp r15, rdi
+    jae .single_lookup_done
+    cmp r15, r12
+    jae .single_lookup_done
+    mov eax, [rsi + r15 * 4]
+    mov eax, [rsp + rax * 4]
+    mov [rbx + r15 * 4], eax
+    inc r15
+    jmp .single_lookup_loop
+.single_lookup_done:
+    add rsp, r14
+    jmp .done
+
+.single_loop_init:
+    xor r15d, r15d
 .single_loop:
     cmp r15, rdi
     jae .done
@@ -2825,6 +2885,7 @@ assp_measure_nps_milli_from_bpms:
     inc r15
     jmp .zero_fill_loop
 
+align 16
 .loop:
     cmp r15, rdi
     jae .done
@@ -2981,47 +3042,70 @@ assp_nps_peak_milli_from_bpms:
     cmp r12, 1
     je .single_bpm_init
     mov r8, [rsi + ASSP_BPM_SEGMENT_BPM_MILLI]
+    xor r10d, r10d
 
+align 16
 .multi_loop:
     cmp r13, rdi
-    jae .done
+    jae .multi_finalize_done
 
-    xor eax, eax
-    mov r11d, [rbx + r13 * 4]
-    test r11d, r11d
-    jz .multi_next
-
-    mov r10, r13
-    imul r10, r10, 4000
 .multi_bpm_loop:
+    mov rdx, r13
+    imul rdx, rdx, 4000
     cmp r15, r12
-    jae .multi_got_bpm
-    mov rdx, r15
-    shl rdx, 4
-    cmp [rsi + rdx + ASSP_BPM_SEGMENT_BEAT_MILLI], r10
-    jg .multi_got_bpm
-    mov r8, [rsi + rdx + ASSP_BPM_SEGMENT_BPM_MILLI]
+    jae .multi_have_bpm
+    mov r9, r15
+    shl r9, 4
+    cmp [rsi + r9 + ASSP_BPM_SEGMENT_BEAT_MILLI], rdx
+    jg .multi_have_bpm
+    test r10d, r10d
+    jz .multi_set_bpm
+    mov rax, r8
+    test rax, rax
+    jle .multi_clear_span
+    cmp rax, 10000000
+    jge .multi_clear_span
+    imul rax, r10
+    add rax, 120
+    xor edx, edx
+    mov r11d, 240
+    div r11
+    cmp rax, r14
+    jbe .multi_clear_span
+    mov r14, rax
+.multi_clear_span:
+    xor r10d, r10d
+.multi_set_bpm:
+    mov r8, [rsi + r9 + ASSP_BPM_SEGMENT_BPM_MILLI]
     inc r15
     jmp .multi_bpm_loop
 
-.multi_got_bpm:
-    mov rax, r8
-    test rax, rax
-    jle .multi_next
-    cmp rax, 10000000
-    jge .multi_next
-    imul rax, r11
-    add rax, 120
-    xor edx, edx
-    mov r10d, 240
-    div r10
-    cmp rax, r14
-    jbe .multi_next
-    mov r14, rax
+.multi_have_bpm:
+    mov r11d, [rbx + r13 * 4]
+    cmp r11d, r10d
+    cmova r10d, r11d
 
 .multi_next:
     inc r13
     jmp .multi_loop
+
+.multi_finalize_done:
+    test r10d, r10d
+    jz .done
+    mov rax, r8
+    test rax, rax
+    jle .done
+    cmp rax, 10000000
+    jge .done
+    imul rax, r10
+    add rax, 120
+    xor edx, edx
+    mov r11d, 240
+    div r11
+    cmp rax, r14
+    jbe .done
+    mov r14, rax
+    jmp .done
 
 .single_bpm_init:
     mov rax, [rsi + ASSP_BPM_SEGMENT_BPM_MILLI]

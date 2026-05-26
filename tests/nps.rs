@@ -153,6 +153,7 @@ fn selects_bpm_at_measure_beats() {
 #[test]
 fn computes_measure_nps_like_rssp_core() {
     assert_nps_match(&[], b"0=120");
+    assert_nps_match(&[0, 16, 24, 32, 16], b"0=175");
     assert_nps_match(&[0, 16, 20, 24, 32, 8], b"0=120,8=240,16=10001,20=175");
     assert_nps_match(&[16, 16], b"");
 }
@@ -191,6 +192,7 @@ fn computes_median_nps_from_fixed_point_vector() {
 fn computes_peak_nps_like_rssp_fixed_timing() {
     assert_peak_nps_match(&[], b"0=120");
     assert_peak_nps_match(&[0, 16, 20, 24, 32, 8], b"0=120");
+    assert_peak_nps_match(&[4, 32, 8, 40, 12, 24], b"0=120,4=240,8=60,8=180,12=90");
 
     let long_stream = vec![16; 12_513];
     assert_peak_nps_match(&long_stream, b"0=140");
