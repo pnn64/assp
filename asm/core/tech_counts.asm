@@ -72,9 +72,28 @@ assp_calculate_step_tech_counts_from_placements_4:
     sub eax, [r14 + rsi * 4 - 4]
     mov r11d, eax
 
+    cmp byte [r13 + rsi], 1
+    jne .skip_jacks_doublesteps
+    cmp byte [r13 + rsi - 1], 1
+    jne .skip_jacks_doublesteps
     call count_jacks_doublesteps_4
+
+.skip_jacks_doublesteps:
+    cmp byte [r13 + rsi], 2
+    jb .skip_brackets
     call count_brackets_placements_4
+
+.skip_brackets:
+    cmp r11d, 300
+    jge .skip_switches
+    movzx eax, byte [r12 + rsi]
+    and al, [r12 + rsi - 1]
+    mov r10d, eax
+    test r10d, r10d
+    jz .skip_switches
     call count_switches_4
+
+.skip_switches:
     call count_crossovers_4
 
     mov rax, [rbp]
@@ -169,9 +188,29 @@ assp_calculate_step_tech_counts_from_placements_seconds_4:
     subss xmm0, [r14 + rsi * 4 - 4]
     movss [rbp + 24], xmm0
 
+    cmp byte [r13 + rsi], 1
+    jne .skip_jacks_doublesteps
+    cmp byte [r13 + rsi - 1], 1
+    jne .skip_jacks_doublesteps
     call count_jacks_doublesteps_seconds_4
+
+.skip_jacks_doublesteps:
+    cmp byte [r13 + rsi], 2
+    jb .skip_brackets
     call count_brackets_placements_4
+
+.skip_brackets:
+    movss xmm0, [rbp + 24]
+    ucomiss xmm0, [rel footswitch_cutoff_seconds]
+    jae .skip_switches
+    movzx eax, byte [r12 + rsi]
+    and al, [r12 + rsi - 1]
+    mov r10d, eax
+    test r10d, r10d
+    jz .skip_switches
     call count_switches_seconds_4
+
+.skip_switches:
     call count_crossovers_4
 
     mov rax, [rbp]
@@ -250,11 +289,6 @@ fill_hit_positions_4:
     ret
 
 count_jacks_doublesteps_4:
-    cmp byte [r13 + rsi], 1
-    jne .done
-    cmp byte [r13 + rsi - 1], 1
-    jne .done
-
     mov ecx, 1
 .foot_loop:
     movzx eax, byte [rbp + 8 + rcx]
@@ -284,11 +318,6 @@ count_jacks_doublesteps_4:
     ret
 
 count_jacks_doublesteps_seconds_4:
-    cmp byte [r13 + rsi], 1
-    jne .done
-    cmp byte [r13 + rsi - 1], 1
-    jne .done
-
     mov ecx, 1
 .foot_loop:
     movzx eax, byte [rbp + 8 + rcx]
@@ -320,8 +349,6 @@ count_jacks_doublesteps_seconds_4:
     ret
 
 count_brackets_placements_4:
-    cmp byte [r13 + rsi], 2
-    jb .done
     cmp byte [rbp + 8 + 1], 0ffh
     je .right
     cmp byte [rbp + 8 + 2], 0ffh
@@ -339,15 +366,6 @@ count_brackets_placements_4:
     ret
 
 count_switches_4:
-    cmp r11d, 300
-    jge .done
-
-    movzx eax, byte [r12 + rsi]
-    and al, [r12 + rsi - 1]
-    mov r10d, eax
-    test r10d, r10d
-    jz .done
-
     xor r11d, r11d
     lea r8, [r15 + rsi * 4]
     lea r9, [r8 - 4]
@@ -386,16 +404,6 @@ count_switches_4:
     ret
 
 count_switches_seconds_4:
-    movss xmm0, [rbp + 24]
-    ucomiss xmm0, [rel footswitch_cutoff_seconds]
-    jae .done
-
-    movzx eax, byte [r12 + rsi]
-    and al, [r12 + rsi - 1]
-    mov r10d, eax
-    test r10d, r10d
-    jz .done
-
     xor r11d, r11d
     lea r8, [r15 + rsi * 4]
     lea r9, [r8 - 4]
@@ -631,9 +639,28 @@ assp_calculate_step_tech_counts_from_placements_8:
     sub eax, [r14 + rsi * 4 - 4]
     mov r11d, eax
 
+    cmp byte [r13 + rsi], 1
+    jne .skip_jacks_doublesteps
+    cmp byte [r13 + rsi - 1], 1
+    jne .skip_jacks_doublesteps
     call count_jacks_doublesteps_8
+
+.skip_jacks_doublesteps:
+    cmp byte [r13 + rsi], 2
+    jb .skip_brackets
     call count_brackets_placements_8
+
+.skip_brackets:
+    cmp r11d, 300
+    jge .skip_switches
+    movzx eax, byte [r12 + rsi]
+    and al, [r12 + rsi - 1]
+    mov r10d, eax
+    test r10d, r10d
+    jz .skip_switches
     call count_switches_8
+
+.skip_switches:
     call count_crossovers_8
 
     mov rax, [rbp]
@@ -728,9 +755,29 @@ assp_calculate_step_tech_counts_from_placements_seconds_8:
     subss xmm0, [r14 + rsi * 4 - 4]
     movss [rbp + 24], xmm0
 
+    cmp byte [r13 + rsi], 1
+    jne .skip_jacks_doublesteps
+    cmp byte [r13 + rsi - 1], 1
+    jne .skip_jacks_doublesteps
     call count_jacks_doublesteps_seconds_8
+
+.skip_jacks_doublesteps:
+    cmp byte [r13 + rsi], 2
+    jb .skip_brackets
     call count_brackets_placements_8
+
+.skip_brackets:
+    movss xmm0, [rbp + 24]
+    ucomiss xmm0, [rel footswitch_cutoff_seconds]
+    jae .skip_switches
+    movzx eax, byte [r12 + rsi]
+    and al, [r12 + rsi - 1]
+    mov r10d, eax
+    test r10d, r10d
+    jz .skip_switches
     call count_switches_seconds_8
+
+.skip_switches:
     call count_crossovers_8
 
     mov rax, [rbp]
@@ -849,11 +896,6 @@ fill_hit_positions_8:
     ret
 
 count_jacks_doublesteps_8:
-    cmp byte [r13 + rsi], 1
-    jne .done
-    cmp byte [r13 + rsi - 1], 1
-    jne .done
-
     mov ecx, 1
 .foot_loop:
     movzx eax, byte [rbp + 8 + rcx]
@@ -883,11 +925,6 @@ count_jacks_doublesteps_8:
     ret
 
 count_jacks_doublesteps_seconds_8:
-    cmp byte [r13 + rsi], 1
-    jne .done
-    cmp byte [r13 + rsi - 1], 1
-    jne .done
-
     mov ecx, 1
 .foot_loop:
     movzx eax, byte [rbp + 8 + rcx]
@@ -919,8 +956,6 @@ count_jacks_doublesteps_seconds_8:
     ret
 
 count_brackets_placements_8:
-    cmp byte [r13 + rsi], 2
-    jb .done
     cmp byte [rbp + 8 + 1], 0ffh
     je .right
     cmp byte [rbp + 8 + 2], 0ffh
@@ -938,15 +973,6 @@ count_brackets_placements_8:
     ret
 
 count_switches_8:
-    cmp r11d, 300
-    jge .done
-
-    movzx eax, byte [r12 + rsi]
-    and al, [r12 + rsi - 1]
-    mov r10d, eax
-    test r10d, r10d
-    jz .done
-
     xor r11d, r11d
     lea r8, [r15 + rsi * 8]
     lea r9, [r8 - 8]
@@ -989,16 +1015,6 @@ count_switches_8:
     ret
 
 count_switches_seconds_8:
-    movss xmm0, [rbp + 24]
-    ucomiss xmm0, [rel footswitch_cutoff_seconds]
-    jae .done
-
-    movzx eax, byte [r12 + rsi]
-    and al, [r12 + rsi - 1]
-    mov r10d, eax
-    test r10d, r10d
-    jz .done
-
     xor r11d, r11d
     lea r8, [r15 + rsi * 8]
     lea r9, [r8 - 8]
