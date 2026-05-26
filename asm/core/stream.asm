@@ -99,13 +99,26 @@ assp_stream_counts_from_densities:
 
 .last_found:
     mov r11, r9
+    xor r13d, r13d
+    xor r12d, r12d
+    cmp r9, 2
+    jb .category_loop
+    add r13, r9
+
 .category_loop:
     cmp r11, r10
-    ja .break_counts
+    ja .store_tail_breaks
 
     mov eax, [rsi + r11 * 4]
     cmp eax, 16
     jb .sn_break
+
+    cmp r12, 2
+    jb .clear_break_run
+    add r13, r12
+.clear_break_run:
+    xor r12d, r12d
+
     cmp eax, 20
     jb .run16
     cmp eax, 24
@@ -129,66 +142,16 @@ assp_stream_counts_from_densities:
 
 .sn_break:
     inc qword [rbx + ASSP_STREAM_COUNTS_SN_BREAKS]
+    inc r12
 
 .category_next:
     inc r11
     jmp .category_loop
 
-.break_counts:
-    xor r12d, r12d
-    xor r13d, r13d
-    xor r14d, r14d
-    xor r15d, r15d
-
-.break_scan:
-    cmp r12, rdi
-    jae .tail_break
-
-    cmp dword [rsi + r12 * 4], 16
-    jae .stream_start
-    inc r12
-    jmp .break_scan
-
-.stream_start:
-    mov r8, r12
-
-.extend_stream:
-    lea rax, [r12 + 1]
-    cmp rax, rdi
-    jae .stream_end
-    cmp dword [rsi + rax * 4], 16
-    jb .stream_end
-    inc r12
-    jmp .extend_stream
-
-.stream_end:
-    lea r9, [r12 + 1]
-    test r15d, r15d
-    jz .leading_gap
-
-    mov rax, r8
-    sub rax, r14
-    cmp rax, 2
-    jb .set_prev
-    add r13, rax
-    jmp .set_prev
-
-.leading_gap:
-    cmp r8, 2
-    jb .set_prev
-    add r13, r8
-
-.set_prev:
-    mov r14, r9
-    mov r15d, 1
-    inc r12
-    jmp .break_scan
-
-.tail_break:
-    test r15d, r15d
-    jz .store_total_breaks
+.store_tail_breaks:
     mov rax, rdi
-    sub rax, r14
+    sub rax, r10
+    dec rax
     cmp rax, 2
     jb .store_total_breaks
     add r13, rax
