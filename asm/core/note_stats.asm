@@ -1652,30 +1652,41 @@ beat_in_timing_range_rows_prepared:
     jz .no
     mov r10, rcx
     xor r9d, r9d
+    mov r11, -1
 .loop:
     cmp r9, rdx
-    jae .no
-    mov rax, r9
-    shl rax, 4
-    mov rcx, [r10 + rax + ASSP_BPM_SEGMENT_BPM_MILLI]
-    test rcx, rcx
-    jle .next
-    call note_stats_milli_to_row48_f32_even
-    test rax, rax
-    jle .next
-    mov r11, rax
+    jae .check_candidate
     mov rax, r9
     shl rax, 4
     mov rcx, [r10 + rax + ASSP_BPM_SEGMENT_BEAT_MILLI]
     call note_stats_milli_to_row48_f32_even
     cmp r8, rax
-    jl .next
-    add rax, r11
-    cmp r8, rax
-    jl .yes
-.next:
+    jl .check_candidate
+    mov r11, r9
+
     inc r9
     jmp .loop
+
+.check_candidate:
+    cmp r11, -1
+    je .no
+    mov rax, r11
+    shl rax, 4
+    mov rcx, [r10 + rax + ASSP_BPM_SEGMENT_BPM_MILLI]
+    test rcx, rcx
+    jle .no
+    call note_stats_milli_to_row48_f32_even
+    test rax, rax
+    jle .no
+    mov rdx, rax
+    mov rax, r11
+    shl rax, 4
+    mov rcx, [r10 + rax + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    call note_stats_milli_to_row48_f32_even
+    add rax, rdx
+    cmp r8, rax
+    jl .yes
+    jmp .no
 .yes:
     mov eax, ASSP_TRUE
     ret
@@ -1685,8 +1696,7 @@ beat_in_timing_range_rows_prepared:
 
 note_stats_milli_to_row48_f32_even:
     cvtsi2ss xmm0, rcx
-    divss xmm0, [rel note_stats_const_thousand_f32]
-    mulss xmm0, [rel note_stats_const_48_f32]
+    mulss xmm0, [rel note_stats_const_48_over_1000_f32]
     cvtss2si rax, xmm0
     ret
 
@@ -3870,3 +3880,4 @@ note_stats_popcount4 db 0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4
 align 4
 note_stats_const_thousand_f32 dd 1000.0
 note_stats_const_48_f32 dd 48.0
+note_stats_const_48_over_1000_f32 dd 0.048
