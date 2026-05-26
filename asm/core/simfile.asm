@@ -1591,10 +1591,32 @@ find_semicolon:
 ; broken one-line metadata tags without truncating multiline timing tags.
 ; eax = 1 when found, 0 otherwise.
 find_line_tag_terminator:
+    movdqu xmm1, [lf_bytes]
+    movdqu xmm3, [cr_bytes]
+
+.scan:
     cmp rdx, r11
     jae .not_found
+    lea rax, [rdx + 16]
+    cmp rax, r11
+    ja .tail
+    movdqu xmm0, [rdx]
+    movdqa xmm2, xmm0
+    pcmpeqb xmm0, xmm1
+    pcmpeqb xmm2, xmm3
+    por xmm0, xmm2
+    pmovmskb eax, xmm0
+    test eax, eax
+    jnz .mask
+    add rdx, 16
+    jmp .scan
 
-.loop:
+.mask:
+    bsf eax, eax
+    add rdx, rax
+    jmp .check_next_tag
+
+.tail:
     cmp rdx, r11
     jae .not_found
     mov al, [rdx]
@@ -1603,7 +1625,7 @@ find_line_tag_terminator:
     cmp al, 13
     je .check_next_tag
     inc rdx
-    jmp .loop
+    jmp .tail
 
 .check_next_tag:
     mov r9, rdx
@@ -1629,7 +1651,7 @@ find_line_tag_terminator:
 
 .continue_after_line:
     inc rdx
-    jmp .loop
+    jmp .scan
 
 .found:
     mov eax, ASSP_TRUE
@@ -2018,6 +2040,8 @@ section .rdata
 align 16
 hash_bytes times 16 db '#'
 semicolon_bytes times 16 db ';'
+lf_bytes times 16 db 10
+cr_bytes times 16 db 13
 
 tag_bpms db "#BPMS:"
 tag_bpms_end:
