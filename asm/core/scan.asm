@@ -136,9 +136,6 @@ assp_find_byte:
 ; rcx = comma-separated #SPEEDS bytes, rdx = len.
 ; rax = count of non-default speed-factor segments, or ASSP_NOT_FOUND.
 assp_count_gimmick_speed_segments:
-; rcx = comma-separated #SCROLLS bytes, rdx = len.
-; rax = count of non-default scroll-value segments, or ASSP_NOT_FOUND.
-assp_count_gimmick_scroll_segments:
     push rbx
     push rsi
     push rdi
@@ -209,6 +206,132 @@ assp_count_gimmick_scroll_segments:
     je .parse_value
     inc rcx
     jmp .find_value_end
+
+.parse_value:
+    mov rdx, rcx
+    mov rcx, rbx
+    call parse_dec6_signed
+    jc .next_segment
+
+    cmp rax, 999999
+    jl .count_segment
+    cmp rax, 1000001
+    jg .count_segment
+    cmp rax, 1000001
+    jne .next_segment
+    test edx, edx
+    jz .next_segment
+
+.count_segment:
+    inc r12
+
+.next_segment:
+    cmp r13, rdi
+    jae .done_count
+    lea rsi, [r13 + 1]
+    jmp .segment_loop
+
+.done_count:
+    mov rax, r12
+    jmp .pop_done
+
+.zero:
+    xor eax, eax
+    jmp .pop_done
+
+.not_found:
+    mov rax, ASSP_NOT_FOUND
+
+.pop_done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
+; rcx = comma-separated #SCROLLS bytes, rdx = len.
+; rax = count of non-default scroll-value segments, or ASSP_NOT_FOUND.
+assp_count_gimmick_scroll_segments:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+
+    test rdx, rdx
+    jz .zero
+    test rcx, rcx
+    jz .not_found
+
+    mov rsi, rcx
+    lea rdi, [rcx + rdx]
+    xor r12d, r12d
+
+.segment_loop:
+    cmp rsi, rdi
+    jae .done_count
+
+    mov r13, rsi
+    xor ebx, ebx
+    xor r11d, r11d
+
+.scan_segment:
+    cmp r13, rdi
+    jae .segment_bounds
+    mov al, [r13]
+    cmp al, ','
+    je .segment_bounds
+    cmp al, '='
+    jne .scan_segment_next
+    test rbx, rbx
+    jnz .scan_second_equal
+    mov rbx, r13
+    jmp .scan_segment_next
+.scan_second_equal:
+    test r11, r11
+    jnz .scan_segment_next
+    mov r11, r13
+.scan_segment_next:
+    inc r13
+    jmp .scan_segment
+
+.segment_bounds:
+    mov r14, rsi
+    mov r15, r13
+
+.trim_left:
+    cmp r14, r15
+    jae .next_segment
+    cmp byte [r14], ' '
+    ja .trim_right
+    inc r14
+    jmp .trim_left
+
+.trim_right:
+    cmp r15, r14
+    jbe .next_segment
+    cmp byte [r15 - 1], ' '
+    ja .value_bounds
+    dec r15
+    jmp .trim_right
+
+.value_bounds:
+    test rbx, rbx
+    jz .next_segment
+    cmp rbx, r14
+    jb .next_segment
+    cmp rbx, r15
+    jae .next_segment
+    inc rbx
+    mov rcx, r15
+    test r11, r11
+    jz .parse_value
+    mov rcx, r11
 
 .parse_value:
     mov rdx, rcx
