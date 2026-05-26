@@ -2758,6 +2758,104 @@ assp_measure_nps_milli_from_bpms:
 .check_empty_bpms:
     test r14, r14
     jz .loop
+    test r12, r12
+    jz .done
+
+    xor r10d, r10d
+.aligned_scan_loop:
+    cmp r10, r14
+    jae .aligned_init
+    mov r11, r10
+    shl r11, 4
+    mov rax, [r13 + r11 + ASSP_BPM_SEGMENT_BEAT_MILLI]
+    cqo
+    mov r11d, 4000
+    idiv r11
+    test rdx, rdx
+    jnz .timed_init_loop
+    inc r10
+    jmp .aligned_scan_loop
+
+.aligned_init:
+    xor r15d, r15d
+    xor r8d, r8d
+    mov qword [rsp + 24], 60000
+    mov qword [rsp + 40], 4000000
+.aligned_init_loop:
+    cmp r8, r14
+    jae .aligned_loop
+    mov r11, r8
+    shl r11, 4
+    cmp qword [r13 + r11 + ASSP_BPM_SEGMENT_BEAT_MILLI], 0
+    jg .aligned_loop
+    mov r11, [r13 + r11 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    mov [rsp + 24], r11
+    test r11, r11
+    jle .aligned_init_zero_duration
+    mov rax, 240000000000
+    xor edx, edx
+    div r11
+    mov [rsp + 40], rax
+    jmp .aligned_init_set_done
+.aligned_init_zero_duration:
+    mov qword [rsp + 40], 0
+.aligned_init_set_done:
+    inc r8
+    jmp .aligned_init_loop
+
+align 16
+.aligned_loop:
+    cmp r15, rdi
+    jae .done
+    mov r10, r15
+    imul r10, r10, 4000
+
+.aligned_event_loop:
+    cmp r8, r14
+    jae .aligned_have_bpm
+    mov r11, r8
+    shl r11, 4
+    cmp [r13 + r11 + ASSP_BPM_SEGMENT_BEAT_MILLI], r10
+    jg .aligned_have_bpm
+    mov r11, [r13 + r11 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    mov [rsp + 24], r11
+    test r11, r11
+    jle .aligned_event_zero_duration
+    mov rax, 240000000000
+    xor edx, edx
+    div r11
+    mov [rsp + 40], rax
+    jmp .aligned_event_set_done
+.aligned_event_zero_duration:
+    mov qword [rsp + 40], 0
+.aligned_event_set_done:
+    inc r8
+    jmp .aligned_event_loop
+
+.aligned_have_bpm:
+    xor eax, eax
+    mov r10, [rsp + 40]
+    cmp r10, 120000
+    jbe .aligned_store
+    mov r11d, [rsi + r15 * 4]
+    test r11d, r11d
+    jz .aligned_store
+    mov rax, r11
+    imul rax, rax, 1000000000
+    mov r9, r10
+    shr r9, 1
+    add rax, r9
+    xor edx, edx
+    div r10
+
+.aligned_store:
+    cmp r15, r12
+    jae .aligned_next
+    mov [rbx + r15 * 4], eax
+
+.aligned_next:
+    inc r15
+    jmp .aligned_loop
 
 .timed_init_loop:
     mov rax, [rsp + 32]
