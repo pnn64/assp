@@ -181,12 +181,18 @@ section .text
 %endmacro
 
 %macro is_notes_tag 1
-    expect_exact %1, 0, '#', %%no
-    expect_alpha_ci %1, 1, 'N', %%no
-    expect_alpha_ci %1, 2, 'O', %%no
-    expect_alpha_ci %1, 3, 'T', %%no
-    expect_alpha_ci %1, 4, 'E', %%no
-    expect_alpha_ci %1, 5, 'S', %%no
+    mov al, [%1 + 1]
+    or al, 20h
+    cmp al, 'n'
+    jne %%no
+    mov eax, [%1]
+    or eax, 20202000h
+    cmp eax, 746f6e23h
+    jne %%no
+    movzx eax, word [%1 + 4]
+    or ax, 2020h
+    cmp ax, 7365h
+    jne %%no
     cmp byte [%1 + 6], ':'
     je %%notes
     cmp byte [%1 + 6], '2'
@@ -204,16 +210,24 @@ section .text
 %endmacro
 
 %macro is_notedata_tag 1
-    expect_exact %1, 0, '#', %%no
-    expect_alpha_ci %1, 1, 'N', %%no
-    expect_alpha_ci %1, 2, 'O', %%no
-    expect_alpha_ci %1, 3, 'T', %%no
-    expect_alpha_ci %1, 4, 'E', %%no
-    expect_alpha_ci %1, 5, 'D', %%no
-    expect_alpha_ci %1, 6, 'A', %%no
-    expect_alpha_ci %1, 7, 'T', %%no
-    expect_alpha_ci %1, 8, 'A', %%no
-    expect_exact %1, 9, ':', %%no
+    mov al, [%1 + 1]
+    or al, 20h
+    cmp al, 'n'
+    jne %%no
+    mov eax, [%1]
+    or eax, 20202000h
+    cmp eax, 746f6e23h
+    jne %%no
+    mov eax, [%1 + 4]
+    or eax, 20202020h
+    cmp eax, 74616465h
+    jne %%no
+    mov al, [%1 + 8]
+    or al, 20h
+    cmp al, 'a'
+    jne %%no
+    cmp byte [%1 + 9], ':'
+    jne %%no
     mov eax, ASSP_TRUE
     jmp %%done
 %%no:
@@ -222,12 +236,18 @@ section .text
 %endmacro
 
 %macro is_bpms_tag 1
-    expect_exact %1, 0, '#', %%no
-    expect_alpha_ci %1, 1, 'B', %%no
-    expect_alpha_ci %1, 2, 'P', %%no
-    expect_alpha_ci %1, 3, 'M', %%no
-    expect_alpha_ci %1, 4, 'S', %%no
-    expect_exact %1, 5, ':', %%no
+    mov al, [%1 + 1]
+    or al, 20h
+    cmp al, 'b'
+    jne %%no
+    mov eax, [%1]
+    or eax, 20202000h
+    cmp eax, 6d706223h
+    jne %%no
+    movzx eax, word [%1 + 4]
+    or ax, 0020h
+    cmp ax, 3a73h
+    jne %%no
     mov eax, ASSP_TRUE
     jmp %%done
 %%no:
