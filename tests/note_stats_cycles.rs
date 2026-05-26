@@ -17,7 +17,27 @@ unsafe extern "C" {
         scratch: *mut u8,
         scratch_cap: usize,
     ) -> usize;
+    fn assp_count_mines_nonfake_8(
+        data: *const u8,
+        len: usize,
+        warps: *const BpmSegment,
+        warp_count: usize,
+        fakes: *const BpmSegment,
+        fake_count: usize,
+        scratch: *mut u8,
+        scratch_cap: usize,
+    ) -> usize;
     fn assp_count_timing_fakes_4(
+        data: *const u8,
+        len: usize,
+        warps: *const BpmSegment,
+        warp_count: usize,
+        fakes: *const BpmSegment,
+        fake_count: usize,
+        scratch: *mut u8,
+        scratch_cap: usize,
+    ) -> usize;
+    fn assp_count_timing_fakes_8(
         data: *const u8,
         len: usize,
         warps: *const BpmSegment,
@@ -151,6 +171,7 @@ fn note_stats_cycles() {
     let mut scratch4 = vec![0u8; synthetic4.len().saturating_mul(8).max(1024)];
     let mut scratch8 = vec![0u8; synthetic8.len().saturating_mul(8).max(1024)];
     let mut row_scratch4 = vec![[0u8; 4]; synthetic4.len() / 4 + 1];
+    let mut row_scratch8 = vec![[0u8; 8]; synthetic8.len() / 8 + 1];
 
     bench(
         || unsafe {
@@ -288,5 +309,41 @@ fn note_stats_cycles() {
         "timing_fakes_4_synthetic",
         100,
         synthetic4.len(),
+    );
+
+    bench(
+        || unsafe {
+            black_box(assp_count_mines_nonfake_8(
+                black_box(synthetic8.as_ptr()),
+                synthetic8.len(),
+                black_box(warps.as_ptr()),
+                warps.len(),
+                black_box(fakes.as_ptr()),
+                fakes.len(),
+                black_box(row_scratch8.as_mut_ptr().cast::<u8>()),
+                row_scratch8.len(),
+            ));
+        },
+        "mines_nonfake_8_synthetic",
+        100,
+        synthetic8.len(),
+    );
+
+    bench(
+        || unsafe {
+            black_box(assp_count_timing_fakes_8(
+                black_box(synthetic8.as_ptr()),
+                synthetic8.len(),
+                black_box(warps.as_ptr()),
+                warps.len(),
+                black_box(fakes.as_ptr()),
+                fakes.len(),
+                black_box(row_scratch8.as_mut_ptr().cast::<u8>()),
+                row_scratch8.len(),
+            ));
+        },
+        "timing_fakes_8_synthetic",
+        100,
+        synthetic8.len(),
     );
 }

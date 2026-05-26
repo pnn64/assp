@@ -1736,12 +1736,16 @@ assp_count_mines_nonfake_8:
     mov r14, [rsp + 104]
     mov r15, [rsp + 112]
     mov r12, [rsp + 120]
-    sub rsp, 64
+    sub rsp, 96
 
     mov [rsp + 32], r8
     mov [rsp + 40], r9
     mov [rsp + 48], r13
     mov [rsp + 56], r14
+    mov qword [rsp + 64], 0
+    mov qword [rsp + 72], -1
+    mov qword [rsp + 80], 0
+    mov qword [rsp + 88], -1
     mov qword [rsp], 0
     mov qword [rsp + 8], 0
     mov qword [rsp + 16], 0
@@ -1857,7 +1861,7 @@ assp_count_mines_nonfake_8:
     mov rax, ASSP_NOT_FOUND
 
 .done:
-    add rsp, 64
+    add rsp, 96
     pop r15
     pop r14
     pop r13
@@ -1894,12 +1898,27 @@ mines_finalize_measure_8:
     test eax, eax
     jz .next
 
-    mov rax, [rsp]
+    mov rcx, [rsp]
+    call note_stats_milli_to_row48_f32_even
+    mov [rsp + 32], rax
+    cvtsi2ss xmm2, qword [rsp]
+    mulss xmm2, [rel note_stats_const_one_over_1000_f32]
+
     mov rcx, [rsp + 80]
     mov rdx, [rsp + 88]
-    mov r8, [rsp + 96]
-    mov r9, [rsp + 104]
-    call beat_in_timing_range_pair
+    mov r8, [rsp + 32]
+    lea r9, [rsp + 112]
+    lea r10, [rsp + 120]
+    call beat_in_timing_range_cursor
+    test eax, eax
+    jnz .next
+
+    mov rcx, [rsp + 96]
+    mov rdx, [rsp + 104]
+    mov r8, [rsp + 32]
+    lea r9, [rsp + 128]
+    lea r10, [rsp + 136]
+    call beat_in_timing_range_cursor
     test eax, eax
     jnz .next
     inc qword [rsp + 56]
@@ -1937,80 +1956,6 @@ row_has_mine_8:
     ret
 .yes:
     mov eax, ASSP_TRUE
-    ret
-
-; rax = beat_milli, rcx/rdx = first range ptr/count, r8/r9 = second range
-; ptr/count. eax = 1 when beat is in either range.
-beat_in_timing_range_pair:
-    sub rsp, 40
-    mov [rsp], rcx
-    mov [rsp + 8], rdx
-    mov [rsp + 16], r8
-    mov [rsp + 24], r9
-
-    mov rcx, rax
-    call note_stats_milli_to_row48_f32_even
-    mov r8, rax
-    cvtsi2ss xmm2, rax
-    divss xmm2, [rel note_stats_const_48_f32]
-
-    mov rcx, [rsp]
-    mov rdx, [rsp + 8]
-    call beat_in_timing_range_prepared
-    test eax, eax
-    jnz .done
-
-    mov rcx, [rsp + 16]
-    mov rdx, [rsp + 24]
-    call beat_in_timing_range_prepared
-
-.done:
-    add rsp, 40
-    ret
-
-; rcx = segments, rdx = count, r8 = beat row48, xmm2 = beat row as beat.
-; eax = 1 when beat is in range.
-beat_in_timing_range_prepared:
-    test rdx, rdx
-    jz .no
-    test rcx, rcx
-    jz .no
-    mov r10, rcx
-    xor r9d, r9d
-    mov r11, -1
-.loop:
-    cmp r9, rdx
-    jae .check_candidate
-    mov rax, r9
-    shl rax, 4
-    mov rcx, [r10 + rax + ASSP_BPM_SEGMENT_BEAT_MILLI]
-    call note_stats_milli_to_row48_f32_even
-    cmp r8, rax
-    jl .check_candidate
-    mov r11, r9
-.next:
-    inc r9
-    jmp .loop
-
-.check_candidate:
-    cmp r11, -1
-    je .no
-    mov rax, r11
-    shl rax, 4
-    mov rcx, [r10 + rax + ASSP_BPM_SEGMENT_BPM_MILLI]
-    test rcx, rcx
-    jle .no
-    add rcx, [r10 + rax + ASSP_BPM_SEGMENT_BEAT_MILLI]
-    cvtsi2ss xmm0, rcx
-    divss xmm0, [rel note_stats_const_thousand_f32]
-    ucomiss xmm2, xmm0
-    jb .yes
-    jmp .no
-.yes:
-    mov eax, ASSP_TRUE
-    ret
-.no:
-    xor eax, eax
     ret
 
 ; rcx = segments, rdx = count, r8 = beat row48, xmm2 = beat as beat,
@@ -2555,12 +2500,16 @@ assp_count_timing_fakes_8:
     mov r14, [rsp + 104]
     mov r15, [rsp + 112]
     mov r12, [rsp + 120]
-    sub rsp, 64
+    sub rsp, 96
 
     mov [rsp + 32], r8
     mov [rsp + 40], r9
     mov [rsp + 48], r13
     mov [rsp + 56], r14
+    mov qword [rsp + 64], 0
+    mov qword [rsp + 72], -1
+    mov qword [rsp + 80], 0
+    mov qword [rsp + 88], -1
     mov qword [rsp], 0
     mov qword [rsp + 8], 0
     mov qword [rsp + 16], 0
@@ -2676,7 +2625,7 @@ assp_count_timing_fakes_8:
     mov rax, ASSP_NOT_FOUND
 
 .done:
-    add rsp, 64
+    add rsp, 96
     pop r15
     pop r14
     pop r13
@@ -2709,12 +2658,27 @@ timing_fakes_finalize_measure_8:
     cmp r13, [rsp + 48]
     jae .clear
 
-    mov rax, [rsp]
+    mov rcx, [rsp]
+    call note_stats_milli_to_row48_f32_even
+    mov [rsp + 32], rax
+    cvtsi2ss xmm2, qword [rsp]
+    mulss xmm2, [rel note_stats_const_one_over_1000_f32]
+
     mov rcx, [rsp + 80]
     mov rdx, [rsp + 88]
-    mov r8, [rsp + 96]
-    mov r9, [rsp + 104]
-    call beat_in_timing_range_pair
+    mov r8, [rsp + 32]
+    lea r9, [rsp + 112]
+    lea r10, [rsp + 120]
+    call beat_in_timing_range_cursor
+    test eax, eax
+    jnz .nonjudgable
+
+    mov rcx, [rsp + 96]
+    mov rdx, [rsp + 104]
+    mov r8, [rsp + 32]
+    lea r9, [rsp + 128]
+    lea r10, [rsp + 136]
+    call beat_in_timing_range_cursor
     test eax, eax
     jnz .nonjudgable
 
