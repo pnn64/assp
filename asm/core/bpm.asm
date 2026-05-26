@@ -1585,6 +1585,8 @@ assp_nps_median_centi:
     push rdi
     push r12
     push r13
+    push r14
+    push r15
 
     test rdx, rdx
     jz .zero
@@ -1592,8 +1594,123 @@ assp_nps_median_centi:
     jz .zero
 
     mov rsi, rcx
-    mov rdi, rdx
-    mov rax, rdx
+    mov r15, rdx
+    cmp r15, 65535
+    ja .radix_median
+
+    xor r10d, r10d
+    xor r9d, r9d
+.hist_scan:
+    cmp r9, r15
+    jae .hist_alloc
+    mov eax, [rsi + r9 * 4]
+    test eax, 0ffff0000h
+    jnz .radix_median
+    cmp eax, r10d
+    cmova r10d, eax
+    inc r9
+    jmp .hist_scan
+
+.hist_alloc:
+    mov r12, r10
+    inc r12
+    lea r14, [r12 * 2 + 15]
+    and r14, -16
+    mov r11, r14
+.hist_probe_loop:
+    cmp r11, 4096
+    jbe .hist_probe_tail
+    sub rsp, 4096
+    mov qword [rsp], 0
+    sub r11, 4096
+    jmp .hist_probe_loop
+.hist_probe_tail:
+    sub rsp, r11
+    mov qword [rsp], 0
+
+    mov rdi, rsp
+    xor eax, eax
+    mov rcx, r14
+    shr rcx, 3
+    rep stosq
+
+    xor r9d, r9d
+.hist_fill:
+    cmp r9, r15
+    jae .hist_select
+    mov eax, [rsi + r9 * 4]
+    inc word [rsp + rax * 2]
+    inc r9
+    jmp .hist_fill
+
+.hist_select:
+    mov r8, r15
+    shr r8, 1
+    test r15, 1
+    jz .hist_even
+
+    xor r9d, r9d
+.hist_odd_loop:
+    movzx ecx, word [rsp + r9 * 2]
+    cmp r8, rcx
+    jb .hist_odd_found
+    sub r8, rcx
+    inc r9
+    cmp r9, r12
+    jb .hist_odd_loop
+    xor eax, eax
+    jmp .hist_odd_done
+.hist_odd_found:
+    mov rax, r9
+.hist_odd_done:
+    add rsp, r14
+    mov rbx, 10
+    call round_signed_div_ties_even
+    jmp .done
+
+.hist_even:
+    mov rax, r15
+    shr rax, 1
+    mov r8, rax
+    mov r9, rax
+    dec r8
+    mov r13, -1
+    xor r10d, r10d
+.hist_even_loop:
+    movzx ecx, word [rsp + r10 * 2]
+    test ecx, ecx
+    jz .hist_even_next
+    cmp r13, -1
+    jne .hist_even_upper
+    cmp r8, rcx
+    jb .hist_even_lower_found
+    sub r8, rcx
+    jmp .hist_even_upper_sub
+.hist_even_lower_found:
+    mov r13, r10
+.hist_even_upper:
+    cmp r9, rcx
+    jb .hist_even_upper_found
+.hist_even_upper_sub:
+    sub r9, rcx
+.hist_even_next:
+    inc r10
+    cmp r10, r12
+    jb .hist_even_loop
+    xor eax, eax
+    jmp .hist_even_done
+.hist_even_upper_found:
+    mov rax, r10
+    add rax, r13
+.hist_even_done:
+    add rsp, r14
+    mov rbx, 20
+    call round_signed_div_ties_even
+    jmp .done
+
+.radix_median:
+    mov rdi, r15
+    mov rax, r15
     shr rax, 1
     test rdx, 1
     jz .even
@@ -1622,6 +1739,8 @@ assp_nps_median_centi:
     xor eax, eax
 
 .done:
+    pop r15
+    pop r14
     pop r13
     pop r12
     pop rdi
