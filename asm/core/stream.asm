@@ -9,27 +9,12 @@ global assp_format_stream_tokens
 global assp_format_stream_segments
 
 %macro ASSP_DENSITY_KIND 0
-    cmp eax, 16
-    jb %%break
-    cmp eax, 20
-    jb %%run16
-    cmp eax, 24
-    jb %%run20
-    cmp eax, 32
-    jb %%run24
+    cmp eax, 64
+    jae %%run32
+    movzx eax, byte [rcx + rax]
+    jmp %%done
+%%run32:
     mov eax, ASSP_STREAM_TOKEN_RUN32
-    jmp %%done
-%%run24:
-    mov eax, ASSP_STREAM_TOKEN_RUN24
-    jmp %%done
-%%run20:
-    mov eax, ASSP_STREAM_TOKEN_RUN20
-    jmp %%done
-%%run16:
-    mov eax, ASSP_STREAM_TOKEN_RUN16
-    jmp %%done
-%%break:
-    mov eax, ASSP_STREAM_TOKEN_BREAK
 %%done:
 %endmacro
 
@@ -414,6 +399,7 @@ assp_stream_tokens_from_densities:
     mov rbx, r8
     mov r12, r9
     xor r13d, r13d
+    lea rcx, [rel stream_density_kind_table]
 
     test rdi, rdi
     jz .done
@@ -1165,6 +1151,24 @@ stream_int4_emit:
 %assign i 0
 %rep 10000
     db '0' + (i / 1000), '0' + ((i / 100) % 10), '0' + ((i / 10) % 10), '0' + (i % 10)
+%assign i i+1
+%endrep
+
+align 64
+stream_density_kind_table:
+%assign i 0
+%rep 64
+%if i < 16
+    db ASSP_STREAM_TOKEN_BREAK
+%elif i < 20
+    db ASSP_STREAM_TOKEN_RUN16
+%elif i < 24
+    db ASSP_STREAM_TOKEN_RUN20
+%elif i < 32
+    db ASSP_STREAM_TOKEN_RUN24
+%else
+    db ASSP_STREAM_TOKEN_RUN32
+%endif
 %assign i i+1
 %endrep
 
