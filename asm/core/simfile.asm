@@ -20,6 +20,125 @@ global assp_supported_step_type_lanes
 
 section .text
 
+%macro find_range_byte 2
+    cmp %1, r11
+    jae %%not_found
+
+%%wide:
+    lea rax, [%1 + 16]
+    cmp rax, r11
+    ja %%tail
+    movdqu xmm0, [%1]
+    pcmpeqb xmm0, xmm1
+    pmovmskb eax, xmm0
+    test eax, eax
+    jnz %%mask
+    add %1, 16
+    lea rax, [%1 + 64]
+    cmp rax, r11
+    ja %%tail_or_32
+    jmp %%wide64
+
+%%wide64:
+    movdqu xmm0, [%1]
+    pcmpeqb xmm0, xmm1
+    pmovmskb eax, xmm0
+    test eax, eax
+    jnz %%mask
+    movdqu xmm0, [%1 + 16]
+    pcmpeqb xmm0, xmm1
+    pmovmskb eax, xmm0
+    test eax, eax
+    jnz %%mask_hi
+    movdqu xmm0, [%1 + 32]
+    pcmpeqb xmm0, xmm1
+    pmovmskb eax, xmm0
+    test eax, eax
+    jnz %%mask_32
+    movdqu xmm0, [%1 + 48]
+    pcmpeqb xmm0, xmm1
+    pmovmskb eax, xmm0
+    test eax, eax
+    jnz %%mask_48
+    add %1, 64
+    lea rax, [%1 + 64]
+    cmp rax, r11
+    jbe %%wide64
+
+%%tail_or_32:
+    lea rax, [%1 + 32]
+    cmp rax, r11
+    ja %%tail_or_16
+
+%%wide32:
+    movdqu xmm0, [%1]
+    pcmpeqb xmm0, xmm1
+    pmovmskb eax, xmm0
+    test eax, eax
+    jnz %%mask
+    movdqu xmm0, [%1 + 16]
+    pcmpeqb xmm0, xmm1
+    pmovmskb eax, xmm0
+    test eax, eax
+    jnz %%mask_hi
+    add %1, 32
+    lea rax, [%1 + 32]
+    cmp rax, r11
+    jbe %%wide32
+
+%%tail_or_16:
+    lea rax, [%1 + 16]
+    cmp rax, r11
+    ja %%tail
+    movdqu xmm0, [%1]
+    pcmpeqb xmm0, xmm1
+    pmovmskb eax, xmm0
+    test eax, eax
+    jnz %%mask
+    add %1, 16
+    jmp %%tail
+
+%%mask:
+    bsf eax, eax
+    add %1, rax
+    mov eax, ASSP_TRUE
+    ret
+
+%%mask_hi:
+    bsf eax, eax
+    lea %1, [%1 + rax + 16]
+    mov eax, ASSP_TRUE
+    ret
+
+%%mask_32:
+    bsf eax, eax
+    lea %1, [%1 + rax + 32]
+    mov eax, ASSP_TRUE
+    ret
+
+%%mask_48:
+    bsf eax, eax
+    lea %1, [%1 + rax + 48]
+    mov eax, ASSP_TRUE
+    ret
+
+%%tail:
+    cmp %1, r11
+    jae %%not_found
+    cmp byte [%1], %2
+    je %%found
+    inc %1
+    jmp %%tail
+
+%%found:
+    mov eax, ASSP_TRUE
+    ret
+
+%%not_found:
+    xor eax, eax
+    ret
+%endmacro
+
 %macro check_timing_tag_at 2
     lea rax, [r10 + %2]
     cmp rax, r11
@@ -1458,84 +1577,14 @@ match_tag_at:
 ; r10 = scan start, r11 = scan end. r10 is advanced to the next '#'.
 ; eax = 1 when found, 0 otherwise.
 find_hash:
-    cmp r10, r11
-    jae .not_found
     movdqu xmm1, [hash_bytes]
-
-.wide:
-    lea rax, [r10 + 16]
-    cmp rax, r11
-    ja .tail
-    movdqu xmm0, [r10]
-    pcmpeqb xmm0, xmm1
-    pmovmskb eax, xmm0
-    test eax, eax
-    jnz .mask
-    add r10, 16
-    jmp .wide
-
-.mask:
-    bsf eax, eax
-    add r10, rax
-    mov eax, ASSP_TRUE
-    ret
-
-.tail:
-    cmp r10, r11
-    jae .not_found
-    cmp byte [r10], '#'
-    je .found
-    inc r10
-    jmp .tail
-
-.found:
-    mov eax, ASSP_TRUE
-    ret
-
-.not_found:
-    xor eax, eax
-    ret
+    find_range_byte r10, '#'
 
 ; rdx = scan start, r11 = scan end. rdx is advanced to the next ';'.
 ; eax = 1 when found, 0 otherwise.
 find_semicolon:
-    cmp rdx, r11
-    jae .not_found
     movdqu xmm1, [semicolon_bytes]
-
-.wide:
-    lea rax, [rdx + 16]
-    cmp rax, r11
-    ja .tail
-    movdqu xmm0, [rdx]
-    pcmpeqb xmm0, xmm1
-    pmovmskb eax, xmm0
-    test eax, eax
-    jnz .mask
-    add rdx, 16
-    jmp .wide
-
-.mask:
-    bsf eax, eax
-    add rdx, rax
-    mov eax, ASSP_TRUE
-    ret
-
-.tail:
-    cmp rdx, r11
-    jae .not_found
-    cmp byte [rdx], ';'
-    je .found
-    inc rdx
-    jmp .tail
-
-.found:
-    mov eax, ASSP_TRUE
-    ret
-
-.not_found:
-    xor eax, eax
-    ret
+    find_range_byte rdx, ';'
 
 ; rdx = scan start, r11 = scan end. rdx is advanced to a line break
 ; that is followed by optional whitespace and another tag. This accepts
@@ -1919,7 +1968,7 @@ parse_sm_notes_block:
     cmp rdx, r11
     jae .store_note_data
     cmp byte [rdx], ';'
-    je .store_note_data
+    je .store_note_data_with_semicolon
     cmp byte [rdx], ':'
     jne .note_data_next
 
@@ -1940,6 +1989,9 @@ parse_sm_notes_block:
 .note_data_next:
     inc rdx
     jmp .note_data_scan
+
+.store_note_data_with_semicolon:
+    inc rdx
 
 .store_note_data:
     mov rax, r8
