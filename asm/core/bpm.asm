@@ -2160,7 +2160,6 @@ assp_elapsed_bpm_only_common:
 .to_millis:
     test rax, rax
     jle .pop_done
-    add rax, 500
     xor edx, edx
     mov r9d, 1000
     div r9
@@ -2195,7 +2194,7 @@ assp_elapsed_us_with_events:
     jmp assp_elapsed_events_common
 
 ; Stop and delay values are milliseconds.
-; rax = elapsed milliseconds, rounded from microseconds.
+; rax = elapsed milliseconds, floored from microseconds.
 assp_elapsed_ms_with_events:
     push rbp
     mov rbp, rsp
@@ -2430,7 +2429,6 @@ assp_elapsed_events_common:
     jle .pop_done
     cmp qword [rbp + EVT_RETURN_US], 0
     jl .pop_done
-    add rax, 500
     xor edx, edx
     mov r9d, 1000
     div r9

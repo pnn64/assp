@@ -1211,12 +1211,22 @@ assp_find_chart_by_index:
 .store_notes:
     inc rdx
     mov r14, rdx
+    mov r10, r15
+    lea rax, [r10 + 10]
+    cmp rax, r12
+    ja .try_sm_notes
+    is_notedata_tag r10
+    test eax, eax
+    jnz .store_ssc_notes
+
+.try_sm_notes:
     mov r10, rsi
     mov r11, r14
     call parse_sm_notes_block
     test eax, eax
     jnz .success
 
+.store_ssc_notes:
     mov [rbx + ASSP_CHART_INFO_NOTES_PTR], rsi
     mov rdx, r14
     sub rdx, rsi
@@ -1326,12 +1336,22 @@ assp_find_next_chart:
 .store_notes:
     inc rdx
     mov r14, rdx
+    mov r10, r15
+    lea rax, [r10 + 10]
+    cmp rax, r12
+    ja .try_sm_notes
+    is_notedata_tag r10
+    test eax, eax
+    jnz .store_ssc_notes
+
+.try_sm_notes:
     mov r10, rsi
     mov r11, r14
     call parse_sm_notes_block
     test eax, eax
     jnz .success
 
+.store_ssc_notes:
     mov [rbx + ASSP_CHART_INFO_NOTES_PTR], rsi
     mov rdx, r14
     sub rdx, rsi
