@@ -778,6 +778,40 @@ format_break_token:
 
 ; input: rax = unsigned integer.
 append_u64:
+    cmp rax, 10000
+    jae .slow
+    cmp rax, 1000
+    jae .small4
+    cmp rax, 100
+    jae .small3
+    cmp rax, 10
+    jae .small2
+    add al, '0'
+    call append_byte
+    ret
+
+.small2:
+    lea r10, [rel stream_int4_emit]
+    lea r10, [r10 + rax * 4 + 2]
+    mov r8d, 2
+    call append_bytes
+    ret
+
+.small3:
+    lea r10, [rel stream_int4_emit]
+    lea r10, [r10 + rax * 4 + 1]
+    mov r8d, 3
+    call append_bytes
+    ret
+
+.small4:
+    lea r10, [rel stream_int4_emit]
+    lea r10, [r10 + rax * 4]
+    mov r8d, 4
+    call append_bytes
+    ret
+
+.slow:
     sub rsp, 32
     lea r10, [rsp + 32]
     xor r8d, r8d
@@ -1118,6 +1152,14 @@ append_total_suffix:
     ret
 
 section .rdata
+align 16
+stream_int4_emit:
+%assign i 0
+%rep 10000
+    db '0' + (i / 1000), '0' + ((i / 100) % 10), '0' + ((i / 10) % 10), '0' + (i % 10)
+%assign i i+1
+%endrep
+
 no_streams_text db "No Streams!"
 no_streams_text_end:
 total_suffix_text db " Total"
