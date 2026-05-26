@@ -3908,140 +3908,125 @@ timing_stats_no_holds_finalize_measure:
     ret
 
 process_no_hold_judgable_row:
-    mov r10d, eax
-    xor r8d, r8d
-    xor r9d, r9d
-    mov dl, r10b
-    mov r11d, ASSP_NOTE_STATS_LEFT
-    call process_no_hold_lane
-    mov edx, r10d
-    shr edx, 8
-    mov r11d, ASSP_NOTE_STATS_DOWN
-    call process_no_hold_lane
-    mov edx, r10d
-    shr edx, 16
-    mov r11d, ASSP_NOTE_STATS_UP
-    call process_no_hold_lane
-    mov edx, r10d
-    shr edx, 24
-    mov r11d, ASSP_NOTE_STATS_RIGHT
-    call process_no_hold_lane
+    movd xmm0, eax
 
-    test r8d, r8d
-    jz .check_hand
-    inc qword [rbx + ASSP_NOTE_STATS_STEPS]
-    cmp r8d, 2
-    jb .check_hand
-    inc qword [rbx + ASSP_NOTE_STATS_JUMPS]
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_1]
+    pmovmskb r8d, xmm1
+    and r8d, 0fh
 
-.check_hand:
-    test r9d, r9d
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_L]
+    pmovmskb r9d, xmm1
+    and r9d, 0fh
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_l]
+    pmovmskb r10d, xmm1
+    and r10d, 0fh
+    or r9d, r10d
+
+    mov r11d, r8d
+    or r11d, r9d
+
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_M]
+    pmovmskb ecx, xmm1
+    and ecx, 0fh
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_m]
+    pmovmskb r10d, xmm1
+    and r10d, 0fh
+    or ecx, r10d
+
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_F]
+    pmovmskb edx, xmm1
+    and edx, 0fh
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_f]
+    pmovmskb r10d, xmm1
+    and r10d, 0fh
+    or edx, r10d
+
+    lea r10, [rel note_stats_popcount4]
+    mov eax, r11d
+    and eax, 0fh
+    movzx eax, byte [r10 + rax]
+    add [rbx + ASSP_NOTE_STATS_ARROWS], rax
+
+    mov r8d, r11d
+    and r8d, 1
+    add [rbx + ASSP_NOTE_STATS_LEFT], r8
+    mov r8d, r11d
+    shr r8d, 1
+    and r8d, 1
+    add [rbx + ASSP_NOTE_STATS_DOWN], r8
+    mov r8d, r11d
+    shr r8d, 2
+    and r8d, 1
+    add [rbx + ASSP_NOTE_STATS_UP], r8
+    mov r8d, r11d
+    shr r8d, 3
+    and r8d, 1
+    add [rbx + ASSP_NOTE_STATS_RIGHT], r8
+
+    mov r8d, r9d
+    and r8d, 0fh
+    movzx r8d, byte [r10 + r8]
+    add [rbx + ASSP_NOTE_STATS_LIFTS], r8
+
+    and ecx, 0fh
+    movzx ecx, byte [r10 + rcx]
+    add [rbx + ASSP_NOTE_STATS_MINES], rcx
+
+    and edx, 0fh
+    movzx edx, byte [r10 + rdx]
+    add [rbx + ASSP_NOTE_STATS_FAKES], rdx
+
+    test eax, eax
     jz .done
-    cmp r8d, 3
+    inc qword [rbx + ASSP_NOTE_STATS_STEPS]
+    cmp eax, 2
+    jb .done
+    inc qword [rbx + ASSP_NOTE_STATS_JUMPS]
+    cmp eax, 3
     jb .done
     inc qword [rbx + ASSP_NOTE_STATS_HANDS]
 .done:
     ret
 
-process_no_hold_lane:
-    mov al, dl
-    cmp al, '1'
-    je .tap
-    cmp al, 'L'
-    je .lift
-    cmp al, 'l'
-    je .lift
-    cmp al, 'M'
-    je .mine
-    cmp al, 'm'
-    je .mine
-    cmp al, 'F'
-    je .fake
-    cmp al, 'f'
-    je .fake
-    ret
-.tap:
-    mov r9d, 1
-    inc r8d
-    inc qword [rbx + ASSP_NOTE_STATS_ARROWS]
-    inc qword [rbx + r11]
-    ret
-.lift:
-    mov r9d, 1
-    inc r8d
-    inc qword [rbx + ASSP_NOTE_STATS_ARROWS]
-    inc qword [rbx + ASSP_NOTE_STATS_LIFTS]
-    inc qword [rbx + r11]
-    ret
-.mine:
-    mov r9d, 1
-    inc qword [rbx + ASSP_NOTE_STATS_MINES]
-    ret
-.fake:
-    mov r9d, 1
-    inc qword [rbx + ASSP_NOTE_STATS_FAKES]
-    ret
-
 row_no_hold_fake_object_count:
-    xor ecx, ecx
-    call no_hold_fake_object_lane_low
-    cmp ah, '1'
-    je .lane1
-    cmp ah, 'M'
-    je .lane1
-    cmp ah, 'm'
-    je .lane1
-    cmp ah, 'L'
-    je .lane1
-    cmp ah, 'l'
-    je .lane1
-    cmp ah, 'F'
-    je .lane1
-    cmp ah, 'f'
-    jne .upper
-.lane1:
-    inc ecx
-.upper:
-    shr eax, 16
-    call no_hold_fake_object_lane_low
-    cmp ah, '1'
-    je .lane3
-    cmp ah, 'M'
-    je .lane3
-    cmp ah, 'm'
-    je .lane3
-    cmp ah, 'L'
-    je .lane3
-    cmp ah, 'l'
-    je .lane3
-    cmp ah, 'F'
-    je .lane3
-    cmp ah, 'f'
-    jne .done
-.lane3:
-    inc ecx
-.done:
-    mov eax, ecx
-    ret
-
-no_hold_fake_object_lane_low:
-    cmp al, '1'
-    je .yes
-    cmp al, 'M'
-    je .yes
-    cmp al, 'm'
-    je .yes
-    cmp al, 'L'
-    je .yes
-    cmp al, 'l'
-    je .yes
-    cmp al, 'F'
-    je .yes
-    cmp al, 'f'
-    jne .no
-.yes:
-    inc ecx
-.no:
+    movd xmm0, eax
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_1]
+    pmovmskb eax, xmm1
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_L]
+    pmovmskb ecx, xmm1
+    or eax, ecx
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_l]
+    pmovmskb ecx, xmm1
+    or eax, ecx
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_M]
+    pmovmskb ecx, xmm1
+    or eax, ecx
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_m]
+    pmovmskb ecx, xmm1
+    or eax, ecx
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_F]
+    pmovmskb ecx, xmm1
+    or eax, ecx
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_f]
+    pmovmskb ecx, xmm1
+    or eax, ecx
+    and eax, 0fh
+    lea r10, [rel note_stats_popcount4]
+    movzx eax, byte [r10 + rax]
     ret
 
 ; rcx = note-data bytes, rdx = byte length, r8 = warp segments, r9 = warp count,
@@ -4283,89 +4268,181 @@ timing_stats_no_holds_finalize_measure_8:
     ret
 
 process_no_hold_judgable_row_8:
-    mov r10, rax
-    xor r8d, r8d
-    xor r9d, r9d
-    mov dl, r10b
-    mov r11d, ASSP_NOTE_STATS_LEFT
-    call process_no_hold_lane
-    mov rdx, r10
-    shr rdx, 8
-    mov r11d, ASSP_NOTE_STATS_DOWN
-    call process_no_hold_lane
-    mov rdx, r10
-    shr rdx, 16
-    mov r11d, ASSP_NOTE_STATS_UP
-    call process_no_hold_lane
-    mov rdx, r10
-    shr rdx, 24
-    mov r11d, ASSP_NOTE_STATS_RIGHT
-    call process_no_hold_lane
-    mov rdx, r10
-    shr rdx, 32
-    mov r11d, ASSP_NOTE_STATS_LEFT
-    call process_no_hold_lane
-    mov rdx, r10
-    shr rdx, 40
-    mov r11d, ASSP_NOTE_STATS_DOWN
-    call process_no_hold_lane
-    mov rdx, r10
-    shr rdx, 48
-    mov r11d, ASSP_NOTE_STATS_UP
-    call process_no_hold_lane
-    mov rdx, r10
-    shr rdx, 56
-    mov r11d, ASSP_NOTE_STATS_RIGHT
-    call process_no_hold_lane
+    movq xmm0, rax
 
-    test r8d, r8d
-    jz .check_hand
-    inc qword [rbx + ASSP_NOTE_STATS_STEPS]
-    cmp r8d, 2
-    jb .check_hand
-    inc qword [rbx + ASSP_NOTE_STATS_JUMPS]
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_1]
+    pmovmskb r8d, xmm1
+    and r8d, 0ffh
 
-.check_hand:
-    test r9d, r9d
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_L]
+    pmovmskb r9d, xmm1
+    and r9d, 0ffh
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_l]
+    pmovmskb r10d, xmm1
+    and r10d, 0ffh
+    or r9d, r10d
+
+    mov r11d, r8d
+    or r11d, r9d
+
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_M]
+    pmovmskb ecx, xmm1
+    and ecx, 0ffh
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_m]
+    pmovmskb r10d, xmm1
+    and r10d, 0ffh
+    or ecx, r10d
+
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_F]
+    pmovmskb edx, xmm1
+    and edx, 0ffh
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_f]
+    pmovmskb r10d, xmm1
+    and r10d, 0ffh
+    or edx, r10d
+
+    lea r10, [rel note_stats_popcount4]
+
+    mov eax, r9d
+    and eax, 0fh
+    movzx eax, byte [r10 + rax]
+    mov r8d, r9d
+    shr r8d, 4
+    and r8d, 0fh
+    movzx r8d, byte [r10 + r8]
+    add eax, r8d
+    add [rbx + ASSP_NOTE_STATS_LIFTS], rax
+
+    mov eax, ecx
+    and eax, 0fh
+    movzx eax, byte [r10 + rax]
+    shr ecx, 4
+    and ecx, 0fh
+    movzx ecx, byte [r10 + rcx]
+    add eax, ecx
+    add [rbx + ASSP_NOTE_STATS_MINES], rax
+
+    mov eax, edx
+    and eax, 0fh
+    movzx eax, byte [r10 + rax]
+    shr edx, 4
+    and edx, 0fh
+    movzx edx, byte [r10 + rdx]
+    add eax, edx
+    add [rbx + ASSP_NOTE_STATS_FAKES], rax
+
+    mov r8d, r11d
+    and r8d, 11h
+    mov r9d, r8d
+    shr r8d, 4
+    and r9d, 1
+    add r8d, r9d
+    add [rbx + ASSP_NOTE_STATS_LEFT], r8
+    mov r8d, r11d
+    and r8d, 22h
+    mov r9d, r8d
+    shr r8d, 5
+    shr r9d, 1
+    and r9d, 1
+    add r8d, r9d
+    add [rbx + ASSP_NOTE_STATS_DOWN], r8
+    mov r8d, r11d
+    and r8d, 44h
+    mov r9d, r8d
+    shr r8d, 6
+    shr r9d, 2
+    and r9d, 1
+    add r8d, r9d
+    add [rbx + ASSP_NOTE_STATS_UP], r8
+    mov r8d, r11d
+    and r8d, 88h
+    mov r9d, r8d
+    shr r8d, 7
+    shr r9d, 3
+    and r9d, 1
+    add r8d, r9d
+    add [rbx + ASSP_NOTE_STATS_RIGHT], r8
+
+    mov eax, r11d
+    and eax, 0fh
+    movzx eax, byte [r10 + rax]
+    mov r8d, r11d
+    shr r8d, 4
+    and r8d, 0fh
+    movzx r8d, byte [r10 + r8]
+    add eax, r8d
+    add [rbx + ASSP_NOTE_STATS_ARROWS], rax
+
+    test eax, eax
     jz .done
-    cmp r8d, 3
+    inc qword [rbx + ASSP_NOTE_STATS_STEPS]
+    cmp eax, 2
+    jb .done
+    inc qword [rbx + ASSP_NOTE_STATS_JUMPS]
+    cmp eax, 3
     jb .done
     inc qword [rbx + ASSP_NOTE_STATS_HANDS]
 .done:
     ret
 
 row_no_hold_fake_object_count_8:
-    mov rdx, rax
-    xor ecx, ecx
-    mov r8d, 8
-.loop:
-    mov al, dl
-    cmp al, '1'
-    je .count
-    cmp al, 'M'
-    je .count
-    cmp al, 'm'
-    je .count
-    cmp al, 'L'
-    je .count
-    cmp al, 'l'
-    je .count
-    cmp al, 'F'
-    je .count
-    cmp al, 'f'
-    jne .next
-.count:
-    inc ecx
-.next:
-    shr rdx, 8
-    dec r8d
-    jnz .loop
-    mov eax, ecx
+    movq xmm0, rax
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_1]
+    pmovmskb eax, xmm1
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_L]
+    pmovmskb ecx, xmm1
+    or eax, ecx
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_l]
+    pmovmskb ecx, xmm1
+    or eax, ecx
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_M]
+    pmovmskb ecx, xmm1
+    or eax, ecx
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_m]
+    pmovmskb ecx, xmm1
+    or eax, ecx
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_F]
+    pmovmskb ecx, xmm1
+    or eax, ecx
+    movdqa xmm1, xmm0
+    pcmpeqb xmm1, [note_stats_byte_f]
+    pmovmskb ecx, xmm1
+    or eax, ecx
+    and eax, 0ffh
+    lea r10, [rel note_stats_popcount4]
+    mov ecx, eax
+    and eax, 0fh
+    movzx eax, byte [r10 + rax]
+    shr ecx, 4
+    and ecx, 0fh
+    movzx ecx, byte [r10 + rcx]
+    add eax, ecx
     ret
 
 section .rdata
 align 16
 note_stats_popcount4 db 0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4
+align 16
+note_stats_byte_1 times 16 db '1'
+note_stats_byte_L times 16 db 'L'
+note_stats_byte_l times 16 db 'l'
+note_stats_byte_M times 16 db 'M'
+note_stats_byte_m times 16 db 'm'
+note_stats_byte_F times 16 db 'F'
+note_stats_byte_f times 16 db 'f'
 align 4
 note_stats_const_thousand_f32 dd 1000.0
 note_stats_const_48_f32 dd 48.0
