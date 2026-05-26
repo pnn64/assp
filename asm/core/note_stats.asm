@@ -575,57 +575,36 @@ assp_count_note_stats_4:
     jmp .skip_line
 
 .tap_only_row:
-    xor eax, 30303030h
-    mov r10d, eax
-    and r10d, 1
-    mov r11d, eax
-    shr r11d, 7
-    and r11d, 2
-    or r10d, r11d
-    mov r11d, eax
-    shr r11d, 14
-    and r11d, 4
-    or r10d, r11d
-    mov r11d, eax
-    shr r11d, 21
-    and r11d, 8
-    or r10d, r11d
+    movd xmm0, eax
+    pcmpeqb xmm0, [note_stats_byte_1]
+    pmovmskb r10d, xmm0
+    and r10d, 0fh
 
     inc qword [rbx + ASSP_NOTE_STATS_ROWS]
     inc qword [rbx + ASSP_NOTE_STATS_STEPS]
+    lea r11, [rel note_stats_tap_row_stats4]
+    mov r11, [r11 + r10 * 8]
 
-    test r10b, 1
-    jz .tap_only_down
-    inc qword [rbx + ASSP_NOTE_STATS_LEFT]
-.tap_only_down:
-    test r10b, 2
-    jz .tap_only_up
-    inc qword [rbx + ASSP_NOTE_STATS_DOWN]
-.tap_only_up:
-    test r10b, 4
-    jz .tap_only_right
-    inc qword [rbx + ASSP_NOTE_STATS_UP]
-.tap_only_right:
-    test r10b, 8
-    jz .tap_only_count
-    inc qword [rbx + ASSP_NOTE_STATS_RIGHT]
-
-.tap_only_count:
-    lea r11, [rel note_stats_popcount4]
-    movzx eax, byte [r11 + r10]
+    movzx eax, r11b
+    add qword [rbx + ASSP_NOTE_STATS_LEFT], rax
+    shr r11, 8
+    movzx eax, r11b
+    add qword [rbx + ASSP_NOTE_STATS_DOWN], rax
+    shr r11, 8
+    movzx eax, r11b
+    add qword [rbx + ASSP_NOTE_STATS_UP], rax
+    shr r11, 8
+    movzx eax, r11b
+    add qword [rbx + ASSP_NOTE_STATS_RIGHT], rax
+    shr r11, 8
+    movzx eax, r11b
     add qword [rbx + ASSP_NOTE_STATS_ARROWS], rax
-    cmp eax, 2
-    jb .tap_only_hand
-    inc qword [rbx + ASSP_NOTE_STATS_JUMPS]
-
-.tap_only_hand:
-    mov r11d, r12d
-    add r11d, eax
-    cmp r11d, 3
-    jb .tap_only_phantom_check
-    inc qword [rbx + ASSP_NOTE_STATS_HANDS]
-
-.tap_only_phantom_check:
+    shr r11, 8
+    movzx eax, r11b
+    add qword [rbx + ASSP_NOTE_STATS_JUMPS], rax
+    shr r11, 8
+    movzx eax, r11b
+    add qword [rbx + ASSP_NOTE_STATS_HANDS], rax
     jmp .skip_row_fast
 
 .consume_one:
@@ -2984,6 +2963,7 @@ row_fake_object_count:
 ; rcx = note-data bytes, rdx = byte length, r8 = warp segments, r9 = warp count,
 ; stack arg 5 = fake segments, arg 6 = fake count, arg 7 = row scratch,
 ; arg 8 = scratch row cap. rax = timing-aware fake object count, or ASSP_NOT_FOUND.
+align 16
 assp_count_timing_fakes_8:
     push rbx
     push rsi
@@ -3132,6 +3112,7 @@ assp_count_timing_fakes_8:
     pop rbx
     ret
 
+align 16
 timing_fakes_finalize_measure_8:
     sub rsp, 40
     cmp qword [rsp + 48], 0
@@ -5052,3 +5033,25 @@ note_stats_const_thousand_f32 dd 1000.0
 note_stats_const_48_f32 dd 48.0
 note_stats_const_48_over_1000_f32 dd 0.048
 note_stats_const_one_over_1000_f32 dd 0.001
+align 16
+note_stats_tap_row_stats4:
+%assign i 0
+%rep 16
+%assign tap_l ((i >> 0) & 1)
+%assign tap_d ((i >> 1) & 1)
+%assign tap_u ((i >> 2) & 1)
+%assign tap_r ((i >> 3) & 1)
+%assign tap_n (tap_l + tap_d + tap_u + tap_r)
+%if tap_n >= 2
+%assign tap_jump 1
+%else
+%assign tap_jump 0
+%endif
+%if tap_n >= 3
+%assign tap_hand 1
+%else
+%assign tap_hand 0
+%endif
+    dq tap_l | (tap_d << 8) | (tap_u << 16) | (tap_r << 24) | (tap_n << 32) | (tap_jump << 40) | (tap_hand << 48)
+%assign i i+1
+%endrep
