@@ -126,12 +126,10 @@ section .text
 
 %%lift_upper:
     mark_phantom_if_active %3
-    bump_arrow %2
     inc qword [rbx + ASSP_NOTE_STATS_LIFTS]
     jmp %%done
 
 %%lift:
-    bump_arrow %2
     inc qword [rbx + ASSP_NOTE_STATS_LIFTS]
     jmp %%done
 
@@ -214,7 +212,6 @@ section .text
     jmp %%done
 
 %%lift:
-    bump_masked_arrow %2
     inc qword [rbx + ASSP_NOTE_STATS_LIFTS]
     jmp %%done
 
@@ -610,6 +607,8 @@ assp_count_note_stats_4:
     jmp .recount_line_loop
 
 .recount_success:
+    mov rax, [rsp + 56]
+    mov [rbx + ASSP_NOTE_STATS_STEPS], rax
     mov eax, ASSP_TRUE
     jmp .done
 
@@ -967,6 +966,8 @@ assp_count_note_stats_8:
     jmp .recount_line_loop
 
 .recount_success:
+    mov rax, [rsp + 88]
+    mov [rbx + ASSP_NOTE_STATS_STEPS], rax
     mov eax, ASSP_TRUE
     jmp .done
 
@@ -1266,6 +1267,7 @@ mines_finalize_measure:
     call beat_in_timing_range
     test eax, eax
     jnz .next
+    mov r8, [rsp]
     mov rcx, [rsp + 96]
     mov rdx, [rsp + 104]
     call beat_in_timing_range
@@ -1507,6 +1509,7 @@ mines_finalize_measure_8:
     call beat_in_timing_range
     test eax, eax
     jnz .next
+    mov r8, [rsp]
     mov rcx, [rsp + 96]
     mov rdx, [rsp + 104]
     call beat_in_timing_range
@@ -1825,6 +1828,7 @@ timing_fakes_finalize_measure:
     call beat_in_timing_range
     test eax, eax
     jnz .nonjudgable
+    mov r8, [rsp]
     mov rcx, [rsp + 96]
     mov rdx, [rsp + 104]
     call beat_in_timing_range
@@ -2139,6 +2143,7 @@ timing_fakes_finalize_measure_8:
     call beat_in_timing_range
     test eax, eax
     jnz .nonjudgable
+    mov r8, [rsp]
     mov rcx, [rsp + 96]
     mov rdx, [rsp + 104]
     call beat_in_timing_range
@@ -3377,6 +3382,7 @@ timing_stats_no_holds_finalize_measure:
     call beat_in_timing_range_rows
     test eax, eax
     jnz .nonjudgable
+    mov r8, [rsp]
     mov rcx, [rsp + 96]
     mov rdx, [rsp + 104]
     call beat_in_timing_range_rows
@@ -3739,6 +3745,7 @@ timing_stats_no_holds_finalize_measure_8:
     call beat_in_timing_range_rows
     test eax, eax
     jnz .nonjudgable
+    mov r8, [rsp]
     mov rcx, [rsp + 96]
     mov rdx, [rsp + 104]
     call beat_in_timing_range_rows
