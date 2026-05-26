@@ -8,6 +8,76 @@ global assp_count_gimmick_scroll_segments
 
 section .text
 
+%macro ASSP_FAST_COUNT_NONDEFAULT_VALUE 3
+    mov r10, rbx
+    mov r11, rcx
+
+%%trim_left:
+    cmp r10, r11
+    jae %3
+    cmp byte [r10], ' '
+    ja %%trim_right
+    inc r10
+    jmp %%trim_left
+
+%%trim_right:
+    cmp r11, r10
+    jbe %3
+    cmp byte [r11 - 1], ' '
+    ja %%classify
+    dec r11
+    jmp %%trim_right
+
+%%classify:
+    mov al, [r10]
+    cmp al, '1'
+    je %%one
+    cmp al, '0'
+    je %%zero
+    cmp al, '2'
+    jb %3
+    cmp al, '9'
+    ja %3
+    lea rax, [r10 + 1]
+    cmp rax, r11
+    jae %2
+    cmp byte [rax], '.'
+    je %2
+    jmp %3
+
+%%one:
+    lea rax, [r10 + 1]
+    cmp rax, r11
+    jae %1
+    cmp byte [rax], '.'
+    jne %3
+    lea rax, [r10 + 2]
+    cmp rax, r11
+    jae %1
+    mov al, [rax]
+    cmp al, '1'
+    jb %3
+    cmp al, '9'
+    jbe %2
+    jmp %3
+
+%%zero:
+    lea rax, [r10 + 1]
+    cmp rax, r11
+    jae %2
+    cmp byte [rax], '.'
+    jne %3
+    lea rax, [r10 + 2]
+    cmp rax, r11
+    jae %2
+    mov al, [rax]
+    cmp al, '0'
+    jb %3
+    cmp al, '8'
+    jbe %2
+    jmp %3
+%endmacro
+
 ; rcx = data, rdx = len, r8d = byte.
 ; rax = byte index, or ASSP_NOT_FOUND.
 assp_find_byte:
@@ -213,13 +283,13 @@ assp_count_gimmick_speed_segments:
     test rdx, rdx
     jz .parse_value_slow
     cmp rdx, 8
-    ja .parse_value_slow
+    ja .parse_value_fast
     cmp byte [rbx], '1'
-    jne .parse_value_slow
+    jne .parse_value_fast
     cmp rdx, 1
     je .next_segment
     cmp byte [rbx + 1], '.'
-    jne .parse_value_slow
+    jne .parse_value_fast
     cmp rdx, 2
     je .next_segment
     lea r10, [rbx + 2]
@@ -227,9 +297,12 @@ assp_count_gimmick_speed_segments:
     cmp r10, rcx
     jae .next_segment
     cmp byte [r10], '0'
-    jne .parse_value_slow
+    jne .parse_value_fast
     inc r10
     jmp .default_frac_loop
+
+.parse_value_fast:
+    ASSP_FAST_COUNT_NONDEFAULT_VALUE .next_segment, .count_segment, .parse_value_slow
 
 .parse_value_slow:
     mov rdx, rcx
@@ -358,6 +431,9 @@ assp_count_gimmick_scroll_segments:
     mov rcx, r11
 
 .parse_value:
+    ASSP_FAST_COUNT_NONDEFAULT_VALUE .next_segment, .count_segment, .parse_value_slow
+
+.parse_value_slow:
     mov rdx, rcx
     mov rcx, rbx
     call parse_dec6_signed
