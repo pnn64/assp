@@ -3,6 +3,7 @@ use std::hint::black_box;
 
 unsafe extern "C" {
     fn assp_find_byte(data: *const u8, len: usize, byte: u32) -> usize;
+    fn assp_count_timing_segments(data: *const u8, len: usize) -> usize;
 }
 
 #[inline(always)]
@@ -38,6 +39,17 @@ fn bench(mut f: impl FnMut(), name: &str, iters: usize, work_units: usize) {
 fn scan_cycles() {
     let mut long = vec![b'a'; 1 << 20];
     let short = vec![b'a'; 31];
+    let mut timing = Vec::with_capacity(256 * 20);
+    for i in 0..256 {
+        if i != 0 {
+            timing.push(b',');
+        }
+        if i % 11 == 0 {
+            timing.extend_from_slice(b"  ");
+        } else {
+            timing.extend_from_slice(format!("{}=120.000", i * 4).as_bytes());
+        }
+    }
     long[(1 << 20) - 1] = b'#';
 
     bench(
@@ -90,5 +102,17 @@ fn scan_cycles() {
         "find_byte_first",
         1_000_000,
         1,
+    );
+
+    bench(
+        || unsafe {
+            black_box(assp_count_timing_segments(
+                black_box(timing.as_ptr()),
+                black_box(timing.len()),
+            ));
+        },
+        "count_timing_segments_256",
+        100_000,
+        timing.len(),
     );
 }

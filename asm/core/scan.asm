@@ -534,36 +534,31 @@ assp_count_timing_segments:
     jz .not_found
 
     xor eax, eax
-    xor r8d, r8d
-    xor r9d, r9d
+    mov r8, rcx
+    lea r9, [rcx + rdx]
 
-.loop:
-    cmp r8, rdx
-    jae .end_segment
-    mov r10b, [rcx + r8]
+.seek_segment:
+    cmp r8, r9
+    jae .done
+    mov r10b, [r8]
+    inc r8
     cmp r10b, ','
-    je .comma
+    je .seek_segment
     cmp r10b, ' '
-    jbe .next
-    mov r9d, 1
-.next:
-    inc r8
-    jmp .loop
-
-.comma:
-    test r9d, r9d
-    jz .comma_done
+    jbe .seek_segment
     inc rax
-.comma_done:
-    xor r9d, r9d
-    inc r8
-    jmp .loop
 
-.end_segment:
-    test r9d, r9d
-    jz .done
-    inc rax
-    jmp .done
+.skip_to_comma:
+    cmp r8, r9
+    jae .done
+    cmp byte [r8], ','
+    je .next_segment
+    inc r8
+    jmp .skip_to_comma
+
+.next_segment:
+    inc r8
+    jmp .seek_segment
 
 .zero:
     xor eax, eax
