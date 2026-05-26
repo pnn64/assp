@@ -3619,6 +3619,14 @@ bpm_frac3_emit:
 %assign i i+1
 %endrep
 
+align 16
+bpm_int4_emit:
+%assign i 0
+%rep 10000
+    db '0' + (i / 1000), '0' + ((i / 100) % 10), '0' + ((i / 10) % 10), '0' + (i % 10)
+%assign i i+1
+%endrep
+
 section .text
 
 ; rcx = number start, rdx = number end.
@@ -3829,6 +3837,67 @@ emit_scaled3:
     jmp .frac
 
 .int_digits:
+    cmp rbx, 10000
+    jae .int_digits_slow
+    cmp rbx, 1000
+    jae .int4
+    cmp rbx, 100
+    jae .int3
+    cmp rbx, 10
+    jae .int2
+    mov al, bl
+    add al, '0'
+    call emit_byte
+    jc .done
+    jmp .frac
+
+.int2:
+    test rdi, rdi
+    jz .int2_count
+    mov rax, r14
+    add rax, 2
+    cmp rax, r13
+    ja .overflow
+    lea r10, [rel bpm_int4_emit]
+    mov eax, [r10 + rbx * 4]
+    shr eax, 16
+    mov [rdi + r14], ax
+.int2_count:
+    add r14, 2
+    jmp .frac
+
+.int3:
+    test rdi, rdi
+    jz .int3_count
+    mov rax, r14
+    add rax, 3
+    cmp rax, r13
+    ja .overflow
+    lea r10, [rel bpm_int4_emit]
+    mov eax, [r10 + rbx * 4]
+    shr eax, 8
+    mov [rdi + r14], ax
+    shr eax, 16
+    mov [rdi + r14 + 2], al
+.int3_count:
+    add r14, 3
+    jmp .frac
+
+.int4:
+    test rdi, rdi
+    jz .int4_count
+    mov rax, r14
+    add rax, 4
+    cmp rax, r13
+    ja .overflow
+    lea r10, [rel bpm_int4_emit]
+    mov eax, [r10 + rbx * 4]
+    mov [rdi + r14], eax
+.int4_count:
+    add r14, 4
+    jmp .frac
+
+.int_digits_slow:
     lea r10, [rsp + 32]
     mov r11, r10
 .int_loop:
