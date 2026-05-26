@@ -4448,6 +4448,9 @@ timing_stats_no_holds_finalize_measure:
     mov rbx, [rsp + 72]
     inc qword [rbx + ASSP_NOTE_STATS_ROWS]
 
+    cmp dword [r15 + r13 * 4], 30303030h
+    je .next
+
     mov rcx, [rsp]
     call note_stats_milli_to_row48_f32_even
     mov [rsp + 32], rax
@@ -4807,6 +4810,10 @@ timing_stats_no_holds_finalize_measure_8:
 
     mov rbx, [rsp + 72]
     inc qword [rbx + ASSP_NOTE_STATS_ROWS]
+
+    mov rax, 3030303030303030h
+    cmp [r15 + r13 * 8], rax
+    je .next
 
     mov rcx, [rsp]
     call note_stats_milli_to_row48_f32_even
