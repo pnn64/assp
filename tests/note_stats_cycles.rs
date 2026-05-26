@@ -69,6 +69,17 @@ unsafe extern "C" {
         scratch: *mut u8,
         scratch_cap: usize,
     ) -> c_int;
+    fn assp_count_timing_note_stats_no_holds_8(
+        data: *const u8,
+        len: usize,
+        warps: *const BpmSegment,
+        warp_count: usize,
+        fakes: *const BpmSegment,
+        fake_count: usize,
+        out: *mut NoteStats,
+        scratch: *mut u8,
+        scratch_cap: usize,
+    ) -> c_int;
     fn assp_count_timing_note_stats_8(
         data: *const u8,
         len: usize,
@@ -273,6 +284,25 @@ fn note_stats_cycles() {
         "timing_note_stats_no_holds_4_synthetic",
         100,
         synthetic4.len(),
+    );
+
+    bench(
+        || unsafe {
+            black_box(assp_count_timing_note_stats_no_holds_8(
+                black_box(synthetic8.as_ptr()),
+                synthetic8.len(),
+                black_box(warps.as_ptr()),
+                warps.len(),
+                black_box(fakes.as_ptr()),
+                fakes.len(),
+                black_box(&mut stats),
+                black_box(row_scratch8.as_mut_ptr().cast::<u8>()),
+                row_scratch8.len(),
+            ));
+        },
+        "timing_note_stats_no_holds_8_synthetic",
+        100,
+        synthetic8.len(),
     );
 
     bench(
