@@ -4847,57 +4847,33 @@ process_no_hold_judgable_row_8:
     add eax, edx
     add [rbx + ASSP_NOTE_STATS_FAKES], rax
 
-    mov r8d, r11d
-    and r8d, 11h
-    mov r9d, r8d
-    shr r8d, 4
-    and r9d, 1
-    add r8d, r9d
-    add [rbx + ASSP_NOTE_STATS_LEFT], r8
-    mov r8d, r11d
-    and r8d, 22h
-    mov r9d, r8d
-    shr r8d, 5
-    shr r9d, 1
-    and r9d, 1
-    add r8d, r9d
-    add [rbx + ASSP_NOTE_STATS_DOWN], r8
-    mov r8d, r11d
-    and r8d, 44h
-    mov r9d, r8d
-    shr r8d, 6
-    shr r9d, 2
-    and r9d, 1
-    add r8d, r9d
-    add [rbx + ASSP_NOTE_STATS_UP], r8
-    mov r8d, r11d
-    and r8d, 88h
-    mov r9d, r8d
-    shr r8d, 7
-    shr r9d, 3
-    and r9d, 1
-    add r8d, r9d
-    add [rbx + ASSP_NOTE_STATS_RIGHT], r8
+    lea r10, [rel note_stats_mask8_row_stats]
+    mov r10, [r10 + r11 * 8]
 
-    mov eax, r11d
-    and eax, 0fh
-    movzx eax, byte [r10 + rax]
-    mov r8d, r11d
-    shr r8d, 4
-    and r8d, 0fh
-    movzx r8d, byte [r10 + r8]
-    add eax, r8d
+    movzx eax, r10b
+    add [rbx + ASSP_NOTE_STATS_LEFT], rax
+    shr r10, 8
+    movzx eax, r10b
+    add [rbx + ASSP_NOTE_STATS_DOWN], rax
+    shr r10, 8
+    movzx eax, r10b
+    add [rbx + ASSP_NOTE_STATS_UP], rax
+    shr r10, 8
+    movzx eax, r10b
+    add [rbx + ASSP_NOTE_STATS_RIGHT], rax
+    shr r10, 8
+    movzx eax, r10b
     add [rbx + ASSP_NOTE_STATS_ARROWS], rax
 
     test eax, eax
     jz .done
+    shr r10, 8
     inc qword [rbx + ASSP_NOTE_STATS_STEPS]
-    cmp eax, 2
-    jb .done
-    inc qword [rbx + ASSP_NOTE_STATS_JUMPS]
-    cmp eax, 3
-    jb .done
-    inc qword [rbx + ASSP_NOTE_STATS_HANDS]
+    movzx eax, r10b
+    add [rbx + ASSP_NOTE_STATS_JUMPS], rax
+    shr r10, 8
+    movzx eax, r10b
+    add [rbx + ASSP_NOTE_STATS_HANDS], rax
 .done:
     ret
 
@@ -4951,6 +4927,29 @@ note_stats_tap_row_stats4:
 %assign tap_hand 0
 %endif
     dq tap_l | (tap_d << 8) | (tap_u << 16) | (tap_r << 24) | (tap_n << 32) | (tap_jump << 40) | (tap_hand << 48)
+%assign i i+1
+%endrep
+
+align 64
+note_stats_mask8_row_stats:
+%assign i 0
+%rep 256
+%assign lane_l (((i >> 0) & 1) + ((i >> 4) & 1))
+%assign lane_d (((i >> 1) & 1) + ((i >> 5) & 1))
+%assign lane_u (((i >> 2) & 1) + ((i >> 6) & 1))
+%assign lane_r (((i >> 3) & 1) + ((i >> 7) & 1))
+%assign arrow_n (lane_l + lane_d + lane_u + lane_r)
+%if arrow_n >= 2
+%assign arrow_jump 1
+%else
+%assign arrow_jump 0
+%endif
+%if arrow_n >= 3
+%assign arrow_hand 1
+%else
+%assign arrow_hand 0
+%endif
+    dq lane_l | (lane_d << 8) | (lane_u << 16) | (lane_r << 24) | (arrow_n << 32) | (arrow_jump << 40) | (arrow_hand << 48)
 %assign i i+1
 %endrep
 
