@@ -39,6 +39,33 @@ global assp_format_stream_segments
 %define FMT_SEG_CUR_SIZE 24
 %define FMT_TOKEN_BREAK_THRESHOLD 8
 
+%macro ASSP_STORE_STREAM_SEGMENT 0
+    test rbx, rbx
+    jz %%count
+    cmp r13, r12
+    jae %%count
+    lea r10, [r13 + r13 * 2]
+    shl r10, 3
+    mov [rbx + r10 + ASSP_STREAM_SEGMENT_START], rax
+    mov [rbx + r10 + ASSP_STREAM_SEGMENT_END], rdx
+    mov [rbx + r10 + ASSP_STREAM_SEGMENT_IS_BREAK], rcx
+%%count:
+    inc r13
+%endmacro
+
+%macro ASSP_STORE_STREAM_TOKEN 0
+    test rbx, rbx
+    jz %%count
+    cmp r13, r12
+    jae %%count
+    mov r8, r13
+    shl r8, 4
+    mov [rbx + r8 + ASSP_STREAM_TOKEN_KIND], rax
+    mov [rbx + r8 + ASSP_STREAM_TOKEN_LEN], rdx
+%%count:
+    inc r13
+%endmacro
+
 section .text
 
 ; rcx = u32 densities, rdx = density count, r8 = out assp_stream_counts.
@@ -316,7 +343,7 @@ assp_stream_segments_from_densities:
     mov rax, r15
     mov rdx, r8
     mov ecx, ASSP_TRUE
-    call store_segment
+    ASSP_STORE_STREAM_SEGMENT
     jmp .push_stream
 
 .leading_gap:
@@ -325,13 +352,13 @@ assp_stream_segments_from_densities:
     xor eax, eax
     mov rdx, r8
     mov ecx, ASSP_TRUE
-    call store_segment
+    ASSP_STORE_STREAM_SEGMENT
 
 .push_stream:
     mov rax, r8
     mov rdx, r9
     xor ecx, ecx
-    call store_segment
+    ASSP_STORE_STREAM_SEGMENT
 
     mov r15, r9
     mov r11d, ASSP_TRUE
@@ -348,7 +375,7 @@ assp_stream_segments_from_densities:
     mov rax, r15
     mov rdx, rdi
     mov ecx, ASSP_TRUE
-    call store_segment
+    ASSP_STORE_STREAM_SEGMENT
 
 .done:
     mov rax, r13
@@ -365,20 +392,6 @@ assp_stream_segments_from_densities:
     pop rdi
     pop rsi
     pop rbx
-    ret
-
-store_segment:
-    test rbx, rbx
-    jz .count
-    cmp r13, r12
-    jae .count
-    lea r10, [r13 + r13 * 2]
-    shl r10, 3
-    mov [rbx + r10 + ASSP_STREAM_SEGMENT_START], rax
-    mov [rbx + r10 + ASSP_STREAM_SEGMENT_END], rdx
-    mov [rbx + r10 + ASSP_STREAM_SEGMENT_IS_BREAK], rcx
-.count:
-    inc r13
     ret
 
 ; rcx = u32 densities, rdx = density count, r8 = optional output tokens,
@@ -444,7 +457,7 @@ assp_stream_tokens_from_densities:
 .emit_token:
     mov eax, r11d
     mov rdx, r9
-    call store_token
+    ASSP_STORE_STREAM_TOKEN
     inc r14
     cmp r14, r15
     jbe .load_token
@@ -464,19 +477,6 @@ assp_stream_tokens_from_densities:
     pop rdi
     pop rsi
     pop rbx
-    ret
-
-store_token:
-    test rbx, rbx
-    jz .count
-    cmp r13, r12
-    jae .count
-    mov r8, r13
-    shl r8, 4
-    mov [rbx + r8 + ASSP_STREAM_TOKEN_KIND], rax
-    mov [rbx + r8 + ASSP_STREAM_TOKEN_LEN], rdx
-.count:
-    inc r13
     ret
 
 ; rcx = assp_stream_token tokens, rdx = token count, r8d = breakdown mode,
