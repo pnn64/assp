@@ -14,6 +14,20 @@ global assp_pattern_percentages_centi
 
 section .text
 
+%macro ASSP_FACING_FINALIZE_MIN_4 0
+    cmp r14, r12
+    jb %%done
+    cmp r13, 1
+    je %%left
+    cmp r13, 2
+    jne %%done
+    add dword [rbx + 4], r14d
+    jmp %%done
+%%left:
+    add dword [rbx + 0], r14d
+%%done:
+%endmacro
+
 ; rcx = minimized 4-panel note-data bytes, rdx = len, r8 = out bitmasks,
 ; r9 = output capacity. Returns count or ASSP_NOT_FOUND on failure.
 assp_collect_bitmasks_minimized_4:
@@ -533,7 +547,7 @@ assp_count_facing_steps_minimized_4:
     jnz .facing_has_arrow
     test r15, r15
     jz .facing_line_done
-    call .facing_finalize
+    ASSP_FACING_FINALIZE_MIN_4
     xor r13d, r13d
     xor r14d, r14d
     xor r15d, r15d
@@ -568,7 +582,7 @@ assp_count_facing_steps_minimized_4:
     mov [rsp + 0], r10
     test al, 4
     jz .facing_step
-    call .facing_finalize
+    ASSP_FACING_FINALIZE_MIN_4
     xor r13d, r13d
     xor r14d, r14d
 
@@ -581,7 +595,7 @@ assp_count_facing_steps_minimized_4:
 .facing_state_right:
     cmp edx, 1
     jne .facing_inc_count
-    call .facing_finalize
+    ASSP_FACING_FINALIZE_MIN_4
     mov r13d, 1
     mov r14d, 1
     jmp .facing_step_done
@@ -589,7 +603,7 @@ assp_count_facing_steps_minimized_4:
 .facing_state_left:
     cmp edx, 2
     jne .facing_inc_count
-    call .facing_finalize
+    ASSP_FACING_FINALIZE_MIN_4
     mov r13d, 2
     mov r14d, 1
     jmp .facing_step_done
@@ -618,7 +632,7 @@ assp_count_facing_steps_minimized_4:
 .facing_eof:
     test r15, r15
     jz .facing_success
-    call .facing_finalize
+    ASSP_FACING_FINALIZE_MIN_4
 
 .facing_success:
     mov eax, ASSP_TRUE
@@ -636,20 +650,6 @@ assp_count_facing_steps_minimized_4:
     pop rdi
     pop rsi
     pop rbx
-    ret
-
-.facing_finalize:
-    cmp r14, r12
-    jb .facing_finalize_done
-    cmp r13, 1
-    je .facing_finalize_left
-    cmp r13, 2
-    jne .facing_finalize_done
-    add dword [rbx + 4], r14d
-    ret
-.facing_finalize_left:
-    add dword [rbx + 0], r14d
-.facing_finalize_done:
     ret
 
 ; rcx = bitmask bytes, rdx = count, r8 = mono threshold,
