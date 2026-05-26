@@ -152,17 +152,28 @@ assp_normalize_float_digits:
     cmp rsi, r12
     jae .done
 
+    mov qword [rsp + 8], 0
     mov r10, rsi
-.find_comma:
-    cmp r10, r12
-    jae .entry_bounds
-    cmp byte [r10], ','
-    je .entry_bounds
-    inc r10
-    jmp .find_comma
 
-.entry_bounds:
+.scan_entry:
+    cmp r10, r12
+    jae .entry_scanned
+    mov al, [r10]
+    cmp al, ','
+    je .entry_scanned
+    cmp al, '='
+    jne .scan_entry_next
+    cmp qword [rsp + 8], 0
+    jne .scan_entry_next
+    mov [rsp + 8], r10
+.scan_entry_next:
+    inc r10
+    jmp .scan_entry
+
+.entry_scanned:
     mov [rsp], r10
+    cmp qword [rsp + 8], 0
+    je .skip_entry
     mov rbx, rsi
     mov r11, r10
 
@@ -178,22 +189,12 @@ assp_normalize_float_digits:
     cmp r11, rbx
     jbe .skip_entry
     cmp byte [r11 - 1], ' '
-    ja .find_equal
+    ja .parse_fields
     dec r11
     jmp .trim_right
 
-.find_equal:
-    mov rax, rbx
-.equal_loop:
-    cmp rax, r11
-    jae .skip_entry
-    cmp byte [rax], '='
-    je .parse_fields
-    inc rax
-    jmp .equal_loop
-
 .parse_fields:
-    mov [rsp + 8], rax
+    mov rax, [rsp + 8]
     mov [rsp + 16], r11
 
     mov rcx, rbx
@@ -3134,6 +3135,13 @@ nps_f64_1000 dq 1000.0
 nps_f64_1000000 dq 1000000.0
 bpm_dec3_frac_scale dq 1000, 100, 10, 1
 bpm_dec6_frac_scale dq 1000000, 100000, 10000, 1000, 100, 10, 1
+align 16
+bpm_frac3_emit:
+%assign i 0
+%rep 1000
+    db '.', '0' + (i / 100), '0' + ((i / 10) % 10), '0' + (i % 10)
+%assign i i+1
+%endrep
 
 section .text
 
@@ -3369,34 +3377,29 @@ emit_scaled3:
     jmp .emit_int
 
 .frac:
-    mov al, '.'
-    call emit_byte
-    jc .done
+    test rdi, rdi
+    jz .frac_count
+    mov rax, r14
+    add rax, 4
+    cmp rax, r13
+    ja .overflow
+    lea r10, [rel bpm_frac3_emit]
+    mov eax, [r10 + rsi * 4]
+    mov [rdi + r14], eax
+    add r14, 4
+    clc
+    jmp .done
 
-    mov rax, rsi
-    xor edx, edx
-    mov r8d, 100
-    div r8
-    add al, '0'
-    mov rsi, rdx
-    call emit_byte
-    jc .done
+.frac_count:
+    add r14, 4
+    clc
+    jmp .done
 
-    mov rax, rsi
-    xor edx, edx
-    mov r8d, 10
-    div r8
-    add al, '0'
-    mov rsi, rdx
-    call emit_byte
-    jc .done
-
-    mov al, sil
-    add al, '0'
-    call emit_byte
+.overflow:
+    stc
 
 .done:
-    add rsp, 40
+    lea rsp, [rsp + 40]
     pop rsi
     pop rbx
     ret

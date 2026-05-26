@@ -13,6 +13,12 @@ struct SpeedSegment {
 }
 
 unsafe extern "C" {
+    fn assp_normalize_float_digits(
+        data: *const u8,
+        len: usize,
+        out: *mut u8,
+        out_cap: usize,
+    ) -> usize;
     fn assp_parse_bpm_map(
         data: *const u8,
         len: usize,
@@ -80,6 +86,26 @@ fn bpm_map(entries: usize) -> Vec<u8> {
     data
 }
 
+fn normalize_map(entries: usize) -> Vec<u8> {
+    let mut data = Vec::with_capacity(entries * 24);
+    for i in 0..entries {
+        if i != 0 {
+            data.push(b',');
+        }
+        let beat = i * 4;
+        let value = 90 + i % 180;
+        data.extend_from_slice(
+            format!(
+                " {beat}.{:04} = {value}.{:04} ",
+                i % 10000,
+                (i * 37) % 10000
+            )
+            .as_bytes(),
+        );
+    }
+    data
+}
+
 fn scroll_map(entries: usize) -> Vec<u8> {
     let mut data = Vec::with_capacity(entries * 24);
     for i in 0..entries {
@@ -123,13 +149,29 @@ fn speed_map(entries: usize) -> Vec<u8> {
 #[ignore]
 fn parse_cycles() {
     let bpm = bpm_map(256);
+    let normalized = normalize_map(256);
     let seconds = seconds_map(256);
     let scrolls = scroll_map(256);
     let speeds = speed_map(256);
     let offset_ms = b"-12345.6789";
     let offset_us = b"-12345.6789019";
+    let mut bytes_out = vec![0u8; normalized.len()];
     let mut out = vec![BpmSegment::default(); 256];
     let mut speed_out = vec![SpeedSegment::default(); 256];
+
+    bench(
+        || unsafe {
+            black_box(assp_normalize_float_digits(
+                black_box(normalized.as_ptr()),
+                black_box(normalized.len()),
+                black_box(bytes_out.as_mut_ptr()),
+                black_box(bytes_out.len()),
+            ));
+        },
+        "normalize_float_digits_256",
+        10_000,
+        256,
+    );
 
     bench(
         || unsafe {
