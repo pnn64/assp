@@ -849,6 +849,20 @@ assp_count_note_stats_8:
     cmp dword [rsi + 4], 30303030h
     je .zero_row
 .not_zero_row:
+    test r12d, r12d
+    jnz .full_row
+    mov eax, [rsi]
+    mov r10d, eax
+    and r10d, 0fefefefeh
+    cmp r10d, 30303030h
+    jne .full_row
+    mov eax, [rsi + 4]
+    mov r10d, eax
+    and r10d, 0fefefefeh
+    cmp r10d, 30303030h
+    je .tap_only_row
+
+.full_row:
     invalid_lane_break 0, .malformed_row
     invalid_lane_break 1, .malformed_row
     invalid_lane_break 2, .malformed_row
@@ -916,7 +930,123 @@ assp_count_note_stats_8:
     jmp .skip_line
 
 .zero_row:
+    lea rax, [rsi + 8]
+    cmp rax, rdi
+    jae .zero_row_single
+    cmp byte [rax], 10
+    jne .zero_row_single
+    xor r11d, r11d
+
+.zero_run_loop:
+    inc r11
+    lea rsi, [rsi + 9]
+    cmp rsi, rdi
+    jae .zero_run_done
+    lea rax, [rsi + 8]
+    cmp rax, rdi
+    jae .zero_run_done
+    cmp dword [rsi], 30303030h
+    jne .zero_run_done
+    cmp dword [rsi + 4], 30303030h
+    jne .zero_run_done
+    cmp byte [rax], 10
+    je .zero_run_loop
+
+.zero_run_done:
+    add [rbx + ASSP_NOTE_STATS_ROWS], r11
+    jmp .line_loop
+
+.zero_row_single:
     inc qword [rbx + ASSP_NOTE_STATS_ROWS]
+    jmp .skip_line
+
+.tap_only_row:
+    mov eax, [rsi]
+    xor eax, 30303030h
+    mov r10d, eax
+    and r10d, 1
+    mov r11d, eax
+    shr r11d, 7
+    and r11d, 2
+    or r10d, r11d
+    mov r11d, eax
+    shr r11d, 14
+    and r11d, 4
+    or r10d, r11d
+    mov r11d, eax
+    shr r11d, 21
+    and r11d, 8
+    or r10d, r11d
+
+    mov eax, [rsi + 4]
+    xor eax, 30303030h
+    mov r11d, eax
+    and r11d, 1
+    mov r13d, eax
+    shr r13d, 7
+    and r13d, 2
+    or r11d, r13d
+    mov r13d, eax
+    shr r13d, 14
+    and r13d, 4
+    or r11d, r13d
+    mov r13d, eax
+    shr r13d, 21
+    and r13d, 8
+    or r11d, r13d
+
+    inc qword [rbx + ASSP_NOTE_STATS_ROWS]
+    inc qword [rbx + ASSP_NOTE_STATS_STEPS]
+
+    mov eax, r10d
+    and eax, 1
+    mov ecx, r11d
+    and ecx, 1
+    add eax, ecx
+    add [rbx + ASSP_NOTE_STATS_LEFT], rax
+
+    mov eax, r10d
+    shr eax, 1
+    and eax, 1
+    mov ecx, r11d
+    shr ecx, 1
+    and ecx, 1
+    add eax, ecx
+    add [rbx + ASSP_NOTE_STATS_DOWN], rax
+
+    mov eax, r10d
+    shr eax, 2
+    and eax, 1
+    mov ecx, r11d
+    shr ecx, 2
+    and ecx, 1
+    add eax, ecx
+    add [rbx + ASSP_NOTE_STATS_UP], rax
+
+    mov eax, r10d
+    shr eax, 3
+    and eax, 1
+    mov ecx, r11d
+    shr ecx, 3
+    and ecx, 1
+    add eax, ecx
+    add [rbx + ASSP_NOTE_STATS_RIGHT], rax
+
+    lea r13, [rel note_stats_popcount4]
+    movzx eax, byte [r13 + r10]
+    movzx ecx, byte [r13 + r11]
+    add eax, ecx
+    add [rbx + ASSP_NOTE_STATS_ARROWS], rax
+    cmp eax, 2
+    jb .tap_only_hand
+    inc qword [rbx + ASSP_NOTE_STATS_JUMPS]
+
+.tap_only_hand:
+    cmp eax, 3
+    jb .tap_only_done
+    inc qword [rbx + ASSP_NOTE_STATS_HANDS]
+
+.tap_only_done:
     jmp .skip_line
 
 .malformed_row:
