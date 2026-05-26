@@ -1211,6 +1211,7 @@ assp_bpm_average_centi:
     ret
 
 ; rcx = BPM segments, rdx = count. rax = RSSP median display BPM * 100.
+align 64
 assp_bpm_median_centi:
     push rbx
     push rsi
@@ -1227,7 +1228,41 @@ assp_bpm_median_centi:
 
     mov rsi, rcx
     mov rdi, rdx
+    cmp rdi, 512
+    jae .large_median_scan
 
+    xor r12d, r12d
+    xor r13d, r13d
+.small_display_count_loop:
+    cmp r12, rdi
+    jae .small_display_count_done
+    mov r14, r12
+    shl r14, 4
+    mov rax, [rsi + r14 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    cmp rax, 0
+    jle .small_display_count_next
+    cmp rax, 10000000
+    jge .small_display_count_next
+    inc r13
+.small_display_count_next:
+    inc r12
+    jmp .small_display_count_loop
+
+.small_display_count_done:
+    mov r14d, 1
+    test r13, r13
+    jnz .small_have_count
+    mov r13, rdi
+    xor r14d, r14d
+.small_have_count:
+    test r13, r13
+    jz .zero
+    jmp .radix_median
+
+.large_median_scan:
+    mov rbx, 0x7fffffffffffffff
+    mov r10, 1
+    shl r10, 63
     xor r12d, r12d
     xor r13d, r13d
 .display_count_loop:
@@ -1241,6 +1276,10 @@ assp_bpm_median_centi:
     cmp rax, 10000000
     jge .display_count_next
     inc r13
+    cmp rax, rbx
+    cmovl rbx, rax
+    cmp rax, r10
+    cmovg r10, rax
 .display_count_next:
     inc r12
     jmp .display_count_loop
@@ -1251,10 +1290,146 @@ assp_bpm_median_centi:
     jnz .have_count
     mov r13, rdi
     xor r14d, r14d
+    mov rbx, 0x7fffffffffffffff
+    mov r10, 1
+    shl r10, 63
+    xor r12d, r12d
+.all_count_loop:
+    cmp r12, rdi
+    jae .have_count
+    mov r11, r12
+    shl r11, 4
+    mov rax, [rsi + r11 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    cmp rax, rbx
+    cmovl rbx, rax
+    cmp rax, r10
+    cmovg r10, rax
+    inc r12
+    jmp .all_count_loop
 .have_count:
     test r13, r13
     jz .zero
 
+    cmp r13, 512
+    jb .radix_median
+    cmp r13, 65535
+    ja .radix_median
+    mov r12, r10
+    sub r12, rbx
+    js .radix_median
+    cmp r12, 131071
+    ja .radix_median
+
+    mov r15d, r14d
+    inc r12
+    lea r14, [r12 * 2 + 15]
+    and r14, -16
+    mov r11, r14
+.hist_probe_loop:
+    cmp r11, 4096
+    jbe .hist_probe_tail
+    sub rsp, 4096
+    mov qword [rsp], 0
+    sub r11, 4096
+    jmp .hist_probe_loop
+.hist_probe_tail:
+    sub rsp, r11
+    mov qword [rsp], 0
+
+    mov rcx, r14
+    shr rcx, 3
+    mov rdi, rsp
+    xor eax, eax
+    rep stosq
+
+    xor r9d, r9d
+.hist_fill_loop:
+    cmp r9, rdx
+    jae .hist_select
+    mov r11, r9
+    shl r11, 4
+    mov rax, [rsi + r11 + ASSP_BPM_SEGMENT_BPM_MILLI]
+    test r15d, r15d
+    jz .hist_fill_value
+    cmp rax, 0
+    jle .hist_fill_next
+    cmp rax, 10000000
+    jge .hist_fill_next
+.hist_fill_value:
+    sub rax, rbx
+    inc word [rsp + rax * 2]
+.hist_fill_next:
+    inc r9
+    jmp .hist_fill_loop
+
+.hist_select:
+    mov r8, r13
+    shr r8, 1
+    test r13, 1
+    jz .hist_even
+
+    xor r9d, r9d
+.hist_odd_loop:
+    movzx ecx, word [rsp + r9 * 2]
+    cmp r8, rcx
+    jb .hist_odd_found
+    sub r8, rcx
+    inc r9
+    cmp r9, r12
+    jb .hist_odd_loop
+    xor eax, eax
+    jmp .hist_odd_done
+.hist_odd_found:
+    lea rax, [rbx + r9]
+.hist_odd_done:
+    add rsp, r14
+    mov rbx, 10
+    call round_signed_div_ties_even
+    jmp .done
+
+.hist_even:
+    mov rax, r13
+    shr rax, 1
+    mov r8, rax
+    mov r9, rax
+    dec r8
+    mov r15, -1
+    xor r10d, r10d
+.hist_even_loop:
+    movzx ecx, word [rsp + r10 * 2]
+    test ecx, ecx
+    jz .hist_even_next
+    cmp r15, -1
+    jne .hist_even_upper
+    cmp r8, rcx
+    jb .hist_even_lower_found
+    sub r8, rcx
+    jmp .hist_even_upper_sub
+.hist_even_lower_found:
+    mov r15, r10
+.hist_even_upper:
+    cmp r9, rcx
+    jb .hist_even_upper_found
+.hist_even_upper_sub:
+    sub r9, rcx
+.hist_even_next:
+    inc r10
+    cmp r10, r12
+    jb .hist_even_loop
+    xor eax, eax
+    jmp .hist_even_done
+.hist_even_upper_found:
+    mov rax, r10
+    add rax, r15
+    lea rax, [rax + rbx * 2]
+.hist_even_done:
+    add rsp, r14
+    mov rbx, 20
+    call round_signed_div_ties_even
+    jmp .done
+
+.radix_median:
+    mov rdi, rdx
     mov rax, r13
     shr rax, 1
     test r13, 1
@@ -1298,6 +1473,7 @@ assp_bpm_median_centi:
 
 ; rsi = BPM segments, rdi = count, r8 = kth index, r9 = display-only flag.
 ; rax = kth BPM value in signed thousandths.
+align 64
 kth_bpm_segment_value:
     push rbx
     push r12
@@ -1579,6 +1755,7 @@ tier_commit_run:
 
 ; rcx = u32 NPS values in thousandths, rdx = count.
 ; rax = median NPS rounded to two decimal places.
+align 64
 assp_nps_median_centi:
     push rbx
     push rsi
