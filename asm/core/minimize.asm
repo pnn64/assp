@@ -438,6 +438,33 @@ chart_finalize_measure:
     mov r14, rax
 
     xor r10d, r10d
+.write_ready:
+    test rbx, rbx
+    jz .count_only_rows
+    mov rax, r14
+    lea rax, [rax + rax * 4]
+    add rax, r13
+    cmp rax, r12
+    ja .row_loop
+    mov r11, [rsp + 8]
+
+.fast_write_loop:
+    test r14, r14
+    jz .clear
+    mov eax, [r11 + r10 * 4]
+    mov [rbx + r13], eax
+    mov byte [rbx + r13 + 4], 10
+    add r13, 5
+    add r10, rdx
+    dec r14
+    jmp .fast_write_loop
+
+.count_only_rows:
+    mov rax, r14
+    lea rax, [rax + rax * 4]
+    add r13, rax
+    jmp .clear
+
 .row_loop:
     test r14, r14
     jz .clear
@@ -698,6 +725,33 @@ chart_finalize_measure_8:
     mov r14, rax
 
     xor r10d, r10d
+.write_ready:
+    test rbx, rbx
+    jz .count_only_rows
+    mov rax, r14
+    lea rax, [rax + rax * 8]
+    add rax, r13
+    cmp rax, r12
+    ja .row_loop
+    mov r11, [rsp + 8]
+
+.fast_write_loop:
+    test r14, r14
+    jz .clear
+    mov rax, [r11 + r10 * 8]
+    mov [rbx + r13], rax
+    mov byte [rbx + r13 + 8], 10
+    add r13, 9
+    add r10, rdx
+    dec r14
+    jmp .fast_write_loop
+
+.count_only_rows:
+    mov rax, r14
+    lea rax, [rax + rax * 8]
+    add r13, rax
+    jmp .clear
+
 .row_loop:
     test r14, r14
     jz .clear
