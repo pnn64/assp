@@ -528,6 +528,9 @@ assp_format_stream_tokens:
     xor r13d, r13d
     xor r14d, r14d
 
+    cmp r15d, ASSP_BREAKDOWN_DETAILED
+    je .token_loop_detailed
+
 .token_loop:
     cmp r14, rdi
     jae .done
@@ -558,6 +561,36 @@ assp_format_stream_tokens:
     call format_break_token
     inc r14
     jmp .token_loop
+
+.token_loop_detailed:
+    cmp r14, rdi
+    jae .done
+
+    mov r10, r14
+    shl r10, 4
+    mov eax, [rsi + r10 + ASSP_STREAM_TOKEN_KIND]
+    test eax, eax
+    jz .break_token_detailed
+
+    mov r8d, eax
+    mov r10, [rsi + r10 + ASSP_STREAM_TOKEN_LEN]
+    xor r11d, r11d
+    inc r14
+
+    test r13, r13
+    jz .write_run_detailed
+    mov al, ' '
+    call append_byte
+
+.write_run_detailed:
+    call write_run_token
+    jmp .token_loop_detailed
+
+.break_token_detailed:
+    mov r8, [rsi + r10 + ASSP_STREAM_TOKEN_LEN]
+    call format_break_token
+    inc r14
+    jmp .token_loop_detailed
 
 .done:
     mov rax, r13
@@ -891,15 +924,17 @@ assp_format_stream_segments:
     mov rbx, r9
     xor r13d, r13d
     xor r14d, r14d
-    mov qword [rsp + FMT_SEG_RUN_SUM], 0
-    mov qword [rsp + FMT_SEG_TOTAL_SUM], 0
-    mov qword [rsp + FMT_SEG_MERGED_FLAG], 0
-    mov qword [rsp + FMT_SEG_CUR_SIZE], 0
 
     test rdi, rdi
     jz .no_streams
     cmp r15d, ASSP_STREAM_BREAKDOWN_TOTAL
     je .total_loop_init
+    cmp r15d, ASSP_STREAM_BREAKDOWN_DETAILED
+    je .segment_loop_detailed
+
+    mov qword [rsp + FMT_SEG_RUN_SUM], 0
+    mov qword [rsp + FMT_SEG_MERGED_FLAG], 0
+    mov qword [rsp + FMT_SEG_CUR_SIZE], 0
 
 .segment_loop:
     cmp r14, rdi
@@ -915,8 +950,6 @@ assp_format_stream_segments:
     jne .break_segment
 
     cmp r15d, ASSP_STREAM_BREAKDOWN_SIMPLE
-    je .stream_sum
-    cmp r15d, ASSP_STREAM_BREAKDOWN_TOTAL
     je .stream_sum
 
     test r14, r14
@@ -944,8 +977,6 @@ assp_format_stream_segments:
     cmp qword [rsi + r10 + ASSP_STREAM_SEGMENT_IS_BREAK], 0
     jne .stream_add_size
     mov qword [rsp + FMT_SEG_MERGED_FLAG], ASSP_TRUE
-    cmp r15d, ASSP_STREAM_BREAKDOWN_SIMPLE
-    jne .stream_add_size
     inc qword [rsp + FMT_SEG_RUN_SUM]
 
 .stream_add_size:
@@ -961,28 +992,6 @@ assp_format_stream_segments:
     cmp rax, rdi
     jae .break_done
 
-    cmp r15d, ASSP_STREAM_BREAKDOWN_DETAILED
-    jne .break_not_detailed
-    mov al, ' '
-    call append_byte
-    mov al, '('
-    call append_byte
-    mov rax, [rsp + FMT_SEG_CUR_SIZE]
-    call append_u64
-    mov al, ')'
-    call append_byte
-    mov al, ' '
-    call append_byte
-    jmp .break_done
-
-.break_not_detailed:
-    cmp r15d, ASSP_STREAM_BREAKDOWN_TOTAL
-    jne .break_symbol
-    mov rax, [rsp + FMT_SEG_RUN_SUM]
-    add [rsp + FMT_SEG_TOTAL_SUM], rax
-    jmp .break_clear
-
-.break_symbol:
     cmp r15d, ASSP_STREAM_BREAKDOWN_SIMPLE
     jne .break_emit_symbol
     cmp qword [rsp + FMT_SEG_RUN_SUM], 0
@@ -1028,30 +1037,13 @@ assp_format_stream_segments:
 
 .finish:
     cmp qword [rsp + FMT_SEG_RUN_SUM], 0
-    je .finish_level
-    cmp r15d, ASSP_STREAM_BREAKDOWN_SIMPLE
-    jne .finish_total
+    je .finish_non_total
     mov rax, [rsp + FMT_SEG_RUN_SUM]
     call append_u64
     cmp qword [rsp + FMT_SEG_MERGED_FLAG], 0
-    je .finish_level
+    je .finish_non_total
     mov al, '*'
     call append_byte
-    jmp .finish_level
-
-.finish_total:
-    cmp r15d, ASSP_STREAM_BREAKDOWN_TOTAL
-    jne .finish_level
-    mov rax, [rsp + FMT_SEG_RUN_SUM]
-    add [rsp + FMT_SEG_TOTAL_SUM], rax
-
-.finish_level:
-    cmp r15d, ASSP_STREAM_BREAKDOWN_TOTAL
-    jne .finish_non_total
-    mov rax, [rsp + FMT_SEG_TOTAL_SUM]
-    call append_u64
-    call append_total_suffix
-    jmp .done
 
 .finish_non_total:
     test r13, r13
@@ -1101,6 +1093,59 @@ assp_format_stream_segments:
     pop rsi
     pop rbx
     ret
+
+.segment_loop_detailed:
+    cmp r14, rdi
+    jae .finish_detailed
+
+    lea r10, [r14 + r14 * 2]
+    shl r10, 3
+    mov r11, [rsi + r10 + ASSP_STREAM_SEGMENT_END]
+    sub r11, [rsi + r10 + ASSP_STREAM_SEGMENT_START]
+    cmp qword [rsi + r10 + ASSP_STREAM_SEGMENT_IS_BREAK], 0
+    jne .break_detailed
+
+    test r14, r14
+    jz .stream_write_detailed
+    lea r10, [r14 - 1]
+    lea r10, [r10 + r10 * 2]
+    shl r10, 3
+    cmp qword [rsi + r10 + ASSP_STREAM_SEGMENT_IS_BREAK], 0
+    jne .stream_write_detailed
+    mov al, '-'
+    call append_byte
+
+.stream_write_detailed:
+    mov rax, r11
+    call append_u64
+    inc r14
+    jmp .segment_loop_detailed
+
+.break_detailed:
+    test r14, r14
+    jz .break_done_detailed
+    lea rax, [r14 + 1]
+    cmp rax, rdi
+    jae .break_done_detailed
+    mov al, ' '
+    call append_byte
+    mov al, '('
+    call append_byte
+    mov rax, r11
+    call append_u64
+    mov al, ')'
+    call append_byte
+    mov al, ' '
+    call append_byte
+
+.break_done_detailed:
+    inc r14
+    jmp .segment_loop_detailed
+
+.finish_detailed:
+    test r13, r13
+    jnz .done
+    jmp .no_streams
 
 append_no_streams:
     lea r10, [rel no_streams_text]
