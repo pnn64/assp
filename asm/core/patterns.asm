@@ -292,10 +292,13 @@ assp_count_anchors_bitmasks_4:
 ; rcx = minimized 4-panel note-data bytes, rdx = len, r8 = u32[4] output.
 ; out[0..4] = left/down/up/right anchors. eax = 1 on success, 0 on failure.
 assp_count_anchors_minimized_4:
+    push rbx
     push rsi
     push rdi
     push r12
-    sub rsp, 32
+    push r13
+    push r14
+    push r15
 
     test r8, r8
     jz .fail
@@ -312,9 +315,11 @@ assp_count_anchors_minimized_4:
 
     mov rsi, rcx
     lea rdi, [rcx + rdx]
-    mov qword [rsp + 0], 0
-    mov qword [rsp + 8], 0
-    mov qword [rsp + 16], 0
+    xor ebx, ebx
+    xor r8d, r8d
+    xor r13d, r13d
+    xor r14d, r14d
+    xor r15d, r15d
 
 .line_loop:
     cmp rsi, rdi
@@ -387,12 +392,11 @@ assp_count_anchors_minimized_4:
     shl eax, 2
     or ecx, eax
 
-    mov rax, [rsp + 16]
-    cmp rax, 4
+    cmp r8, 4
     jb .shift
 
-    mov edx, [rsp + 0]
-    and edx, [rsp + 8]
+    mov edx, ebx
+    and edx, r14d
     and edx, ecx
     test dl, 1
     jz .check_down
@@ -411,14 +415,11 @@ assp_count_anchors_minimized_4:
     inc dword [r12 + 12]
 
 .shift:
-    mov edx, [rsp + 4]
-    mov [rsp + 0], edx
-    mov edx, [rsp + 8]
-    mov [rsp + 4], edx
-    mov edx, [rsp + 12]
-    mov [rsp + 8], edx
-    mov [rsp + 12], ecx
-    inc qword [rsp + 16]
+    mov ebx, r13d
+    mov r13d, r14d
+    mov r14d, r15d
+    mov r15d, ecx
+    inc r8
 
 .line_done:
     mov rsi, r9
@@ -432,10 +433,13 @@ assp_count_anchors_minimized_4:
     xor eax, eax
 
 .done:
-    add rsp, 32
+    pop r15
+    pop r14
+    pop r13
     pop r12
     pop rdi
     pop rsi
+    pop rbx
     ret
 
 ; rcx = minimized 4-panel note-data bytes, rdx = len, r8 = mono threshold,
