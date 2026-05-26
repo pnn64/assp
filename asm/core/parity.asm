@@ -4958,6 +4958,7 @@ assp_step_parity_row_best_candidates_4:
     sub rsp, 1216
     mov qword [rsp + 784], 0
     mov qword [rsp + 792], 0
+    mov byte [rsp + 901], 0
 
     mov ecx, [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_NOTE_MASK]
     or ecx, [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_HOLD_MASK]
@@ -5011,6 +5012,30 @@ assp_step_parity_row_best_candidates_4:
     mulss xmm0, [rel cost_jack_weight]
     movss [rsp + 840], xmm0
 .row_jack_cost_ready:
+%ifdef ASSP_STANDALONE_EXE
+    cmp dword [r15 + ASSP_STEP_PARITY_ROW_COST_CTX4_HOLD_MASK], 0
+    jne .direct_no_hold_ready
+    cmp qword [rsp + 1336], 65535
+    ja .direct_no_hold_ready
+    mov byte [rsp + 901], 1
+    inc dword [rel step_parity_fast_key_generation]
+    cmp dword [rel step_parity_fast_key_generation], 65536
+    jb .direct_no_hold_ready
+    mov dword [rel step_parity_fast_key_generation], 1
+    lea r10, [rel step_parity_fast_key_entries]
+    xor eax, eax
+    mov ecx, 65536
+.clear_fast_key_entries:
+    mov [r10], eax
+    add r10, 4
+    dec ecx
+    jnz .clear_fast_key_entries
+.direct_no_hold_ready:
+%endif
+%ifdef ASSP_STANDALONE_EXE
+    cmp byte [rsp + 901], 0
+    jne .hash_ready
+%endif
     cmp qword [rsp + 1336], 128
     ja .hash_ready
     pxor xmm0, xmm0
@@ -5022,21 +5047,6 @@ assp_step_parity_row_best_candidates_4:
     movdqu [rsp + 1040], xmm0
     movdqu [rsp + 1056], xmm0
     movdqu [rsp + 1072], xmm0
-%ifdef ASSP_STANDALONE_EXE
-    inc dword [rel step_parity_fast_key_generation]
-    cmp dword [rel step_parity_fast_key_generation], 65536
-    jb .fast_key_generation_ready
-    mov dword [rel step_parity_fast_key_generation], 1
-    lea r10, [rel step_parity_fast_key_entries]
-    xor eax, eax
-    mov ecx, 65536
-.clear_fast_key_entries:
-    mov [r10], eax
-    add r10, 4
-    dec ecx
-    jnz .clear_fast_key_entries
-.fast_key_generation_ready:
-%endif
 .hash_ready:
     mov dword [rsp + 944], -1
     mov byte [rsp + 900], 0
@@ -5145,6 +5155,10 @@ assp_step_parity_row_best_candidates_4:
     mov edx, [rsp + 616]
     mov [rsp + 808], edx
     mov r10, [rsp + 1320]
+%ifdef ASSP_STANDALONE_EXE
+    cmp byte [rsp + 901], 0
+    jne .scan_key_direct_no_hold_fast
+%endif
     cmp qword [rsp + 1336], 128
     ja .scan_keys_linear_fast
     cmp qword [rsp + 784], 128

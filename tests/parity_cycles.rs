@@ -167,6 +167,69 @@ fn parity_row_best_cycles() {
 
 #[test]
 #[ignore]
+fn parity_row_best_single_clean_cycles() {
+    let seed = StepParityState4::default();
+    let transitions = step_parity_row_transitions_4(&seed, 0b1111, 0);
+    let initial_states: Vec<_> = transitions
+        .iter()
+        .cycle()
+        .take(64)
+        .map(|transition| transition.state)
+        .collect();
+    let initial_costs: Vec<_> = (0..initial_states.len())
+        .map(|i| (initial_states.len() - i) as f32 * 0.25)
+        .collect();
+    let cap = initial_states.len() * 24;
+    let elapsed = 0.08f32;
+    let ctx = StepParityRowCostCtx4 {
+        note_count: 1,
+        note_mask: 0b0001,
+        hold_mask: 0,
+        mine_mask: 0,
+        side_mask: 0,
+        prev_row_has_live_hold: 0,
+        elapsed_seconds: &elapsed,
+    };
+    let mut predecessors = vec![0u32; cap];
+    let mut placements = vec![0u8; cap * 4];
+    let mut states = vec![StepParityState4::default(); cap];
+    let mut hits = vec![0i8; cap * 5];
+    let mut keys = vec![0u32; cap];
+    let mut costs = vec![0.0f32; cap];
+    let state_count = initial_states.len();
+
+    let mut run = || unsafe {
+        assp_step_parity_row_best_candidates_4(
+            black_box(initial_states.as_ptr()),
+            black_box(initial_costs.as_ptr()),
+            state_count,
+            &ctx,
+            predecessors.as_mut_ptr(),
+            placements.as_mut_ptr(),
+            states.as_mut_ptr(),
+            hits.as_mut_ptr(),
+            keys.as_mut_ptr(),
+            costs.as_mut_ptr(),
+            cap,
+        )
+    };
+
+    let count = run();
+    assert_ne!(count, NOT_FOUND);
+    assert!(count > 0);
+
+    bench(
+        || {
+            black_box(run());
+        },
+        "parity_row_best_single_clean_64_states",
+        2000,
+        state_count,
+    );
+}
+
+#[test]
+#[ignore]
 fn parity_place_rows_cycles() {
     let row_count = 256;
     let state_cap = 4096;
