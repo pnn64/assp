@@ -2875,6 +2875,8 @@ timing_fakes_finalize_measure:
 .row_loop:
     cmp r13, [rsp + 48]
     jae .clear
+    cmp dword [r15 + r13 * 4], 30303030h
+    je .next
 
     mov rcx, [rsp]
     call note_stats_milli_to_row48_f32_even
@@ -3152,6 +3154,9 @@ timing_fakes_finalize_measure_8:
 .row_loop:
     cmp r13, [rsp + 48]
     jae .clear
+    mov rax, 3030303030303030h
+    cmp [r15 + r13 * 8], rax
+    je .next
 
     mov rcx, [rsp]
     call note_stats_milli_to_row48_f32_even
@@ -3628,6 +3633,8 @@ assp_count_timing_note_stats_4:
     mov r10, [rsp + TS4_ROWS_BASE]
     mov eax, [r10 + r12 * 4]
     mov [rsp + TS4_CURRENT_ROW], eax
+    cmp eax, 30303030h
+    je .write_row
 
     mov r10, [rsp + TS4_BEATS_BASE]
     mov rax, [r10 + r12 * 8]
@@ -4117,6 +4124,9 @@ assp_count_timing_note_stats_8:
     mov r10, [rsp + TS8_ROWS_BASE]
     mov rax, [r10 + r12 * 8]
     mov [rsp + TS8_CURRENT_ROW], rax
+    mov rcx, 3030303030303030h
+    cmp rax, rcx
+    je .write_row
 
     mov r10, [rsp + TS8_BEATS_BASE]
     mov rax, [r10 + r12 * 8]
