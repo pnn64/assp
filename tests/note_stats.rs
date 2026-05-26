@@ -75,6 +75,25 @@ L00F
 }
 
 #[test]
+fn counts_4_panel_zero_row_runs() {
+    let stats = count_note_stats_4(
+        b"
+0000
+0000
+0000
+1000
+0000
+;",
+    )
+    .unwrap();
+
+    assert_eq!(stats.rows, 5);
+    assert_eq!(stats.steps, 1);
+    assert_eq!(stats.arrows, 1);
+    assert_eq!(stats.left, 1);
+}
+
+#[test]
 fn counts_basic_8_panel_note_rows() {
     let stats = count_note_stats_8(
         b"

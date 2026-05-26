@@ -443,7 +443,7 @@ assp_count_note_stats_4:
 
 .store_active:
     mov r12d, eax
-    jmp .skip_line
+    jmp .skip_row_fast
 
 .row_no_step:
     test r11d, r11d
@@ -459,11 +459,36 @@ assp_count_note_stats_4:
 
 .store_empty_active:
     mov r12d, eax
-    jmp .skip_line
+    jmp .skip_row_fast
 
 .zero_row:
+    lea rax, [rsi + 4]
+    cmp rax, rdi
+    jae .zero_row_single
+    cmp byte [rax], 10
+    jne .zero_row_single
+    xor r11d, r11d
+
+.zero_run_loop:
+    inc r11
+    lea rsi, [rsi + 5]
+    cmp rsi, rdi
+    jae .zero_run_done
+    lea rax, [rsi + 4]
+    cmp rax, rdi
+    jae .zero_run_done
+    cmp dword [rsi], 30303030h
+    jne .zero_run_done
+    cmp byte [rax], 10
+    je .zero_run_loop
+
+.zero_run_done:
+    add [rbx + ASSP_NOTE_STATS_ROWS], r11
+    jmp .line_loop
+
+.zero_row_single:
     inc qword [rbx + ASSP_NOTE_STATS_ROWS]
-    jmp .skip_line
+    jmp .skip_row_fast
 
 .malformed_row:
     inc qword [rbx + ASSP_NOTE_STATS_MALFORMED_ROWS]
@@ -521,10 +546,41 @@ assp_count_note_stats_4:
     inc qword [rbx + ASSP_NOTE_STATS_HANDS]
 
 .tap_only_phantom_check:
-    jmp .skip_line
+    jmp .skip_row_fast
 
 .consume_one:
     inc rsi
+    jmp .line_loop
+
+.skip_row_fast:
+    lea rax, [rsi + 4]
+    cmp rax, rdi
+    jae .skip_row_to_end
+    cmp byte [rax], 10
+    je .skip_row_lf
+    cmp byte [rax], 13
+    je .skip_row_cr
+    jmp .skip_line
+
+.skip_row_lf:
+    lea rsi, [rax + 1]
+    jmp .line_loop
+
+.skip_row_cr:
+    lea r10, [rax + 1]
+    cmp r10, rdi
+    jae .skip_row_to_cr
+    cmp byte [r10], 10
+    jne .skip_line
+    lea rsi, [rax + 2]
+    jmp .line_loop
+
+.skip_row_to_cr:
+    mov rsi, r10
+    jmp .line_loop
+
+.skip_row_to_end:
+    mov rsi, rax
     jmp .line_loop
 
 .skip_line:
