@@ -631,6 +631,11 @@ assp_count_timing_segments:
     xor eax, eax
     mov r8, rcx
     lea r9, [rcx + rdx]
+    mov edx, ','
+    movd xmm1, edx
+    punpcklbw xmm1, xmm1
+    punpcklwd xmm1, xmm1
+    pshufd xmm1, xmm1, 0
 
 .seek_segment:
     cmp r8, r9
@@ -644,6 +649,23 @@ assp_count_timing_segments:
     inc rax
 
 .skip_to_comma:
+    lea r11, [r8 + 16]
+    cmp r11, r9
+    ja .skip_to_comma_tail
+    movdqu xmm0, [r8]
+    pcmpeqb xmm0, xmm1
+    pmovmskb r10d, xmm0
+    test r10d, r10d
+    jnz .skip_to_comma_hit
+    add r8, 16
+    jmp .skip_to_comma
+
+.skip_to_comma_hit:
+    bsf r10d, r10d
+    add r8, r10
+    jmp .next_segment
+
+.skip_to_comma_tail:
     cmp r8, r9
     jae .done
     cmp byte [r8], ','
