@@ -4138,6 +4138,20 @@ emit_scaled3:
     jc .done
 
 .split:
+    cmp rbx, 0ffffffffh
+    ja .split_slow
+    mov r11d, ebx
+    mov eax, r11d
+    mov ecx, 274877907
+    mul ecx
+    shr edx, 6
+    mov ebx, edx
+    imul eax, edx, 1000
+    sub r11d, eax
+    mov esi, r11d
+    jmp .split_done
+
+.split_slow:
     mov rax, rbx
     xor edx, edx
     mov r8d, 1000
@@ -4145,6 +4159,7 @@ emit_scaled3:
     mov rbx, rax
     mov rsi, rdx
 
+.split_done:
     test rbx, rbx
     jnz .int_digits
     mov al, '0'
