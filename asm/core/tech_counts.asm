@@ -254,6 +254,152 @@ section .text
 %%done:
 %endmacro
 
+; %1 = placement row width. Used when current and previous note counts are 1.
+%macro ASSP_COUNT_SINGLE_JACKS_DOUBLESTEPS_MS 1
+    movzx eax, byte [r12 + rsi]
+    test eax, eax
+    jz %%done
+    mov edx, eax
+    dec edx
+    test edx, eax
+    jnz %%fallback
+    bsf ecx, eax
+    lea r8, [r15 + rsi * %1]
+    movzx eax, byte [r8 + rcx]
+    test eax, eax
+    jz %%done
+    cmp eax, 4
+    ja %%done
+
+    movzx edx, byte [r12 + rsi - 1]
+    test edx, edx
+    jz %%done
+    mov r10d, edx
+    dec r10d
+    test r10d, edx
+    jnz %%fallback
+    bsf edx, edx
+    lea r9, [r8 - %1]
+    cmp al, [r9 + rdx]
+    jne %%done
+
+    cmp ecx, edx
+    jne %%maybe_doublestep
+    cmp r11d, 176
+    jge %%done
+    inc dword [rbx + ASSP_TECH_COUNTS_JACKS]
+    jmp %%done
+
+%%maybe_doublestep:
+    cmp r11d, 235
+    jge %%done
+    inc dword [rbx + ASSP_TECH_COUNTS_DOUBLESTEPS]
+    jmp %%done
+
+%%fallback:
+    mov ecx, 1
+%%foot_loop:
+    movzx eax, byte [rbp + 8 + rcx]
+    cmp al, 0ffh
+    je %%next
+    movzx edx, byte [rbp + rcx]
+    cmp dl, 0ffh
+    je %%next
+    cmp al, dl
+    jne %%fallback_maybe_doublestep
+    cmp r11d, 176
+    jge %%next
+    inc dword [rbx + ASSP_TECH_COUNTS_JACKS]
+    jmp %%next
+
+%%fallback_maybe_doublestep:
+    cmp r11d, 235
+    jge %%next
+    inc dword [rbx + ASSP_TECH_COUNTS_DOUBLESTEPS]
+
+%%next:
+    inc ecx
+    cmp ecx, 4
+    jbe %%foot_loop
+
+%%done:
+%endmacro
+
+; %1 = placement row width. Used when current and previous note counts are 1.
+%macro ASSP_COUNT_SINGLE_JACKS_DOUBLESTEPS_SECONDS 1
+    movzx eax, byte [r12 + rsi]
+    test eax, eax
+    jz %%done
+    mov edx, eax
+    dec edx
+    test edx, eax
+    jnz %%fallback
+    bsf ecx, eax
+    lea r8, [r15 + rsi * %1]
+    movzx eax, byte [r8 + rcx]
+    test eax, eax
+    jz %%done
+    cmp eax, 4
+    ja %%done
+
+    movzx edx, byte [r12 + rsi - 1]
+    test edx, edx
+    jz %%done
+    mov r10d, edx
+    dec r10d
+    test r10d, edx
+    jnz %%fallback
+    bsf edx, edx
+    lea r9, [r8 - %1]
+    cmp al, [r9 + rdx]
+    jne %%done
+
+    cmp ecx, edx
+    jne %%maybe_doublestep
+    movss xmm0, [rbp + 24]
+    ucomiss xmm0, [rel jack_cutoff_seconds]
+    jae %%done
+    inc dword [rbx + ASSP_TECH_COUNTS_JACKS]
+    jmp %%done
+
+%%maybe_doublestep:
+    movss xmm0, [rbp + 24]
+    ucomiss xmm0, [rel doublestep_cutoff_seconds]
+    jae %%done
+    inc dword [rbx + ASSP_TECH_COUNTS_DOUBLESTEPS]
+    jmp %%done
+
+%%fallback:
+    mov ecx, 1
+%%foot_loop:
+    movzx eax, byte [rbp + 8 + rcx]
+    cmp al, 0ffh
+    je %%next
+    movzx edx, byte [rbp + rcx]
+    cmp dl, 0ffh
+    je %%next
+    cmp al, dl
+    jne %%fallback_maybe_doublestep
+    movss xmm0, [rbp + 24]
+    ucomiss xmm0, [rel jack_cutoff_seconds]
+    jae %%next
+    inc dword [rbx + ASSP_TECH_COUNTS_JACKS]
+    jmp %%next
+
+%%fallback_maybe_doublestep:
+    movss xmm0, [rbp + 24]
+    ucomiss xmm0, [rel doublestep_cutoff_seconds]
+    jae %%next
+    inc dword [rbx + ASSP_TECH_COUNTS_DOUBLESTEPS]
+
+%%next:
+    inc ecx
+    cmp ecx, 4
+    jbe %%foot_loop
+
+%%done:
+%endmacro
+
 ; rcx = tech masks, rdx = note counts, r8 = row times in milliseconds,
 ; r9 = row placements as 4 bytes per row, stack arg 5 = row count,
 ; stack arg 6 = out assp_tech_counts.
@@ -322,7 +468,7 @@ assp_calculate_step_tech_counts_from_placements_4:
     jne .skip_jacks_doublesteps
     cmp byte [r13 + rsi - 1], 1
     jne .skip_jacks_doublesteps
-    call count_jacks_doublesteps_4
+    ASSP_COUNT_SINGLE_JACKS_DOUBLESTEPS_MS 4
 
 .skip_jacks_doublesteps:
     cmp byte [r13 + rsi], 2
@@ -438,7 +584,7 @@ assp_calculate_step_tech_counts_from_placements_seconds_4:
     jne .skip_jacks_doublesteps
     cmp byte [r13 + rsi - 1], 1
     jne .skip_jacks_doublesteps
-    call count_jacks_doublesteps_seconds_4
+    ASSP_COUNT_SINGLE_JACKS_DOUBLESTEPS_SECONDS 4
 
 .skip_jacks_doublesteps:
     cmp byte [r13 + rsi], 2
@@ -490,66 +636,6 @@ assp_calculate_step_tech_counts_from_placements_seconds_4:
 ; ecx = row mask, rdx = placement row, r8 = output positions[5].
 fill_hit_positions_4:
     ASSP_FILL_HIT_POSITIONS_4
-    ret
-
-count_jacks_doublesteps_4:
-    mov ecx, 1
-.foot_loop:
-    movzx eax, byte [rbp + 8 + rcx]
-    cmp al, 0ffh
-    je .next
-    movzx edx, byte [rbp + rcx]
-    cmp dl, 0ffh
-    je .next
-    cmp al, dl
-    jne .maybe_doublestep
-    cmp r11d, 176
-    jge .next
-    inc dword [rbx + ASSP_TECH_COUNTS_JACKS]
-    jmp .next
-
-.maybe_doublestep:
-    cmp r11d, 235
-    jge .next
-    inc dword [rbx + ASSP_TECH_COUNTS_DOUBLESTEPS]
-
-.next:
-    inc ecx
-    cmp ecx, 4
-    jbe .foot_loop
-
-.done:
-    ret
-
-count_jacks_doublesteps_seconds_4:
-    mov ecx, 1
-.foot_loop:
-    movzx eax, byte [rbp + 8 + rcx]
-    cmp al, 0ffh
-    je .next
-    movzx edx, byte [rbp + rcx]
-    cmp dl, 0ffh
-    je .next
-    cmp al, dl
-    jne .maybe_doublestep
-    movss xmm0, [rbp + 24]
-    ucomiss xmm0, [rel jack_cutoff_seconds]
-    jae .next
-    inc dword [rbx + ASSP_TECH_COUNTS_JACKS]
-    jmp .next
-
-.maybe_doublestep:
-    movss xmm0, [rbp + 24]
-    ucomiss xmm0, [rel doublestep_cutoff_seconds]
-    jae .next
-    inc dword [rbx + ASSP_TECH_COUNTS_DOUBLESTEPS]
-
-.next:
-    inc ecx
-    cmp ecx, 4
-    jbe .foot_loop
-
-.done:
     ret
 
 count_brackets_placements_4:
@@ -739,7 +825,7 @@ assp_calculate_step_tech_counts_from_placements_8:
     jne .skip_jacks_doublesteps
     cmp byte [r13 + rsi - 1], 1
     jne .skip_jacks_doublesteps
-    call count_jacks_doublesteps_8
+    ASSP_COUNT_SINGLE_JACKS_DOUBLESTEPS_MS 8
 
 .skip_jacks_doublesteps:
     cmp byte [r13 + rsi], 2
@@ -855,7 +941,7 @@ assp_calculate_step_tech_counts_from_placements_seconds_8:
     jne .skip_jacks_doublesteps
     cmp byte [r13 + rsi - 1], 1
     jne .skip_jacks_doublesteps
-    call count_jacks_doublesteps_seconds_8
+    ASSP_COUNT_SINGLE_JACKS_DOUBLESTEPS_SECONDS 8
 
 .skip_jacks_doublesteps:
     cmp byte [r13 + rsi], 2
@@ -907,66 +993,6 @@ assp_calculate_step_tech_counts_from_placements_seconds_8:
 ; ecx = row mask, rdx = placement row, r8 = output positions[5].
 fill_hit_positions_8:
     ASSP_FILL_HIT_POSITIONS_8
-    ret
-
-count_jacks_doublesteps_8:
-    mov ecx, 1
-.foot_loop:
-    movzx eax, byte [rbp + 8 + rcx]
-    cmp al, 0ffh
-    je .next
-    movzx edx, byte [rbp + rcx]
-    cmp dl, 0ffh
-    je .next
-    cmp al, dl
-    jne .maybe_doublestep
-    cmp r11d, 176
-    jge .next
-    inc dword [rbx + ASSP_TECH_COUNTS_JACKS]
-    jmp .next
-
-.maybe_doublestep:
-    cmp r11d, 235
-    jge .next
-    inc dword [rbx + ASSP_TECH_COUNTS_DOUBLESTEPS]
-
-.next:
-    inc ecx
-    cmp ecx, 4
-    jbe .foot_loop
-
-.done:
-    ret
-
-count_jacks_doublesteps_seconds_8:
-    mov ecx, 1
-.foot_loop:
-    movzx eax, byte [rbp + 8 + rcx]
-    cmp al, 0ffh
-    je .next
-    movzx edx, byte [rbp + rcx]
-    cmp dl, 0ffh
-    je .next
-    cmp al, dl
-    jne .maybe_doublestep
-    movss xmm0, [rbp + 24]
-    ucomiss xmm0, [rel jack_cutoff_seconds]
-    jae .next
-    inc dword [rbx + ASSP_TECH_COUNTS_JACKS]
-    jmp .next
-
-.maybe_doublestep:
-    movss xmm0, [rbp + 24]
-    ucomiss xmm0, [rel doublestep_cutoff_seconds]
-    jae .next
-    inc dword [rbx + ASSP_TECH_COUNTS_DOUBLESTEPS]
-
-.next:
-    inc ecx
-    cmp ecx, 4
-    jbe .foot_loop
-
-.done:
     ret
 
 count_brackets_placements_8:
