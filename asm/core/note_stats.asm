@@ -4427,90 +4427,65 @@ timing_stats_no_holds_finalize_measure:
     ret
 
 process_no_hold_judgable_row:
-    movd xmm0, eax
+    mov r11d, eax
+    lea r10, [rel note_stats_no_hold_lane_stats]
+    movzx ecx, al
+    mov eax, [r10 + rcx * 4]
+    mov ecx, r11d
+    shr ecx, 8
+    and ecx, 0ffh
+    add eax, [r10 + rcx * 4 + 1024]
+    mov ecx, r11d
+    shr ecx, 16
+    and ecx, 0ffh
+    add eax, [r10 + rcx * 4 + 2048]
+    shr r11d, 24
+    add eax, [r10 + r11 * 4 + 3072]
 
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_1]
-    pmovmskb r8d, xmm1
-    and r8d, 0fh
+    mov r11d, eax
 
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_L]
-    pmovmskb r9d, xmm1
-    and r9d, 0fh
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_l]
-    pmovmskb r10d, xmm1
-    and r10d, 0fh
-    or r9d, r10d
+    movzx r8d, al
 
-    mov r11d, r8d
-    or r11d, r9d
+    mov ecx, eax
+    shr ecx, 8
+    and ecx, 0ffh
+    add [rbx + ASSP_NOTE_STATS_LIFTS], rcx
 
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_M]
-    pmovmskb ecx, xmm1
-    and ecx, 0fh
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_m]
-    pmovmskb r10d, xmm1
-    and r10d, 0fh
-    or ecx, r10d
+    mov edx, eax
+    shr edx, 16
+    and edx, 0ffh
+    add [rbx + ASSP_NOTE_STATS_MINES], rdx
 
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_F]
-    pmovmskb edx, xmm1
-    and edx, 0fh
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_f]
-    pmovmskb r10d, xmm1
-    and r10d, 0fh
-    or edx, r10d
+    shr eax, 24
+    add [rbx + ASSP_NOTE_STATS_FAKES], rax
 
-    lea r10, [rel note_stats_popcount4]
-    mov eax, r11d
-    and eax, 0fh
-    movzx eax, byte [r10 + rax]
+    lea r10, [rel note_stats_tap_row_stats4]
+    mov r10, [r10 + r8 * 8]
+
+    movzx eax, r10b
+    add [rbx + ASSP_NOTE_STATS_LEFT], rax
+    shr r10, 8
+    movzx eax, r10b
+    add [rbx + ASSP_NOTE_STATS_DOWN], rax
+    shr r10, 8
+    movzx eax, r10b
+    add [rbx + ASSP_NOTE_STATS_UP], rax
+    shr r10, 8
+    movzx eax, r10b
+    add [rbx + ASSP_NOTE_STATS_RIGHT], rax
+    shr r10, 8
+    movzx eax, r10b
     add [rbx + ASSP_NOTE_STATS_ARROWS], rax
-
-    mov r8d, r11d
-    and r8d, 1
-    add [rbx + ASSP_NOTE_STATS_LEFT], r8
-    mov r8d, r11d
-    shr r8d, 1
-    and r8d, 1
-    add [rbx + ASSP_NOTE_STATS_DOWN], r8
-    mov r8d, r11d
-    shr r8d, 2
-    and r8d, 1
-    add [rbx + ASSP_NOTE_STATS_UP], r8
-    mov r8d, r11d
-    shr r8d, 3
-    and r8d, 1
-    add [rbx + ASSP_NOTE_STATS_RIGHT], r8
-
-    mov r8d, r9d
-    and r8d, 0fh
-    movzx r8d, byte [r10 + r8]
-    add [rbx + ASSP_NOTE_STATS_LIFTS], r8
-
-    and ecx, 0fh
-    movzx ecx, byte [r10 + rcx]
-    add [rbx + ASSP_NOTE_STATS_MINES], rcx
-
-    and edx, 0fh
-    movzx edx, byte [r10 + rdx]
-    add [rbx + ASSP_NOTE_STATS_FAKES], rdx
 
     test eax, eax
     jz .done
     inc qword [rbx + ASSP_NOTE_STATS_STEPS]
-    cmp eax, 2
-    jb .done
-    inc qword [rbx + ASSP_NOTE_STATS_JUMPS]
-    cmp eax, 3
-    jb .done
-    inc qword [rbx + ASSP_NOTE_STATS_HANDS]
+    shr r10, 8
+    movzx eax, r10b
+    add [rbx + ASSP_NOTE_STATS_JUMPS], rax
+    shr r10, 8
+    movzx eax, r10b
+    add [rbx + ASSP_NOTE_STATS_HANDS], rax
 .done:
     ret
 
@@ -4777,78 +4752,54 @@ timing_stats_no_holds_finalize_measure_8:
     ret
 
 process_no_hold_judgable_row_8:
-    movq xmm0, rax
-
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_1]
-    pmovmskb r8d, xmm1
-    and r8d, 0ffh
-
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_L]
-    pmovmskb r9d, xmm1
-    and r9d, 0ffh
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_l]
-    pmovmskb r10d, xmm1
-    and r10d, 0ffh
-    or r9d, r10d
-
-    mov r11d, r8d
-    or r11d, r9d
-
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_M]
-    pmovmskb ecx, xmm1
+    mov r11, rax
+    lea r10, [rel note_stats_no_hold_lane_stats]
+    movzx ecx, al
+    mov eax, [r10 + rcx * 4]
+    mov rcx, r11
+    shr rcx, 8
     and ecx, 0ffh
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_m]
-    pmovmskb r10d, xmm1
-    and r10d, 0ffh
-    or ecx, r10d
+    add eax, [r10 + rcx * 4 + 1024]
+    mov rcx, r11
+    shr rcx, 16
+    and ecx, 0ffh
+    add eax, [r10 + rcx * 4 + 2048]
+    mov rcx, r11
+    shr rcx, 24
+    and ecx, 0ffh
+    add eax, [r10 + rcx * 4 + 3072]
+    mov rcx, r11
+    shr rcx, 32
+    and ecx, 0ffh
+    add eax, [r10 + rcx * 4 + 4096]
+    mov rcx, r11
+    shr rcx, 40
+    and ecx, 0ffh
+    add eax, [r10 + rcx * 4 + 5120]
+    mov rcx, r11
+    shr rcx, 48
+    and ecx, 0ffh
+    add eax, [r10 + rcx * 4 + 6144]
+    shr r11, 56
+    add eax, [r10 + r11 * 4 + 7168]
 
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_F]
-    pmovmskb edx, xmm1
+    movzx r8d, al
+
+    mov ecx, eax
+    shr ecx, 8
+    and ecx, 0ffh
+    add [rbx + ASSP_NOTE_STATS_LIFTS], rcx
+
+    mov edx, eax
+    shr edx, 16
     and edx, 0ffh
-    movdqa xmm1, xmm0
-    pcmpeqb xmm1, [note_stats_byte_f]
-    pmovmskb r10d, xmm1
-    and r10d, 0ffh
-    or edx, r10d
+    add [rbx + ASSP_NOTE_STATS_MINES], rdx
 
-    lea r10, [rel note_stats_popcount4]
-
-    mov eax, r9d
-    and eax, 0fh
-    movzx eax, byte [r10 + rax]
-    mov r8d, r9d
-    shr r8d, 4
-    and r8d, 0fh
-    movzx r8d, byte [r10 + r8]
-    add eax, r8d
-    add [rbx + ASSP_NOTE_STATS_LIFTS], rax
-
-    mov eax, ecx
-    and eax, 0fh
-    movzx eax, byte [r10 + rax]
-    shr ecx, 4
-    and ecx, 0fh
-    movzx ecx, byte [r10 + rcx]
-    add eax, ecx
-    add [rbx + ASSP_NOTE_STATS_MINES], rax
-
-    mov eax, edx
-    and eax, 0fh
-    movzx eax, byte [r10 + rax]
-    shr edx, 4
-    and edx, 0fh
-    movzx edx, byte [r10 + rdx]
-    add eax, edx
+    shr eax, 24
     add [rbx + ASSP_NOTE_STATS_FAKES], rax
 
     lea r10, [rel note_stats_mask8_row_stats]
-    mov r10, [r10 + r11 * 8]
+    mov r10, [r10 + r8 * 8]
 
     movzx eax, r10b
     add [rbx + ASSP_NOTE_STATS_LEFT], rax
@@ -4963,6 +4914,34 @@ note_stats_literal_fake_char_count:
     db 0
 %endif
 %assign i i+1
+%endrep
+
+align 64
+note_stats_no_hold_lane_stats:
+%assign lane 0
+%rep 8
+%assign i 0
+%rep 256
+%assign active 0
+%assign lift 0
+%assign mine 0
+%assign fake 0
+%if i = '1' || i = 'L' || i = 'l'
+%assign active 1
+%endif
+%if i = 'L' || i = 'l'
+%assign lift 1
+%endif
+%if i = 'M' || i = 'm'
+%assign mine 1
+%endif
+%if i = 'F' || i = 'f'
+%assign fake 1
+%endif
+    dd (active << lane) | (lift << 8) | (mine << 16) | (fake << 24)
+%assign i i+1
+%endrep
+%assign lane lane+1
 %endrep
 
 align 64
