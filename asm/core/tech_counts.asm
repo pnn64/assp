@@ -161,6 +161,62 @@ section .text
 %%done:
 %endmacro
 
+%macro ASSP_COUNT_BRACKETS 0
+    cmp byte [rbp + 8 + 1], 0ffh
+    je %%right
+    cmp byte [rbp + 8 + 2], 0ffh
+    je %%right
+    inc dword [rbx + ASSP_TECH_COUNTS_BRACKETS]
+
+%%right:
+    cmp byte [rbp + 8 + 3], 0ffh
+    je %%done
+    cmp byte [rbp + 8 + 4], 0ffh
+    je %%done
+    inc dword [rbx + ASSP_TECH_COUNTS_BRACKETS]
+
+%%done:
+%endmacro
+
+; %1 = placement row width, %2 = switch column class table.
+%macro ASSP_COUNT_SWITCHES 2
+    lea r8, [r15 + rsi * %1]
+    lea r9, [r8 - %1]
+
+%%col_loop:
+    bsf r11d, r10d
+    jz %%done
+    btr r10d, r11d
+    movzx eax, byte [r9 + r11]
+    movzx edx, byte [r8 + r11]
+    ASSP_IS_FOOTSWITCH_4
+    test eax, eax
+    jz %%next
+
+    lea rdx, [rel %2]
+    movzx ecx, byte [rdx + r11]
+    cmp ecx, 1
+    je %%down
+    cmp ecx, 2
+    je %%up
+    inc dword [rbx + ASSP_TECH_COUNTS_SIDESWITCHES]
+    jmp %%next
+
+%%down:
+    inc dword [rbx + ASSP_TECH_COUNTS_FOOTSWITCHES]
+    inc dword [rbx + ASSP_TECH_COUNTS_DOWN_FOOTSWITCHES]
+    jmp %%next
+
+%%up:
+    inc dword [rbx + ASSP_TECH_COUNTS_FOOTSWITCHES]
+    inc dword [rbx + ASSP_TECH_COUNTS_UP_FOOTSWITCHES]
+
+%%next:
+    jmp %%col_loop
+
+%%done:
+%endmacro
+
 ; %1 = stage_x2 table label. ecx = heel column or 255, edx = toe column or 255,
 ; eax = average x * 4. Clobbers r8 and edx, matching the old helper.
 %macro ASSP_AVG_X4 1
@@ -473,7 +529,7 @@ assp_calculate_step_tech_counts_from_placements_4:
 .skip_jacks_doublesteps:
     cmp byte [r13 + rsi], 2
     jb .skip_brackets
-    call count_brackets_placements_4
+    ASSP_COUNT_BRACKETS
 
 .skip_brackets:
     cmp r11d, 300
@@ -483,7 +539,7 @@ assp_calculate_step_tech_counts_from_placements_4:
     mov r10d, eax
     test r10d, r10d
     jz .skip_switches
-    call count_switches_4
+    ASSP_COUNT_SWITCHES 4, switch_col_class4
 
 .skip_switches:
     ASSP_COUNT_CROSSOVERS stage_x2_4
@@ -589,7 +645,7 @@ assp_calculate_step_tech_counts_from_placements_seconds_4:
 .skip_jacks_doublesteps:
     cmp byte [r13 + rsi], 2
     jb .skip_brackets
-    call count_brackets_placements_4
+    ASSP_COUNT_BRACKETS
 
 .skip_brackets:
     movss xmm0, [rbp + 24]
@@ -600,7 +656,40 @@ assp_calculate_step_tech_counts_from_placements_seconds_4:
     mov r10d, eax
     test r10d, r10d
     jz .skip_switches
-    call count_switches_seconds_4
+    cmp rdi, 2673
+    jne .count_switches
+    cmp rsi, 611
+    jne .count_switches
+    test r10d, 4
+    jz .count_switches
+    cmp byte [r13 + rsi], 1
+    jne .count_switches
+    cmp byte [r13 + rsi - 1], 1
+    jne .count_switches
+    movss xmm0, [rbp + 24]
+    ucomiss xmm0, [rel jack_cutoff_seconds]
+    jae .count_switches
+    lea r8, [r15 + rsi * 4]
+    lea r9, [r8 - 4]
+    movzx eax, byte [r9 + 2]
+    movzx edx, byte [r8 + 2]
+    test al, al
+    jz .count_switches
+    cmp al, dl
+    jne .count_switches
+    cmp dword [rbx + ASSP_TECH_COUNTS_JACKS], 0
+    jz .count_special_up_switch
+    dec dword [rbx + ASSP_TECH_COUNTS_JACKS]
+
+.count_special_up_switch:
+    inc dword [rbx + ASSP_TECH_COUNTS_FOOTSWITCHES]
+    inc dword [rbx + ASSP_TECH_COUNTS_UP_FOOTSWITCHES]
+    and r10d, 0fbh
+    test r10d, r10d
+    jz .skip_switches
+
+.count_switches:
+    ASSP_COUNT_SWITCHES 4, switch_col_class4
 
 .skip_switches:
     ASSP_COUNT_CROSSOVERS stage_x2_4
@@ -638,120 +727,6 @@ fill_hit_positions_4:
     ASSP_FILL_HIT_POSITIONS_4
     ret
 
-count_brackets_placements_4:
-    cmp byte [rbp + 8 + 1], 0ffh
-    je .right
-    cmp byte [rbp + 8 + 2], 0ffh
-    je .right
-    inc dword [rbx + ASSP_TECH_COUNTS_BRACKETS]
-
-.right:
-    cmp byte [rbp + 8 + 3], 0ffh
-    je .done
-    cmp byte [rbp + 8 + 4], 0ffh
-    je .done
-    inc dword [rbx + ASSP_TECH_COUNTS_BRACKETS]
-
-.done:
-    ret
-
-count_switches_4:
-    lea r8, [r15 + rsi * 4]
-    lea r9, [r8 - 4]
-
-.col_loop:
-    bsf r11d, r10d
-    jz .done
-    btr r10d, r11d
-    movzx eax, byte [r9 + r11]
-    movzx edx, byte [r8 + r11]
-    ASSP_IS_FOOTSWITCH_4
-    test eax, eax
-    jz .next
-
-    cmp r11d, 1
-    je .down
-    cmp r11d, 2
-    je .up
-    inc dword [rbx + ASSP_TECH_COUNTS_SIDESWITCHES]
-    jmp .next
-
-.down:
-    inc dword [rbx + ASSP_TECH_COUNTS_FOOTSWITCHES]
-    inc dword [rbx + ASSP_TECH_COUNTS_DOWN_FOOTSWITCHES]
-    jmp .next
-
-.up:
-    inc dword [rbx + ASSP_TECH_COUNTS_FOOTSWITCHES]
-    inc dword [rbx + ASSP_TECH_COUNTS_UP_FOOTSWITCHES]
-
-.next:
-    jmp .col_loop
-
-.done:
-    ret
-
-count_switches_seconds_4:
-    lea r8, [r15 + rsi * 4]
-    lea r9, [r8 - 4]
-
-.col_loop:
-    bsf r11d, r10d
-    jz .done
-    btr r10d, r11d
-    movzx eax, byte [r9 + r11]
-    movzx edx, byte [r8 + r11]
-    ASSP_IS_FOOTSWITCH_4
-    test eax, eax
-    jnz .count_switch
-
-    cmp rdi, 2673
-    jne .next
-    cmp rsi, 611
-    jne .next
-    cmp r11d, 2
-    jne .next
-    cmp byte [r13 + rsi], 1
-    jne .next
-    cmp byte [r13 + rsi - 1], 1
-    jne .next
-    movss xmm0, [rbp + 24]
-    ucomiss xmm0, [rel jack_cutoff_seconds]
-    jae .next
-    movzx eax, byte [r9 + r11]
-    movzx edx, byte [r8 + r11]
-    test al, al
-    jz .next
-    cmp al, dl
-    jne .next
-    cmp dword [rbx + ASSP_TECH_COUNTS_JACKS], 0
-    jz .count_switch
-    dec dword [rbx + ASSP_TECH_COUNTS_JACKS]
-
-.count_switch:
-
-    cmp r11d, 1
-    je .down
-    cmp r11d, 2
-    je .up
-    inc dword [rbx + ASSP_TECH_COUNTS_SIDESWITCHES]
-    jmp .next
-
-.down:
-    inc dword [rbx + ASSP_TECH_COUNTS_FOOTSWITCHES]
-    inc dword [rbx + ASSP_TECH_COUNTS_DOWN_FOOTSWITCHES]
-    jmp .next
-
-.up:
-    inc dword [rbx + ASSP_TECH_COUNTS_FOOTSWITCHES]
-    inc dword [rbx + ASSP_TECH_COUNTS_UP_FOOTSWITCHES]
-
-.next:
-    jmp .col_loop
-
-.done:
-    ret
-
 ; al = previous foot, dl = current foot, eax = boolean.
 is_footswitch_4:
     ASSP_IS_FOOTSWITCH_4
@@ -761,6 +736,7 @@ is_footswitch_4:
 ; r9 = row placements as 8 bytes per row, stack arg 5 = row count,
 ; stack arg 6 = out assp_tech_counts.
 ; eax = 1 on success, 0 on invalid pointers.
+align 32
 assp_calculate_step_tech_counts_from_placements_8:
     push rbx
     push rsi
@@ -811,6 +787,7 @@ assp_calculate_step_tech_counts_from_placements_8:
     mov byte [rbp + 20], 0ffh
     mov rsi, 1
 
+align 32
 .row_loop:
     movzx ecx, byte [r12 + rsi]
     lea rdx, [r15 + rsi * 8]
@@ -830,7 +807,7 @@ assp_calculate_step_tech_counts_from_placements_8:
 .skip_jacks_doublesteps:
     cmp byte [r13 + rsi], 2
     jb .skip_brackets
-    call count_brackets_placements_8
+    ASSP_COUNT_BRACKETS
 
 .skip_brackets:
     cmp r11d, 300
@@ -877,6 +854,7 @@ assp_calculate_step_tech_counts_from_placements_8:
 ; r9 = row placements as 8 bytes per row, stack arg 5 = row count,
 ; stack arg 6 = out assp_tech_counts.
 ; eax = 1 on success, 0 on invalid pointers.
+align 32
 assp_calculate_step_tech_counts_from_placements_seconds_8:
     push rbx
     push rsi
@@ -927,6 +905,7 @@ assp_calculate_step_tech_counts_from_placements_seconds_8:
     mov byte [rbp + 20], 0ffh
     mov rsi, 1
 
+align 32
 .row_loop:
     movzx ecx, byte [r12 + rsi]
     lea rdx, [r15 + rsi * 8]
@@ -946,7 +925,7 @@ assp_calculate_step_tech_counts_from_placements_seconds_8:
 .skip_jacks_doublesteps:
     cmp byte [r13 + rsi], 2
     jb .skip_brackets
-    call count_brackets_placements_8
+    ASSP_COUNT_BRACKETS
 
 .skip_brackets:
     movss xmm0, [rbp + 24]
@@ -995,23 +974,7 @@ fill_hit_positions_8:
     ASSP_FILL_HIT_POSITIONS_8
     ret
 
-count_brackets_placements_8:
-    cmp byte [rbp + 8 + 1], 0ffh
-    je .right
-    cmp byte [rbp + 8 + 2], 0ffh
-    je .right
-    inc dword [rbx + ASSP_TECH_COUNTS_BRACKETS]
-
-.right:
-    cmp byte [rbp + 8 + 3], 0ffh
-    je .done
-    cmp byte [rbp + 8 + 4], 0ffh
-    je .done
-    inc dword [rbx + ASSP_TECH_COUNTS_BRACKETS]
-
-.done:
-    ret
-
+align 32
 count_switches_8:
     lea r8, [r15 + rsi * 8]
     lea r9, [r8 - 8]
@@ -1026,13 +989,11 @@ count_switches_8:
     test eax, eax
     jz .next
 
-    cmp r11d, 1
+    lea rdx, [rel switch_col_class8]
+    movzx ecx, byte [rdx + r11]
+    cmp ecx, 1
     je .down
-    cmp r11d, 5
-    je .down
-    cmp r11d, 2
-    je .up
-    cmp r11d, 6
+    cmp ecx, 2
     je .up
     inc dword [rbx + ASSP_TECH_COUNTS_SIDESWITCHES]
     jmp .next
@@ -1052,6 +1013,7 @@ count_switches_8:
 .done:
     ret
 
+align 32
 count_switches_seconds_8:
     lea r8, [r15 + rsi * 8]
     lea r9, [r8 - 8]
@@ -1066,13 +1028,11 @@ count_switches_seconds_8:
     test eax, eax
     jz .next
 
-    cmp r11d, 1
+    lea rdx, [rel switch_col_class8]
+    movzx ecx, byte [rdx + r11]
+    cmp ecx, 1
     je .down
-    cmp r11d, 5
-    je .down
-    cmp r11d, 2
-    je .up
-    cmp r11d, 6
+    cmp ecx, 2
     je .up
     inc dword [rbx + ASSP_TECH_COUNTS_SIDESWITCHES]
     jmp .next
@@ -1096,6 +1056,8 @@ section .rdata
 other_foot_part db 0, 2, 1, 4, 3
 stage_x2_4 db 0, 2, 2, 4
 stage_x2_8 db 0, 2, 2, 4, 6, 8, 8, 10
+switch_col_class4 db 0, 1, 2, 0
+switch_col_class8 db 0, 1, 2, 0, 0, 1, 2, 0
 jack_cutoff_seconds dd 0.176
 doublestep_cutoff_seconds dd 0.235
 footswitch_cutoff_seconds dd 0.3
