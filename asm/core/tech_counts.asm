@@ -570,13 +570,13 @@ count_brackets_placements_4:
     ret
 
 count_switches_4:
-    xor r11d, r11d
     lea r8, [r15 + rsi * 4]
     lea r9, [r8 - 4]
 
 .col_loop:
-    bt r10d, r11d
-    jnc .next
+    bsf r11d, r10d
+    jz .done
+    btr r10d, r11d
     movzx eax, byte [r9 + r11]
     movzx edx, byte [r8 + r11]
     ASSP_IS_FOOTSWITCH_4
@@ -600,21 +600,19 @@ count_switches_4:
     inc dword [rbx + ASSP_TECH_COUNTS_UP_FOOTSWITCHES]
 
 .next:
-    inc r11d
-    cmp r11d, 4
-    jb .col_loop
+    jmp .col_loop
 
 .done:
     ret
 
 count_switches_seconds_4:
-    xor r11d, r11d
     lea r8, [r15 + rsi * 4]
     lea r9, [r8 - 4]
 
 .col_loop:
-    bt r10d, r11d
-    jnc .next
+    bsf r11d, r10d
+    jz .done
+    btr r10d, r11d
     movzx eax, byte [r9 + r11]
     movzx edx, byte [r8 + r11]
     ASSP_IS_FOOTSWITCH_4
@@ -663,9 +661,7 @@ count_switches_seconds_4:
     inc dword [rbx + ASSP_TECH_COUNTS_UP_FOOTSWITCHES]
 
 .next:
-    inc r11d
-    cmp r11d, 4
-    jb .col_loop
+    jmp .col_loop
 
 .done:
     ret
@@ -991,13 +987,13 @@ count_brackets_placements_8:
     ret
 
 count_switches_8:
-    xor r11d, r11d
     lea r8, [r15 + rsi * 8]
     lea r9, [r8 - 8]
 
 .col_loop:
-    bt r10d, r11d
-    jnc .next
+    bsf r11d, r10d
+    jz .done
+    btr r10d, r11d
     movzx eax, byte [r9 + r11]
     movzx edx, byte [r8 + r11]
     ASSP_IS_FOOTSWITCH_4
@@ -1025,21 +1021,19 @@ count_switches_8:
     inc dword [rbx + ASSP_TECH_COUNTS_UP_FOOTSWITCHES]
 
 .next:
-    inc r11d
-    cmp r11d, 8
-    jb .col_loop
+    jmp .col_loop
 
 .done:
     ret
 
 count_switches_seconds_8:
-    xor r11d, r11d
     lea r8, [r15 + rsi * 8]
     lea r9, [r8 - 8]
 
 .col_loop:
-    bt r10d, r11d
-    jnc .next
+    bsf r11d, r10d
+    jz .done
+    btr r10d, r11d
     movzx eax, byte [r9 + r11]
     movzx edx, byte [r8 + r11]
     ASSP_IS_FOOTSWITCH_4
@@ -1067,9 +1061,7 @@ count_switches_seconds_8:
     inc dword [rbx + ASSP_TECH_COUNTS_UP_FOOTSWITCHES]
 
 .next:
-    inc r11d
-    cmp r11d, 8
-    jb .col_loop
+    jmp .col_loop
 
 .done:
     ret
