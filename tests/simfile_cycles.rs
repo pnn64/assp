@@ -173,6 +173,21 @@ fn simfile_cycles() {
 
     bench(
         || unsafe {
+            let mut info = ChartInfo::default();
+            black_box(assp_find_chart_by_index(
+                black_box(big_sm.as_ptr()),
+                black_box(big_sm.len()),
+                black_box(0),
+                black_box(&mut info as *mut ChartInfo),
+            ));
+        },
+        "find_chart_by_index big sm",
+        200,
+        big_sm.len(),
+    );
+
+    bench(
+        || unsafe {
             let mut out = ByteSlice::default();
             black_box(assp_find_global_tag(
                 black_box(global_no_timing.as_ptr()),

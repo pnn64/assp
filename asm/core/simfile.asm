@@ -2049,15 +2049,40 @@ parse_sm_notes_block:
     lea rax, [r12 + 1]
     mov r8, rax
     mov rdx, rax
+    movdqa xmm4, [colon_bytes]
+    movdqa xmm5, [semicolon_bytes]
 
 .note_data_scan:
     cmp rdx, r11
     jae .store_note_data
+    lea rax, [rdx + 16]
+    cmp rax, r11
+    ja .note_data_tail
+    movdqu xmm0, [rdx]
+    movdqa xmm1, xmm0
+    pcmpeqb xmm0, xmm4
+    pcmpeqb xmm1, xmm5
+    por xmm0, xmm1
+    pmovmskb eax, xmm0
+    test eax, eax
+    jnz .note_data_candidate
+    add rdx, 16
+    jmp .note_data_scan
+
+.note_data_tail:
     cmp byte [rdx], ';'
     je .store_note_data_with_semicolon
     cmp byte [rdx], ':'
     jne .note_data_next
+    jmp .note_data_colon
 
+.note_data_candidate:
+    bsf ecx, eax
+    add rdx, rcx
+    cmp byte [rdx], ';'
+    je .store_note_data_with_semicolon
+
+.note_data_colon:
     mov rax, rdx
     xor ecx, ecx
 .note_slash_loop:
@@ -2104,6 +2129,7 @@ section .rdata
 align 16
 hash_bytes times 16 db '#'
 semicolon_bytes times 16 db ';'
+colon_bytes times 16 db ':'
 lf_bytes times 16 db 10
 cr_bytes times 16 db 13
 

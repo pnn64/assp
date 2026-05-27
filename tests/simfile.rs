@@ -160,6 +160,27 @@ fn finds_sm_chart_metadata_and_note_rows() {
 }
 
 #[test]
+fn keeps_escaped_colons_in_sm_note_rows() {
+    let data = b"#TITLE:X;
+#NOTES:
+     dance-single:
+     escaped:
+     Beginner:
+     1:
+     0,0,0,0,0:
+0001
+\\:
+0000
+;";
+    let chart = find_chart_by_index(data, 0).unwrap();
+
+    assert_eq!(
+        slice(data, chart.note_data, chart.note_data_len),
+        b"\n0001\n\\:\n0000\n;"
+    );
+}
+
+#[test]
 fn finds_global_bpms() {
     let data = b"#TITLE:X;#BPMS:0.000=140.000,64.000=175.000;#NOTES:0000\n;";
     let bpms = find_global_bpms(data).unwrap();
