@@ -189,6 +189,18 @@ assp_find_byte:
 .tail:
     test rdx, rdx
     jz .not_found
+    test rax, rax
+    jz .tail_loop
+
+    lea r11, [rax + rdx - 16]
+    movdqu xmm0, [rcx + r11]
+    pcmpeqb xmm0, xmm1
+    pmovmskb r10d, xmm0
+    test r10d, r10d
+    jz .not_found
+    bsf r10d, r10d
+    lea rax, [r11 + r10]
+    ret
 
 .tail_loop:
     cmp byte [rcx + rax], r8b
