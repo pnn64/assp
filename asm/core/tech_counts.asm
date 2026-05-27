@@ -54,6 +54,92 @@ section .text
 %%done:
 %endmacro
 
+%macro ASSP_FILL_HIT_POSITIONS_8 0
+    mov dword [r8], 0ffffffffh
+    mov byte [r8 + 4], 0ffh
+
+    test cl, 1
+    jz %%col1
+    movzx eax, byte [rdx]
+    test eax, eax
+    jz %%col1
+    cmp eax, 4
+    ja %%col1
+    mov byte [r8 + rax], 0
+
+%%col1:
+    test cl, 2
+    jz %%col2
+    movzx eax, byte [rdx + 1]
+    test eax, eax
+    jz %%col2
+    cmp eax, 4
+    ja %%col2
+    mov byte [r8 + rax], 1
+
+%%col2:
+    test cl, 4
+    jz %%col3
+    movzx eax, byte [rdx + 2]
+    test eax, eax
+    jz %%col3
+    cmp eax, 4
+    ja %%col3
+    mov byte [r8 + rax], 2
+
+%%col3:
+    test cl, 8
+    jz %%col4
+    movzx eax, byte [rdx + 3]
+    test eax, eax
+    jz %%col4
+    cmp eax, 4
+    ja %%col4
+    mov byte [r8 + rax], 3
+
+%%col4:
+    test ecx, 16
+    jz %%col5
+    movzx eax, byte [rdx + 4]
+    test eax, eax
+    jz %%col5
+    cmp eax, 4
+    ja %%col5
+    mov byte [r8 + rax], 4
+
+%%col5:
+    test ecx, 32
+    jz %%col6
+    movzx eax, byte [rdx + 5]
+    test eax, eax
+    jz %%col6
+    cmp eax, 4
+    ja %%col6
+    mov byte [r8 + rax], 5
+
+%%col6:
+    test ecx, 64
+    jz %%col7
+    movzx eax, byte [rdx + 6]
+    test eax, eax
+    jz %%col7
+    cmp eax, 4
+    ja %%col7
+    mov byte [r8 + rax], 6
+
+%%col7:
+    test ecx, 128
+    jz %%done
+    movzx eax, byte [rdx + 7]
+    test eax, eax
+    jz %%done
+    cmp eax, 4
+    ja %%done
+    mov byte [r8 + rax], 7
+
+%%done:
+%endmacro
+
 ; rcx = tech masks, rdx = note counts, r8 = row times in milliseconds,
 ; r9 = row placements as 4 bytes per row, stack arg 5 = row count,
 ; stack arg 6 = out assp_tech_counts.
@@ -627,7 +713,7 @@ assp_calculate_step_tech_counts_from_placements_8:
     movzx ecx, byte [r12]
     mov rdx, r15
     lea r8, [rbp]
-    call fill_hit_positions_8
+    ASSP_FILL_HIT_POSITIONS_8
 
     mov dword [rbp + 16], 0ffffffffh
     mov byte [rbp + 20], 0ffh
@@ -637,7 +723,7 @@ assp_calculate_step_tech_counts_from_placements_8:
     movzx ecx, byte [r12 + rsi]
     lea rdx, [r15 + rsi * 8]
     lea r8, [rbp + 8]
-    call fill_hit_positions_8
+    ASSP_FILL_HIT_POSITIONS_8
 
     mov eax, [r14 + rsi * 4]
     sub eax, [r14 + rsi * 4 - 4]
@@ -743,7 +829,7 @@ assp_calculate_step_tech_counts_from_placements_seconds_8:
     movzx ecx, byte [r12]
     mov rdx, r15
     lea r8, [rbp]
-    call fill_hit_positions_8
+    ASSP_FILL_HIT_POSITIONS_8
 
     mov dword [rbp + 16], 0ffffffffh
     mov byte [rbp + 20], 0ffh
@@ -753,7 +839,7 @@ assp_calculate_step_tech_counts_from_placements_seconds_8:
     movzx ecx, byte [r12 + rsi]
     lea rdx, [r15 + rsi * 8]
     lea r8, [rbp + 8]
-    call fill_hit_positions_8
+    ASSP_FILL_HIT_POSITIONS_8
 
     movss xmm0, [r14 + rsi * 4]
     subss xmm0, [r14 + rsi * 4 - 4]
@@ -814,89 +900,7 @@ assp_calculate_step_tech_counts_from_placements_seconds_8:
 
 ; ecx = row mask, rdx = placement row, r8 = output positions[5].
 fill_hit_positions_8:
-    mov dword [r8], 0ffffffffh
-    mov byte [r8 + 4], 0ffh
-
-    test cl, 1
-    jz .col1
-    movzx eax, byte [rdx]
-    test eax, eax
-    jz .col1
-    cmp eax, 4
-    ja .col1
-    mov byte [r8 + rax], 0
-
-.col1:
-    test cl, 2
-    jz .col2
-    movzx eax, byte [rdx + 1]
-    test eax, eax
-    jz .col2
-    cmp eax, 4
-    ja .col2
-    mov byte [r8 + rax], 1
-
-.col2:
-    test cl, 4
-    jz .col3
-    movzx eax, byte [rdx + 2]
-    test eax, eax
-    jz .col3
-    cmp eax, 4
-    ja .col3
-    mov byte [r8 + rax], 2
-
-.col3:
-    test cl, 8
-    jz .col4
-    movzx eax, byte [rdx + 3]
-    test eax, eax
-    jz .col4
-    cmp eax, 4
-    ja .col4
-    mov byte [r8 + rax], 3
-
-.col4:
-    test ecx, 16
-    jz .col5
-    movzx eax, byte [rdx + 4]
-    test eax, eax
-    jz .col5
-    cmp eax, 4
-    ja .col5
-    mov byte [r8 + rax], 4
-
-.col5:
-    test ecx, 32
-    jz .col6
-    movzx eax, byte [rdx + 5]
-    test eax, eax
-    jz .col6
-    cmp eax, 4
-    ja .col6
-    mov byte [r8 + rax], 5
-
-.col6:
-    test ecx, 64
-    jz .col7
-    movzx eax, byte [rdx + 6]
-    test eax, eax
-    jz .col7
-    cmp eax, 4
-    ja .col7
-    mov byte [r8 + rax], 6
-
-.col7:
-    test ecx, 128
-    jz .done
-    movzx eax, byte [rdx + 7]
-    test eax, eax
-    jz .done
-    cmp eax, 4
-    ja .done
-    mov byte [r8 + rax], 7
-
-.done:
+    ASSP_FILL_HIT_POSITIONS_8
     ret
 
 count_jacks_doublesteps_8:
