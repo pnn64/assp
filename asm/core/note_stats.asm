@@ -580,31 +580,29 @@ assp_count_note_stats_4:
     pmovmskb r10d, xmm0
     and r10d, 0fh
 
-    inc qword [rbx + ASSP_NOTE_STATS_ROWS]
-    inc qword [rbx + ASSP_NOTE_STATS_STEPS]
-    lea r11, [rel note_stats_tap_row_stats4]
-    mov r11, [r11 + r10 * 8]
+    lea r11, [r10 + r10 * 4]
+    shl r11, 4
+    lea r10, [rel note_stats_tap_row_qstats4]
+    add r11, r10
 
-    movzx eax, r11b
-    add qword [rbx + ASSP_NOTE_STATS_LEFT], rax
-    shr r11, 8
-    movzx eax, r11b
-    add qword [rbx + ASSP_NOTE_STATS_DOWN], rax
-    shr r11, 8
-    movzx eax, r11b
-    add qword [rbx + ASSP_NOTE_STATS_UP], rax
-    shr r11, 8
-    movzx eax, r11b
-    add qword [rbx + ASSP_NOTE_STATS_RIGHT], rax
-    shr r11, 8
-    movzx eax, r11b
-    add qword [rbx + ASSP_NOTE_STATS_ARROWS], rax
-    shr r11, 8
-    movzx eax, r11b
-    add qword [rbx + ASSP_NOTE_STATS_JUMPS], rax
-    shr r11, 8
-    movzx eax, r11b
-    add qword [rbx + ASSP_NOTE_STATS_HANDS], rax
+    movdqu xmm0, [rbx + ASSP_NOTE_STATS_ROWS]
+    paddq xmm0, [r11 + 0]
+    movdqu [rbx + ASSP_NOTE_STATS_ROWS], xmm0
+
+    movdqu xmm0, [rbx + ASSP_NOTE_STATS_ARROWS]
+    paddq xmm0, [r11 + 16]
+    movdqu [rbx + ASSP_NOTE_STATS_ARROWS], xmm0
+
+    mov rax, [r11 + 32]
+    add [rbx + ASSP_NOTE_STATS_HANDS], rax
+
+    movdqu xmm0, [rbx + ASSP_NOTE_STATS_LEFT]
+    paddq xmm0, [r11 + 48]
+    movdqu [rbx + ASSP_NOTE_STATS_LEFT], xmm0
+
+    movdqu xmm0, [rbx + ASSP_NOTE_STATS_UP]
+    paddq xmm0, [r11 + 64]
+    movdqu [rbx + ASSP_NOTE_STATS_UP], xmm0
     jmp .skip_row_fast
 
 .consume_one:
@@ -4459,33 +4457,29 @@ process_no_hold_judgable_row:
     shr eax, 24
     add [rbx + ASSP_NOTE_STATS_FAKES], rax
 
-    lea r10, [rel note_stats_tap_row_stats4]
-    mov r10, [r10 + r8 * 8]
+    lea r10, [r8 + r8 * 4]
+    shl r10, 4
+    lea r11, [rel note_stats_tap_row_qstats4]
+    add r10, r11
 
-    movzx eax, r10b
-    add [rbx + ASSP_NOTE_STATS_LEFT], rax
-    shr r10, 8
-    movzx eax, r10b
-    add [rbx + ASSP_NOTE_STATS_DOWN], rax
-    shr r10, 8
-    movzx eax, r10b
-    add [rbx + ASSP_NOTE_STATS_UP], rax
-    shr r10, 8
-    movzx eax, r10b
-    add [rbx + ASSP_NOTE_STATS_RIGHT], rax
-    shr r10, 8
-    movzx eax, r10b
-    add [rbx + ASSP_NOTE_STATS_ARROWS], rax
+    movdqu xmm0, [rbx + ASSP_NOTE_STATS_ARROWS]
+    paddq xmm0, [r10 + 16]
+    movdqu [rbx + ASSP_NOTE_STATS_ARROWS], xmm0
 
-    test eax, eax
+    mov rax, [r10 + 32]
+    add [rbx + ASSP_NOTE_STATS_HANDS], rax
+
+    movdqu xmm0, [rbx + ASSP_NOTE_STATS_LEFT]
+    paddq xmm0, [r10 + 48]
+    movdqu [rbx + ASSP_NOTE_STATS_LEFT], xmm0
+
+    movdqu xmm0, [rbx + ASSP_NOTE_STATS_UP]
+    paddq xmm0, [r10 + 64]
+    movdqu [rbx + ASSP_NOTE_STATS_UP], xmm0
+
+    test r8d, r8d
     jz .done
     inc qword [rbx + ASSP_NOTE_STATS_STEPS]
-    shr r10, 8
-    movzx eax, r10b
-    add [rbx + ASSP_NOTE_STATS_JUMPS], rax
-    shr r10, 8
-    movzx eax, r10b
-    add [rbx + ASSP_NOTE_STATS_HANDS], rax
 .done:
     ret
 
@@ -4859,7 +4853,7 @@ note_stats_const_48_f32 dd 48.0
 note_stats_const_48_over_1000_f32 dd 0.048
 note_stats_const_one_over_1000_f32 dd 0.001
 align 16
-note_stats_tap_row_stats4:
+note_stats_tap_row_qstats4:
 %assign i 0
 %rep 16
 %assign tap_l ((i >> 0) & 1)
@@ -4877,7 +4871,11 @@ note_stats_tap_row_stats4:
 %else
 %assign tap_hand 0
 %endif
-    dq tap_l | (tap_d << 8) | (tap_u << 16) | (tap_r << 24) | (tap_n << 32) | (tap_jump << 40) | (tap_hand << 48)
+    dq 1, 1
+    dq tap_n, tap_jump
+    dq tap_hand, 0
+    dq tap_l, tap_d
+    dq tap_u, tap_r
 %assign i i+1
 %endrep
 
