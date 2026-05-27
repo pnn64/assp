@@ -161,6 +161,39 @@ section .text
 %%done:
 %endmacro
 
+; %1 = stage_x2 table label. ecx = heel column or 255, edx = toe column or 255,
+; eax = average x * 4. Clobbers r8 and edx, matching the old helper.
+%macro ASSP_AVG_X4 1
+    cmp cl, 0ffh
+    je %%heel_invalid
+    cmp dl, 0ffh
+    je %%toe_invalid
+    lea r8, [rel %1]
+    movzx eax, byte [r8 + rcx]
+    movzx edx, byte [r8 + rdx]
+    add eax, edx
+    jmp %%done
+
+%%heel_invalid:
+    cmp dl, 0ffh
+    je %%zero
+    lea r8, [rel %1]
+    movzx eax, byte [r8 + rdx]
+    add eax, eax
+    jmp %%done
+
+%%toe_invalid:
+    lea r8, [rel %1]
+    movzx eax, byte [r8 + rcx]
+    add eax, eax
+    jmp %%done
+
+%%zero:
+    xor eax, eax
+
+%%done:
+%endmacro
+
 ; rcx = tech masks, rdx = note counts, r8 = row times in milliseconds,
 ; r9 = row placements as 4 bytes per row, stack arg 5 = row count,
 ; stack arg 6 = out assp_tech_counts.
@@ -592,11 +625,11 @@ count_crossovers_4:
 
     movzx ecx, byte [rbp + 1]
     movzx edx, byte [rbp + 2]
-    call avg_x4_4
+    ASSP_AVG_X4 stage_x2_4
     mov r10d, eax
     movzx ecx, byte [rbp + 8 + 3]
     movzx edx, byte [rbp + 8 + 4]
-    call avg_x4_4
+    ASSP_AVG_X4 stage_x2_4
     cmp eax, r10d
     jge .left_cross
 
@@ -619,11 +652,11 @@ count_crossovers_4:
 
     movzx ecx, byte [rbp + 8 + 1]
     movzx edx, byte [rbp + 8 + 2]
-    call avg_x4_4
+    ASSP_AVG_X4 stage_x2_4
     mov r10d, eax
     movzx ecx, byte [rbp + 3]
     movzx edx, byte [rbp + 4]
-    call avg_x4_4
+    ASSP_AVG_X4 stage_x2_4
     cmp eax, r10d
     jge .done
 
@@ -639,36 +672,6 @@ count_crossovers_4:
     inc dword [rbx + ASSP_TECH_COUNTS_CROSSOVERS]
 
 .done:
-    ret
-
-; ecx = heel column or 255, edx = toe column or 255, eax = average x * 4.
-avg_x4_4:
-    cmp cl, 0ffh
-    je .heel_invalid
-    cmp dl, 0ffh
-    je .toe_invalid
-    lea r8, [rel stage_x2_4]
-    movzx eax, byte [r8 + rcx]
-    movzx edx, byte [r8 + rdx]
-    add eax, edx
-    ret
-
-.heel_invalid:
-    cmp dl, 0ffh
-    je .zero
-    lea r8, [rel stage_x2_4]
-    movzx eax, byte [r8 + rdx]
-    add eax, eax
-    ret
-
-.toe_invalid:
-    lea r8, [rel stage_x2_4]
-    movzx eax, byte [r8 + rcx]
-    add eax, eax
-    ret
-
-.zero:
-    xor eax, eax
     ret
 
 ; rcx = tech masks, rdx = note counts, r8 = row times in milliseconds,
@@ -1080,11 +1083,11 @@ count_crossovers_8:
 
     movzx ecx, byte [rbp + 1]
     movzx edx, byte [rbp + 2]
-    call avg_x4_8
+    ASSP_AVG_X4 stage_x2_8
     mov r10d, eax
     movzx ecx, byte [rbp + 8 + 3]
     movzx edx, byte [rbp + 8 + 4]
-    call avg_x4_8
+    ASSP_AVG_X4 stage_x2_8
     cmp eax, r10d
     jge .left_cross
 
@@ -1107,11 +1110,11 @@ count_crossovers_8:
 
     movzx ecx, byte [rbp + 8 + 1]
     movzx edx, byte [rbp + 8 + 2]
-    call avg_x4_8
+    ASSP_AVG_X4 stage_x2_8
     mov r10d, eax
     movzx ecx, byte [rbp + 3]
     movzx edx, byte [rbp + 4]
-    call avg_x4_8
+    ASSP_AVG_X4 stage_x2_8
     cmp eax, r10d
     jge .done
 
@@ -1127,36 +1130,6 @@ count_crossovers_8:
     inc dword [rbx + ASSP_TECH_COUNTS_CROSSOVERS]
 
 .done:
-    ret
-
-; ecx = heel column or 255, edx = toe column or 255, eax = average x * 4.
-avg_x4_8:
-    cmp cl, 0ffh
-    je .heel_invalid
-    cmp dl, 0ffh
-    je .toe_invalid
-    lea r8, [rel stage_x2_8]
-    movzx eax, byte [r8 + rcx]
-    movzx edx, byte [r8 + rdx]
-    add eax, edx
-    ret
-
-.heel_invalid:
-    cmp dl, 0ffh
-    je .zero
-    lea r8, [rel stage_x2_8]
-    movzx eax, byte [r8 + rdx]
-    add eax, eax
-    ret
-
-.toe_invalid:
-    lea r8, [rel stage_x2_8]
-    movzx eax, byte [r8 + rcx]
-    add eax, eax
-    ret
-
-.zero:
-    xor eax, eax
     ret
 
 section .rdata
