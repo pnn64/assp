@@ -25,37 +25,8 @@ section .text
 
     mov rbx, rsp
     lea rdi, [rsi + rdx]
-    lea r12, [rel duration_note_types]
+    lea r12, [rel duration_pair_masks]
     xor r13d, r13d
-%endmacro
-
-%macro ASSP_SCAN_ROW_LANE_OBJECT 1
-    movzx eax, byte [rsi + %1]
-    movzx eax, byte [r12 + rax]
-    cmp al, 1
-    je %%tap
-    cmp al, 2
-    je %%hold_start
-    cmp al, 3
-    je %%hold_end
-    jmp %%next
-
-%%tap:
-    mov r14d, ASSP_TRUE
-    mov dword [rbx + DEPTHS + %1 * 4], 0
-    jmp %%next
-
-%%hold_start:
-    inc dword [rbx + DEPTHS + %1 * 4]
-    jmp %%next
-
-%%hold_end:
-    cmp dword [rbx + DEPTHS + %1 * 4], 0
-    je %%next
-    dec dword [rbx + DEPTHS + %1 * 4]
-    mov r14d, ASSP_TRUE
-
-%%next:
 %endmacro
 
 %macro ASSP_REJECT_ZERO_ROW 2
@@ -70,39 +41,103 @@ section .text
 %endif
 %endmacro
 
-%macro ASSP_SCAN_ROW_OBJECT_NONZERO 1
-    xor r14d, r14d
+; Load packed lane masks for a row:
+;   bits 0..7   = tap/object lane mask
+;   bits 8..15  = hold-start lane mask
+;   bits 16..23 = hold-end lane mask
+; The pair table maps two row bytes at a time, and shifting by the pair's
+; lane offset moves all three masks into their final positions.
+%macro ASSP_LOAD_ROW_OBJECT_MASKS 1
+    movzx eax, word [rsi]
+    mov eax, [r12 + rax * 4]
+    movzx ecx, word [rsi + 2]
+    mov ecx, [r12 + rcx * 4]
+    shl ecx, 2
+    or eax, ecx
+%if %1 = 8
+    movzx ecx, word [rsi + 4]
+    mov ecx, [r12 + rcx * 4]
+    shl ecx, 4
+    or eax, ecx
+    movzx ecx, word [rsi + 6]
+    mov ecx, [r12 + rcx * 4]
+    shl ecx, 6
+    or eax, ecx
+%endif
+%endmacro
 
-    %assign lane 0
-    %rep %1
-        ASSP_SCAN_ROW_LANE_OBJECT lane
-        %assign lane lane + 1
-    %endrep
+%macro ASSP_APPLY_ROW_OBJECT_MASKS 1
+    xor r14d, r14d
+    test eax, eax
+    jz %%done
+    mov r10d, eax
+
+    movzx ecx, al
+    and ecx, (1 << %1) - 1
+    jz %%tap_done
+    mov r14d, ASSP_TRUE
+
+%%tap_loop:
+    bsf edx, ecx
+    jz %%tap_done
+    btr ecx, edx
+    mov dword [rbx + DEPTHS + rdx * 4], 0
+    jmp %%tap_loop
+
+%%tap_done:
+    mov ecx, r10d
+    shr ecx, 8
+    and ecx, (1 << %1) - 1
+
+%%start_loop:
+    bsf edx, ecx
+    jz %%start_done
+    btr ecx, edx
+    inc dword [rbx + DEPTHS + rdx * 4]
+    jmp %%start_loop
+
+%%start_done:
+    mov ecx, r10d
+    shr ecx, 16
+    and ecx, (1 << %1) - 1
+
+%%end_loop:
+    bsf edx, ecx
+    jz %%done
+    btr ecx, edx
+    cmp dword [rbx + DEPTHS + rdx * 4], 0
+    je %%end_loop
+    dec dword [rbx + DEPTHS + rdx * 4]
+    mov r14d, ASSP_TRUE
+    jmp %%end_loop
 
 %%done:
     mov eax, r14d
 %endmacro
 
+%macro ASSP_SCAN_ROW_OBJECT_NONZERO 1
+    ASSP_LOAD_ROW_OBJECT_MASKS %1
+    ASSP_APPLY_ROW_OBJECT_MASKS %1
+%endmacro
+
 %macro ASSP_SCAN_ROW_OBJECT 1
-    xor r14d, r14d
     cmp dword [rsi], 30303030h
 %if %1 = 4
-    je %%done
+    je %%zero
 %else
     jne %%scan
     cmp dword [rsi + 4], 30303030h
-    je %%done
+    je %%zero
 %%scan:
 %endif
+    ASSP_LOAD_ROW_OBJECT_MASKS %1
+    ASSP_APPLY_ROW_OBJECT_MASKS %1
+    jmp %%done
 
-    %assign lane 0
-    %rep %1
-        ASSP_SCAN_ROW_LANE_OBJECT lane
-        %assign lane lane + 1
-    %endrep
+%%zero:
+    xor eax, eax
 
 %%done:
-    mov eax, r14d
 %endmacro
 
 %macro ASSP_FINALIZE_MEASURE 0
@@ -351,17 +386,27 @@ ASSP_LAST_BEAT_MILLI assp_last_beat_milli_8, 8
 
 section .rdata
 
-align 16
-duration_note_types:
-    times '1' db 0
-    db 1
-    db 2
-    db 3
-    db 2
-    times 'F' - '4' - 1 db 0
-    db 1
-    times 'K' - 'F' - 1 db 0
-    db 1
-    db 1
-    db 1
-    times 256 - 'M' - 1 db 0
+align 64
+duration_pair_masks:
+%assign i 0
+%rep 65536
+    %assign lo i & 0ffh
+    %assign hi (i >> 8) & 0ffh
+    %assign masks 0
+    %if lo = '1' || lo = 'F' || lo = 'K' || lo = 'L' || lo = 'M'
+        %assign masks masks | 000001h
+    %elif lo = '2' || lo = '4'
+        %assign masks masks | 000100h
+    %elif lo = '3'
+        %assign masks masks | 010000h
+    %endif
+    %if hi = '1' || hi = 'F' || hi = 'K' || hi = 'L' || hi = 'M'
+        %assign masks masks | 000002h
+    %elif hi = '2' || hi = '4'
+        %assign masks masks | 000200h
+    %elif hi = '3'
+        %assign masks masks | 020000h
+    %endif
+    dd masks
+    %assign i i + 1
+%endrep
