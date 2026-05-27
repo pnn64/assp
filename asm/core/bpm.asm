@@ -291,6 +291,16 @@ assp_parse_speed_map:
     xor r14d, r14d
     mov qword [rsp + 72], 0
     mov qword [rsp + 80], 0
+    mov edx, ','
+    movd xmm1, edx
+    punpcklbw xmm1, xmm1
+    punpcklwd xmm1, xmm1
+    pshufd xmm1, xmm1, 0
+    mov edx, '='
+    movd xmm2, edx
+    punpcklbw xmm2, xmm2
+    punpcklwd xmm2, xmm2
+    pshufd xmm2, xmm2, 0
 
 .entry_loop:
     cmp rsi, r12
@@ -302,6 +312,32 @@ assp_parse_speed_map:
     mov r10, rsi
 
 .scan_entry:
+    lea rax, [r10 + 16]
+    cmp rax, r12
+    ja .scan_entry_tail
+    movdqu xmm0, [r10]
+    movdqa xmm3, xmm0
+    pcmpeqb xmm0, xmm1
+    pcmpeqb xmm3, xmm2
+    por xmm0, xmm3
+    pmovmskb r9d, xmm0
+    test r9d, r9d
+    jnz .scan_entry_hit
+    add r10, 16
+    jmp .scan_entry
+
+.scan_entry_hit:
+    bsf r9d, r9d
+    add r10, r9
+    mov al, [r10]
+    cmp al, ','
+    je .entry_scanned
+    cmp qword [rsp + 8], 0
+    jne .scan_eq2
+    mov [rsp + 8], r10
+    jmp .scan_entry_next
+
+.scan_entry_tail:
     cmp r10, r12
     jae .entry_scanned
     mov al, [r10]
@@ -618,6 +654,16 @@ assp_parse_timing_seconds_map:
     xor r14d, r14d
     mov qword [rsp + 56], 0
     mov qword [rsp + 64], 0
+    mov edx, ','
+    movd xmm1, edx
+    punpcklbw xmm1, xmm1
+    punpcklwd xmm1, xmm1
+    pshufd xmm1, xmm1, 0
+    mov edx, '='
+    movd xmm2, edx
+    punpcklbw xmm2, xmm2
+    punpcklwd xmm2, xmm2
+    pshufd xmm2, xmm2, 0
 
 .entry_loop:
     cmp rsi, r12
@@ -627,6 +673,32 @@ assp_parse_timing_seconds_map:
     mov r10, rsi
 
 .scan_entry:
+    lea rax, [r10 + 16]
+    cmp rax, r12
+    ja .scan_entry_tail
+    movdqu xmm0, [r10]
+    movdqa xmm3, xmm0
+    pcmpeqb xmm0, xmm1
+    pcmpeqb xmm3, xmm2
+    por xmm0, xmm3
+    pmovmskb r9d, xmm0
+    test r9d, r9d
+    jnz .scan_entry_hit
+    add r10, 16
+    jmp .scan_entry
+
+.scan_entry_hit:
+    bsf r9d, r9d
+    add r10, r9
+    mov al, [r10]
+    cmp al, ','
+    je .entry_scanned
+    cmp qword [rsp + 8], 0
+    jne .scan_entry_next
+    mov [rsp + 8], r10
+    jmp .scan_entry_next
+
+.scan_entry_tail:
     cmp r10, r12
     jae .entry_scanned
     mov al, [r10]
@@ -4233,6 +4305,16 @@ assp_parse_bpm_map:
     xor r14d, r14d
     mov qword [rsp + 56], 0
     mov qword [rsp + 64], 0
+    mov edx, ','
+    movd xmm1, edx
+    punpcklbw xmm1, xmm1
+    punpcklwd xmm1, xmm1
+    pshufd xmm1, xmm1, 0
+    mov edx, '='
+    movd xmm2, edx
+    punpcklbw xmm2, xmm2
+    punpcklwd xmm2, xmm2
+    pshufd xmm2, xmm2, 0
 
 .entry_loop:
     cmp rsi, r12
@@ -4242,6 +4324,32 @@ assp_parse_bpm_map:
     mov r10, rsi
 
 .scan_entry:
+    lea rax, [r10 + 16]
+    cmp rax, r12
+    ja .scan_entry_tail
+    movdqu xmm0, [r10]
+    movdqa xmm3, xmm0
+    pcmpeqb xmm0, xmm1
+    pcmpeqb xmm3, xmm2
+    por xmm0, xmm3
+    pmovmskb r9d, xmm0
+    test r9d, r9d
+    jnz .scan_entry_hit
+    add r10, 16
+    jmp .scan_entry
+
+.scan_entry_hit:
+    bsf r9d, r9d
+    add r10, r9
+    mov al, [r10]
+    cmp al, ','
+    je .entry_scanned
+    cmp qword [rsp + 8], 0
+    jne .scan_entry_next
+    mov [rsp + 8], r10
+    jmp .scan_entry_next
+
+.scan_entry_tail:
     cmp r10, r12
     jae .entry_scanned
     mov al, [r10]
