@@ -371,6 +371,39 @@ assp_parse_speed_map:
     jmp .trim_before_suffix
 
 .parse_beat_value:
+    test r15d, r15d
+    jnz .parse_beat_value_slow
+    mov rax, [rsp + 8]
+    cmp rdx, rax
+    jne .parse_beat_value_slow
+    cmp qword [rsp + 24], 0
+    jne .parse_beat_value_slow
+
+    mov rcx, rbx
+    mov rdx, rax
+    call parse_dec3_unsigned_strict
+    jc .parse_beat_value_slow_eq
+    mov [rsp + 32], rax
+
+    mov rcx, [rsp + 8]
+    inc rcx
+    mov rdx, [rsp + 16]
+    call parse_dec6_unsigned_strict
+    jc .parse_beat_value_slow_eq
+    mov [rsp + 40], rax
+
+    mov rcx, [rsp + 16]
+    inc rcx
+    mov rdx, [rsp + 64]
+    call parse_dec6_unsigned_strict
+    jc .parse_beat_value_slow_eq
+    mov [rsp + 48], rax
+    mov qword [rsp + 56], 0
+    jmp .store_entry
+
+.parse_beat_value_slow_eq:
+    mov rdx, [rsp + 8]
+.parse_beat_value_slow:
     mov rcx, rbx
     call parse_dec3
     cmp rax, ASSP_NOT_FOUND
@@ -441,6 +474,7 @@ assp_parse_speed_map:
 .store_unit:
     mov [rsp + 56], rax
 
+.store_entry:
     test rdi, rdi
     jz .inc_count
     cmp r14, r13
@@ -661,6 +695,29 @@ assp_parse_timing_seconds_map:
     jmp .trim_before_suffix
 
 .parse_beat_value:
+    test r15d, r15d
+    jnz .parse_beat_value_slow
+    mov rax, [rsp + 8]
+    cmp rdx, rax
+    jne .parse_beat_value_slow
+
+    mov rcx, rbx
+    mov rdx, rax
+    call parse_dec3_unsigned_strict
+    jc .parse_beat_value_slow_eq
+    mov [rsp + 24], rax
+
+    mov rcx, [rsp + 8]
+    inc rcx
+    mov rdx, [rsp + 16]
+    call parse_dec6_unsigned_strict
+    jc .parse_beat_value_slow_eq
+    mov [rsp + 32], rax
+    jmp .store_entry
+
+.parse_beat_value_slow_eq:
+    mov rdx, [rsp + 8]
+.parse_beat_value_slow:
     mov rcx, rbx
     call parse_dec3
     cmp rax, ASSP_NOT_FOUND
@@ -689,6 +746,7 @@ assp_parse_timing_seconds_map:
 .store_value:
     mov [rsp + 32], rax
 
+.store_entry:
     test rdi, rdi
     jz .inc_count
     cmp r14, r13
@@ -964,6 +1022,100 @@ parse_dec6:
     pop r12
     pop rdi
     pop rsi
+    ret
+
+; rcx = number start, rdx = number end.
+; rax = absolute millionths. CF set on strict unsigned parse failure.
+parse_dec6_unsigned_strict:
+    cmp rcx, rdx
+    jae .fail
+
+    xor r8d, r8d
+    xor r9d, r9d
+
+.int_loop:
+    cmp rcx, rdx
+    jae .finish_number
+    movzx eax, byte [rcx]
+    cmp al, '.'
+    je .frac_init
+    cmp al, '0'
+    jb .fail
+    cmp al, '9'
+    ja .fail
+    sub eax, '0'
+    imul r8, r8, 10
+    add r8, rax
+    inc r9
+    inc rcx
+    jmp .int_loop
+
+.frac_init:
+    inc rcx
+    xor r10d, r10d
+    xor r11d, r11d
+
+.frac_loop:
+    cmp rcx, rdx
+    jae .finish_frac
+    movzx eax, byte [rcx]
+    cmp al, '0'
+    jb .fail
+    cmp al, '9'
+    ja .fail
+    sub eax, '0'
+    inc r9
+    cmp r10d, 6
+    jae .round_digit
+    imul r11, r11, 10
+    add r11, rax
+    inc r10d
+    inc rcx
+    jmp .frac_loop
+
+.round_digit:
+    cmp r10d, 6
+    jne .extra_digit
+    shl eax, 16
+    or r10d, eax
+    inc r10d
+.extra_digit:
+    inc rcx
+    jmp .frac_loop
+
+.finish_number:
+    xor r10d, r10d
+    xor r11d, r11d
+
+.finish_frac:
+    test r9, r9
+    jz .fail
+
+    mov ecx, r10d
+    and ecx, 0xffff
+    mov eax, 6
+    cmp ecx, eax
+    cmova ecx, eax
+    lea rdx, [rel bpm_dec6_frac_scale]
+    imul r11, qword [rdx + rcx * 8]
+
+    imul r8, r8, 1000000
+    add r8, r11
+
+    mov eax, r10d
+    shr eax, 16
+    and eax, 0xf
+    cmp eax, 5
+    jb .store
+    inc r8
+
+.store:
+    mov rax, r8
+    clc
+    ret
+
+.fail:
+    stc
     ret
 
 ; rcx = offset bytes, rdx = byte len. rax = signed offset milliseconds.
@@ -3803,6 +3955,100 @@ parse_dec3:
     pop rsi
     ret
 
+; rcx = number start, rdx = number end.
+; rax = absolute thousandths. CF set on strict unsigned parse failure.
+parse_dec3_unsigned_strict:
+    cmp rcx, rdx
+    jae .fail
+
+    xor r8d, r8d
+    xor r9d, r9d
+
+.int_loop:
+    cmp rcx, rdx
+    jae .finish_number
+    movzx eax, byte [rcx]
+    cmp al, '.'
+    je .frac_init
+    cmp al, '0'
+    jb .fail
+    cmp al, '9'
+    ja .fail
+    sub eax, '0'
+    imul r8, r8, 10
+    add r8, rax
+    inc r9
+    inc rcx
+    jmp .int_loop
+
+.frac_init:
+    inc rcx
+    xor r10d, r10d
+    xor r11d, r11d
+
+.frac_loop:
+    cmp rcx, rdx
+    jae .finish_frac
+    movzx eax, byte [rcx]
+    cmp al, '0'
+    jb .fail
+    cmp al, '9'
+    ja .fail
+    sub eax, '0'
+    inc r9
+    cmp r10d, 3
+    jae .round_digit
+    imul r11, r11, 10
+    add r11, rax
+    inc r10d
+    inc rcx
+    jmp .frac_loop
+
+.round_digit:
+    cmp r10d, 3
+    jne .extra_digit
+    shl eax, 16
+    or r10d, eax
+    inc r10d
+.extra_digit:
+    inc rcx
+    jmp .frac_loop
+
+.finish_number:
+    xor r10d, r10d
+    xor r11d, r11d
+
+.finish_frac:
+    test r9, r9
+    jz .fail
+
+    mov ecx, r10d
+    and ecx, 0xffff
+    mov eax, 3
+    cmp ecx, eax
+    cmova ecx, eax
+    lea rdx, [rel bpm_dec3_frac_scale]
+    imul r11, qword [rdx + rcx * 8]
+
+    imul r8, r8, 1000
+    add r8, r11
+
+    mov eax, r10d
+    shr eax, 16
+    and eax, 0xf
+    cmp eax, 5
+    jb .store
+    inc r8
+
+.store:
+    mov rax, r8
+    clc
+    ret
+
+.fail:
+    stc
+    ret
+
 ; rax = absolute thousandths, edx = negative flag.
 ; Uses rdi/r13/r14 as the output state. CF = overflow.
 emit_scaled3:
@@ -4064,6 +4310,29 @@ assp_parse_bpm_map:
     jmp .trim_before_suffix
 
 .parse_beat_value:
+    test r15d, r15d
+    jnz .parse_beat_value_slow
+    mov rax, [rsp + 8]
+    cmp rdx, rax
+    jne .parse_beat_value_slow
+
+    mov rcx, rbx
+    mov rdx, rax
+    call parse_dec3_unsigned_strict
+    jc .parse_beat_value_slow_eq
+    mov [rsp + 24], rax
+
+    mov rcx, [rsp + 8]
+    inc rcx
+    mov rdx, [rsp + 16]
+    call parse_dec3_unsigned_strict
+    jc .parse_beat_value_slow_eq
+    mov [rsp + 32], rax
+    jmp .store_entry
+
+.parse_beat_value_slow_eq:
+    mov rdx, [rsp + 8]
+.parse_beat_value_slow:
     mov rcx, rbx
     call parse_dec3
     cmp rax, ASSP_NOT_FOUND
@@ -4092,6 +4361,7 @@ assp_parse_bpm_map:
 .store_bpm:
     mov [rsp + 32], rax
 
+.store_entry:
     test rdi, rdi
     jz .inc_count
     cmp r14, r13
