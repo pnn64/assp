@@ -234,6 +234,16 @@ assp_count_gimmick_speed_segments:
     mov rsi, rcx
     lea rdi, [rcx + rdx]
     xor r12d, r12d
+    mov edx, ','
+    movd xmm1, edx
+    punpcklbw xmm1, xmm1
+    punpcklwd xmm1, xmm1
+    pshufd xmm1, xmm1, 0
+    mov edx, '='
+    movd xmm2, edx
+    punpcklbw xmm2, xmm2
+    punpcklwd xmm2, xmm2
+    pshufd xmm2, xmm2, 0
 
 .segment_loop:
     cmp rsi, rdi
@@ -241,6 +251,23 @@ assp_count_gimmick_speed_segments:
 
     mov r13, rsi
 .find_comma:
+    lea rax, [r13 + 16]
+    cmp rax, rdi
+    ja .find_comma_tail
+    movdqu xmm0, [r13]
+    pcmpeqb xmm0, xmm1
+    pmovmskb r10d, xmm0
+    test r10d, r10d
+    jnz .find_comma_hit
+    add r13, 16
+    jmp .find_comma
+
+.find_comma_hit:
+    bsf r10d, r10d
+    add r13, r10
+    jmp .segment_bounds
+
+.find_comma_tail:
     cmp r13, rdi
     jae .segment_bounds
     cmp byte [r13], ','
@@ -271,6 +298,23 @@ assp_count_gimmick_speed_segments:
 .find_equal:
     mov rbx, r14
 .equal_loop:
+    lea rax, [rbx + 16]
+    cmp rax, r15
+    ja .equal_tail
+    movdqu xmm0, [rbx]
+    pcmpeqb xmm0, xmm2
+    pmovmskb r10d, xmm0
+    test r10d, r10d
+    jnz .equal_hit
+    add rbx, 16
+    jmp .equal_loop
+
+.equal_hit:
+    bsf r10d, r10d
+    add rbx, r10
+    jmp .value_bounds
+
+.equal_tail:
     cmp rbx, r15
     jae .next_segment
     cmp byte [rbx], '='
@@ -282,6 +326,23 @@ assp_count_gimmick_speed_segments:
     inc rbx
     mov rcx, rbx
 .find_value_end:
+    lea rax, [rcx + 16]
+    cmp rax, r15
+    ja .find_value_end_tail
+    movdqu xmm0, [rcx]
+    pcmpeqb xmm0, xmm2
+    pmovmskb r10d, xmm0
+    test r10d, r10d
+    jnz .find_value_end_hit
+    add rcx, 16
+    jmp .find_value_end
+
+.find_value_end_hit:
+    bsf r10d, r10d
+    add rcx, r10
+    jmp .parse_value
+
+.find_value_end_tail:
     cmp rcx, r15
     jae .parse_value
     cmp byte [rcx], '='
@@ -380,6 +441,16 @@ assp_count_gimmick_scroll_segments:
     mov rsi, rcx
     lea rdi, [rcx + rdx]
     xor r12d, r12d
+    mov edx, ','
+    movd xmm1, edx
+    punpcklbw xmm1, xmm1
+    punpcklwd xmm1, xmm1
+    pshufd xmm1, xmm1, 0
+    mov edx, '='
+    movd xmm2, edx
+    punpcklbw xmm2, xmm2
+    punpcklwd xmm2, xmm2
+    pshufd xmm2, xmm2, 0
 
 .segment_loop:
     cmp rsi, rdi
@@ -390,6 +461,33 @@ assp_count_gimmick_scroll_segments:
     xor r11d, r11d
 
 .scan_segment:
+    lea rax, [r13 + 16]
+    cmp rax, rdi
+    ja .scan_segment_tail
+    movdqu xmm0, [r13]
+    movdqa xmm3, xmm0
+    pcmpeqb xmm0, xmm1
+    pcmpeqb xmm3, xmm2
+    por xmm0, xmm3
+    pmovmskb r10d, xmm0
+    test r10d, r10d
+    jnz .scan_segment_hit
+    add r13, 16
+    jmp .scan_segment
+
+.scan_segment_hit:
+    bsf r10d, r10d
+    add r13, r10
+    mov al, [r13]
+    cmp al, ','
+    je .segment_bounds
+    test rbx, rbx
+    jnz .scan_second_equal
+    mov rbx, r13
+    inc r13
+    jmp .scan_segment
+
+.scan_segment_tail:
     cmp r13, rdi
     jae .segment_bounds
     mov al, [r13]
