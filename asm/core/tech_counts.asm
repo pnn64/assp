@@ -194,6 +194,66 @@ section .text
 %%done:
 %endmacro
 
+; %1 = stage_x2 table label. Uses rbp row hit buffers and rsi row index.
+%macro ASSP_COUNT_CROSSOVERS 1
+    cmp byte [rbp + 8 + 3], 0ffh
+    je %%left_cross
+    cmp byte [rbp + 1], 0ffh
+    je %%left_cross
+    cmp byte [rbp + 3], 0ffh
+    jne %%left_cross
+
+    movzx ecx, byte [rbp + 1]
+    movzx edx, byte [rbp + 2]
+    ASSP_AVG_X4 %1
+    mov r10d, eax
+    movzx ecx, byte [rbp + 8 + 3]
+    movzx edx, byte [rbp + 8 + 4]
+    ASSP_AVG_X4 %1
+    cmp eax, r10d
+    jge %%left_cross
+
+    cmp rsi, 1
+    je %%count
+    movzx eax, byte [rbp + 16 + 3]
+    cmp al, 0ffh
+    je %%left_cross
+    cmp al, [rbp + 8 + 3]
+    je %%left_cross
+    jmp %%count
+
+%%left_cross:
+    cmp byte [rbp + 8 + 1], 0ffh
+    je %%done
+    cmp byte [rbp + 3], 0ffh
+    je %%done
+    cmp byte [rbp + 1], 0ffh
+    jne %%done
+
+    movzx ecx, byte [rbp + 8 + 1]
+    movzx edx, byte [rbp + 8 + 2]
+    ASSP_AVG_X4 %1
+    mov r10d, eax
+    movzx ecx, byte [rbp + 3]
+    movzx edx, byte [rbp + 4]
+    ASSP_AVG_X4 %1
+    cmp eax, r10d
+    jge %%done
+
+    cmp rsi, 1
+    je %%count
+    movzx eax, byte [rbp + 16 + 1]
+    cmp al, 0ffh
+    je %%done
+    cmp al, [rbp + 8 + 1]
+    je %%done
+
+%%count:
+    inc dword [rbx + ASSP_TECH_COUNTS_CROSSOVERS]
+
+%%done:
+%endmacro
+
 ; rcx = tech masks, rdx = note counts, r8 = row times in milliseconds,
 ; r9 = row placements as 4 bytes per row, stack arg 5 = row count,
 ; stack arg 6 = out assp_tech_counts.
@@ -280,7 +340,7 @@ assp_calculate_step_tech_counts_from_placements_4:
     call count_switches_4
 
 .skip_switches:
-    call count_crossovers_4
+    ASSP_COUNT_CROSSOVERS stage_x2_4
 
     mov rax, [rbp]
     mov [rbp + 16], rax
@@ -397,7 +457,7 @@ assp_calculate_step_tech_counts_from_placements_seconds_4:
     call count_switches_seconds_4
 
 .skip_switches:
-    call count_crossovers_4
+    ASSP_COUNT_CROSSOVERS stage_x2_4
 
     mov rax, [rbp]
     mov [rbp + 16], rax
@@ -615,65 +675,6 @@ is_footswitch_4:
     ASSP_IS_FOOTSWITCH_4
     ret
 
-count_crossovers_4:
-    cmp byte [rbp + 8 + 3], 0ffh
-    je .left_cross
-    cmp byte [rbp + 1], 0ffh
-    je .left_cross
-    cmp byte [rbp + 3], 0ffh
-    jne .left_cross
-
-    movzx ecx, byte [rbp + 1]
-    movzx edx, byte [rbp + 2]
-    ASSP_AVG_X4 stage_x2_4
-    mov r10d, eax
-    movzx ecx, byte [rbp + 8 + 3]
-    movzx edx, byte [rbp + 8 + 4]
-    ASSP_AVG_X4 stage_x2_4
-    cmp eax, r10d
-    jge .left_cross
-
-    cmp rsi, 1
-    je .count
-    movzx eax, byte [rbp + 16 + 3]
-    cmp al, 0ffh
-    je .left_cross
-    cmp al, [rbp + 8 + 3]
-    je .left_cross
-    jmp .count
-
-.left_cross:
-    cmp byte [rbp + 8 + 1], 0ffh
-    je .done
-    cmp byte [rbp + 3], 0ffh
-    je .done
-    cmp byte [rbp + 1], 0ffh
-    jne .done
-
-    movzx ecx, byte [rbp + 8 + 1]
-    movzx edx, byte [rbp + 8 + 2]
-    ASSP_AVG_X4 stage_x2_4
-    mov r10d, eax
-    movzx ecx, byte [rbp + 3]
-    movzx edx, byte [rbp + 4]
-    ASSP_AVG_X4 stage_x2_4
-    cmp eax, r10d
-    jge .done
-
-    cmp rsi, 1
-    je .count
-    movzx eax, byte [rbp + 16 + 1]
-    cmp al, 0ffh
-    je .done
-    cmp al, [rbp + 8 + 1]
-    je .done
-
-.count:
-    inc dword [rbx + ASSP_TECH_COUNTS_CROSSOVERS]
-
-.done:
-    ret
-
 ; rcx = tech masks, rdx = note counts, r8 = row times in milliseconds,
 ; r9 = row placements as 8 bytes per row, stack arg 5 = row count,
 ; stack arg 6 = out assp_tech_counts.
@@ -760,7 +761,7 @@ assp_calculate_step_tech_counts_from_placements_8:
     call count_switches_8
 
 .skip_switches:
-    call count_crossovers_8
+    ASSP_COUNT_CROSSOVERS stage_x2_8
 
     mov rax, [rbp]
     mov [rbp + 16], rax
@@ -877,7 +878,7 @@ assp_calculate_step_tech_counts_from_placements_seconds_8:
     call count_switches_seconds_8
 
 .skip_switches:
-    call count_crossovers_8
+    ASSP_COUNT_CROSSOVERS stage_x2_8
 
     mov rax, [rbp]
     mov [rbp + 16], rax
@@ -1069,65 +1070,6 @@ count_switches_seconds_8:
     inc r11d
     cmp r11d, 8
     jb .col_loop
-
-.done:
-    ret
-
-count_crossovers_8:
-    cmp byte [rbp + 8 + 3], 0ffh
-    je .left_cross
-    cmp byte [rbp + 1], 0ffh
-    je .left_cross
-    cmp byte [rbp + 3], 0ffh
-    jne .left_cross
-
-    movzx ecx, byte [rbp + 1]
-    movzx edx, byte [rbp + 2]
-    ASSP_AVG_X4 stage_x2_8
-    mov r10d, eax
-    movzx ecx, byte [rbp + 8 + 3]
-    movzx edx, byte [rbp + 8 + 4]
-    ASSP_AVG_X4 stage_x2_8
-    cmp eax, r10d
-    jge .left_cross
-
-    cmp rsi, 1
-    je .count
-    movzx eax, byte [rbp + 16 + 3]
-    cmp al, 0ffh
-    je .left_cross
-    cmp al, [rbp + 8 + 3]
-    je .left_cross
-    jmp .count
-
-.left_cross:
-    cmp byte [rbp + 8 + 1], 0ffh
-    je .done
-    cmp byte [rbp + 3], 0ffh
-    je .done
-    cmp byte [rbp + 1], 0ffh
-    jne .done
-
-    movzx ecx, byte [rbp + 8 + 1]
-    movzx edx, byte [rbp + 8 + 2]
-    ASSP_AVG_X4 stage_x2_8
-    mov r10d, eax
-    movzx ecx, byte [rbp + 3]
-    movzx edx, byte [rbp + 4]
-    ASSP_AVG_X4 stage_x2_8
-    cmp eax, r10d
-    jge .done
-
-    cmp rsi, 1
-    je .count
-    movzx eax, byte [rbp + 16 + 1]
-    cmp al, 0ffh
-    je .done
-    cmp al, [rbp + 8 + 1]
-    je .done
-
-.count:
-    inc dword [rbx + ASSP_TECH_COUNTS_CROSSOVERS]
 
 .done:
     ret
