@@ -3335,8 +3335,8 @@ assp_measure_nps_milli_with_events:
     je .done
 
 .init:
-    mov qword [rbp + NPS_INDEX], 0
-    mov qword [rbp + NPS_START_MS], 0
+    xor r15d, r15d
+    xor r14d, r14d
     mov qword [rbp + NPS_EVT_TIME], 0
     mov qword [rbp + NPS_EVT_BEAT], 0
     mov qword [rbp + NPS_EVT_BPM], 60000
@@ -3356,7 +3356,6 @@ assp_measure_nps_milli_with_events:
     mov [rbp + NPS_EVT_BPM], rax
 
 .loop:
-    mov r15, [rbp + NPS_INDEX]
     cmp r15, [rbp + NPS_DENSITY_LEN]
     jae .done
 
@@ -3540,7 +3539,7 @@ assp_measure_nps_milli_with_events:
     xor eax, eax
 
 .event_elapsed_done:
-    mov [rbp + NPS_END_MS], rax
+    mov r13, rax
 
     xor eax, eax
     mov rsi, [rbp + NPS_DENSITIES]
@@ -3548,8 +3547,8 @@ assp_measure_nps_milli_with_events:
     test r11d, r11d
     jz .store
 
-    mov r12, [rbp + NPS_END_MS]
-    sub r12, [rbp + NPS_START_MS]
+    mov r12, r13
+    sub r12, r14
     cmp r12, 120
     jle .store
 
@@ -3570,9 +3569,8 @@ assp_measure_nps_milli_with_events:
     mov [rbx + r15 * 4], eax
 
 .next:
-    mov rax, [rbp + NPS_END_MS]
-    mov [rbp + NPS_START_MS], rax
-    inc qword [rbp + NPS_INDEX]
+    mov r14, r13
+    inc r15
     jmp .loop
 
 .empty:
