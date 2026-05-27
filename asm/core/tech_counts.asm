@@ -8,6 +8,52 @@ global assp_calculate_step_tech_counts_from_placements_seconds_8
 
 section .text
 
+%macro ASSP_FILL_HIT_POSITIONS_4 0
+    mov dword [r8], 0ffffffffh
+    mov byte [r8 + 4], 0ffh
+
+    test cl, 1
+    jz %%col1
+    movzx eax, byte [rdx]
+    test eax, eax
+    jz %%col1
+    cmp eax, 4
+    ja %%col1
+    mov byte [r8 + rax], 0
+
+%%col1:
+    test cl, 2
+    jz %%col2
+    movzx eax, byte [rdx + 1]
+    test eax, eax
+    jz %%col2
+    cmp eax, 4
+    ja %%col2
+    mov byte [r8 + rax], 1
+
+%%col2:
+    test cl, 4
+    jz %%col3
+    movzx eax, byte [rdx + 2]
+    test eax, eax
+    jz %%col3
+    cmp eax, 4
+    ja %%col3
+    mov byte [r8 + rax], 2
+
+%%col3:
+    test cl, 8
+    jz %%done
+    movzx eax, byte [rdx + 3]
+    test eax, eax
+    jz %%done
+    cmp eax, 4
+    ja %%done
+    mov byte [r8 + rax], 3
+
+%%done:
+%endmacro
+
 ; rcx = tech masks, rdx = note counts, r8 = row times in milliseconds,
 ; r9 = row placements as 4 bytes per row, stack arg 5 = row count,
 ; stack arg 6 = out assp_tech_counts.
@@ -56,7 +102,7 @@ assp_calculate_step_tech_counts_from_placements_4:
     movzx ecx, byte [r12]
     mov rdx, r15
     lea r8, [rbp]
-    call fill_hit_positions_4
+    ASSP_FILL_HIT_POSITIONS_4
 
     mov dword [rbp + 16], 0ffffffffh
     mov byte [rbp + 20], 0ffh
@@ -66,7 +112,7 @@ assp_calculate_step_tech_counts_from_placements_4:
     movzx ecx, byte [r12 + rsi]
     lea rdx, [r15 + rsi * 4]
     lea r8, [rbp + 8]
-    call fill_hit_positions_4
+    ASSP_FILL_HIT_POSITIONS_4
 
     mov eax, [r14 + rsi * 4]
     sub eax, [r14 + rsi * 4 - 4]
@@ -172,7 +218,7 @@ assp_calculate_step_tech_counts_from_placements_seconds_4:
     movzx ecx, byte [r12]
     mov rdx, r15
     lea r8, [rbp]
-    call fill_hit_positions_4
+    ASSP_FILL_HIT_POSITIONS_4
 
     mov dword [rbp + 16], 0ffffffffh
     mov byte [rbp + 20], 0ffh
@@ -182,7 +228,7 @@ assp_calculate_step_tech_counts_from_placements_seconds_4:
     movzx ecx, byte [r12 + rsi]
     lea rdx, [r15 + rsi * 4]
     lea r8, [rbp + 8]
-    call fill_hit_positions_4
+    ASSP_FILL_HIT_POSITIONS_4
 
     movss xmm0, [r14 + rsi * 4]
     subss xmm0, [r14 + rsi * 4 - 4]
@@ -243,49 +289,7 @@ assp_calculate_step_tech_counts_from_placements_seconds_4:
 
 ; ecx = row mask, rdx = placement row, r8 = output positions[5].
 fill_hit_positions_4:
-    mov dword [r8], 0ffffffffh
-    mov byte [r8 + 4], 0ffh
-
-    test cl, 1
-    jz .col1
-    movzx eax, byte [rdx]
-    test eax, eax
-    jz .col1
-    cmp eax, 4
-    ja .col1
-    mov byte [r8 + rax], 0
-
-.col1:
-    test cl, 2
-    jz .col2
-    movzx eax, byte [rdx + 1]
-    test eax, eax
-    jz .col2
-    cmp eax, 4
-    ja .col2
-    mov byte [r8 + rax], 1
-
-.col2:
-    test cl, 4
-    jz .col3
-    movzx eax, byte [rdx + 2]
-    test eax, eax
-    jz .col3
-    cmp eax, 4
-    ja .col3
-    mov byte [r8 + rax], 2
-
-.col3:
-    test cl, 8
-    jz .done
-    movzx eax, byte [rdx + 3]
-    test eax, eax
-    jz .done
-    cmp eax, 4
-    ja .done
-    mov byte [r8 + rax], 3
-
-.done:
+    ASSP_FILL_HIT_POSITIONS_4
     ret
 
 count_jacks_doublesteps_4:
