@@ -140,6 +140,27 @@ section .text
 %%done:
 %endmacro
 
+%macro ASSP_IS_FOOTSWITCH_4 0
+    test al, al
+    jz %%no
+    test dl, dl
+    jz %%no
+    cmp al, dl
+    je %%no
+    movzx ecx, al
+    lea rax, [rel other_foot_part]
+    movzx ecx, byte [rax + rcx]
+    cmp cl, dl
+    je %%no
+    mov eax, ASSP_TRUE
+    jmp %%done
+
+%%no:
+    xor eax, eax
+
+%%done:
+%endmacro
+
 ; rcx = tech masks, rdx = note counts, r8 = row times in milliseconds,
 ; r9 = row placements as 4 bytes per row, stack arg 5 = row count,
 ; stack arg 6 = out assp_tech_counts.
@@ -465,7 +486,7 @@ count_switches_4:
     jnc .next
     movzx eax, byte [r9 + r11]
     movzx edx, byte [r8 + r11]
-    call is_footswitch_4
+    ASSP_IS_FOOTSWITCH_4
     test eax, eax
     jz .next
 
@@ -503,7 +524,7 @@ count_switches_seconds_4:
     jnc .next
     movzx eax, byte [r9 + r11]
     movzx edx, byte [r8 + r11]
-    call is_footswitch_4
+    ASSP_IS_FOOTSWITCH_4
     test eax, eax
     jnz .count_switch
 
@@ -558,22 +579,7 @@ count_switches_seconds_4:
 
 ; al = previous foot, dl = current foot, eax = boolean.
 is_footswitch_4:
-    test al, al
-    jz .no
-    test dl, dl
-    jz .no
-    cmp al, dl
-    je .no
-    movzx ecx, al
-    lea rax, [rel other_foot_part]
-    movzx ecx, byte [rax + rcx]
-    cmp cl, dl
-    je .no
-    mov eax, ASSP_TRUE
-    ret
-
-.no:
-    xor eax, eax
+    ASSP_IS_FOOTSWITCH_4
     ret
 
 count_crossovers_4:
@@ -990,7 +996,7 @@ count_switches_8:
     jnc .next
     movzx eax, byte [r9 + r11]
     movzx edx, byte [r8 + r11]
-    call is_footswitch_4
+    ASSP_IS_FOOTSWITCH_4
     test eax, eax
     jz .next
 
@@ -1032,7 +1038,7 @@ count_switches_seconds_8:
     jnc .next
     movzx eax, byte [r9 + r11]
     movzx edx, byte [r8 + r11]
-    call is_footswitch_4
+    ASSP_IS_FOOTSWITCH_4
     test eax, eax
     jz .next
 
