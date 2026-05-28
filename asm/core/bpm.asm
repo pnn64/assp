@@ -3550,7 +3550,7 @@ assp_measure_nps_milli_with_events:
     push r13
     push r14
     push r15
-    sub rsp, 264
+    sub rsp, 1288
 
     mov [rbp + NPS_DENSITIES], rcx
     mov [rbp + NPS_DENSITY_LEN], rdx
@@ -3653,6 +3653,60 @@ assp_measure_nps_milli_with_events:
     mov r12, rax
     mov rsi, [rbp + NPS_DENSITIES]
     mov rbx, [rbp + NPS_OUT]
+    mov rax, r12
+    xor edx, edx
+    mov r9d, 1000
+    div r9
+    test edx, edx
+    jnz .event_exhausted_loop
+    cmp rax, 120
+    jbe .event_exhausted_zero_loop_init
+    mov r13, rax
+    xor r10d, r10d
+    mov rdi, r15
+.event_exhausted_table_scan:
+    cmp rdi, [rbp + NPS_DENSITY_LEN]
+    jae .event_exhausted_table_build
+    mov eax, [rsi + rdi * 4]
+    cmp eax, 255
+    ja .event_exhausted_loop
+    cmp eax, r10d
+    cmova r10d, eax
+    inc rdi
+    jmp .event_exhausted_table_scan
+
+.event_exhausted_table_build:
+    xor edi, edi
+.event_exhausted_table_build_loop:
+    cmp rdi, r10
+    ja .event_exhausted_lookup_loop
+    xor eax, eax
+    test edi, edi
+    jz .event_exhausted_table_store
+    mov rax, rdi
+    imul rax, rax, 1000000
+    mov r9, r13
+    shr r9, 1
+    add rax, r9
+    xor edx, edx
+    div r13
+.event_exhausted_table_store:
+    mov [rsp + rdi * 4], eax
+    inc rdi
+    jmp .event_exhausted_table_build_loop
+
+.event_exhausted_lookup_loop:
+    cmp r15, [rbp + NPS_DENSITY_LEN]
+    jae .done
+    cmp r15, [rbp + NPS_OUT_CAP]
+    jae .event_exhausted_lookup_next
+    mov eax, [rsi + r15 * 4]
+    mov eax, [rsp + rax * 4]
+    mov [rbx + r15 * 4], eax
+.event_exhausted_lookup_next:
+    inc r15
+    jmp .event_exhausted_lookup_loop
+
     jmp .event_exhausted_loop
 
 .event_exhausted_zero_loop_init:
@@ -3939,7 +3993,7 @@ assp_measure_nps_milli_with_events:
     mov rax, ASSP_NOT_FOUND
 
 .pop_done:
-    add rsp, 264
+    add rsp, 1288
     pop r15
     pop r14
     pop r13
