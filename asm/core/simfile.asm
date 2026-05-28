@@ -1231,13 +1231,6 @@ assp_find_chart_by_index:
 .store_notes:
     inc rdx
     mov r14, rdx
-    mov r10, r15
-    lea rax, [r10 + 10]
-    cmp rax, r12
-    ja .try_sm_notes
-    is_notedata_tag r10
-    test eax, eax
-    jnz .store_ssc_notes
 
 .try_sm_notes:
     mov r10, rsi
@@ -1356,13 +1349,6 @@ assp_find_next_chart:
 .store_notes:
     inc rdx
     mov r14, rdx
-    mov r10, r15
-    lea rax, [r10 + 10]
-    cmp rax, r12
-    ja .try_sm_notes
-    is_notedata_tag r10
-    test eax, eax
-    jnz .store_ssc_notes
 
 .try_sm_notes:
     mov r10, rsi

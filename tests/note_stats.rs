@@ -137,6 +137,38 @@ L00F0000
 }
 
 #[test]
+fn recounts_unmatched_hold_rows_without_reusing_scratch_args() {
+    let single = count_note_stats_4(
+        b"
+2000
+0000
+;
+",
+    )
+    .unwrap();
+    let double = count_note_stats_8(
+        b"
+00002000
+00000000
+;
+",
+    )
+    .unwrap();
+
+    assert_eq!(single.rows, 2);
+    assert_eq!(single.steps, 1);
+    assert_eq!(single.arrows, 0);
+    assert_eq!(single.holds, 0);
+    assert_eq!(single.malformed_rows, 0);
+
+    assert_eq!(double.rows, 2);
+    assert_eq!(double.steps, 1);
+    assert_eq!(double.arrows, 0);
+    assert_eq!(double.holds, 0);
+    assert_eq!(double.malformed_rows, 0);
+}
+
+#[test]
 fn counts_hands_with_active_holds() {
     let stats = count_note_stats_4(
         b"

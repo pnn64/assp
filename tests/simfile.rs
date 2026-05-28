@@ -160,6 +160,41 @@ fn finds_sm_chart_metadata_and_note_rows() {
 }
 
 #[test]
+fn sm_notes_fields_win_in_hybrid_notedata_blocks() {
+    let data = b"#TITLE:X;
+#NOTEDATA:;
+#STEPSTYPE:dance-single;
+#DESCRIPTION:;
+#DIFFICULTY:Challenge;
+#METER:27;
+#NOTES:
+     dance-single:
+     JWong:
+     Challenge:
+     12:
+     0,0,0,0,0:
+1000
+0000
+;";
+    let chart = find_chart_by_index(data, 0).unwrap();
+
+    assert_eq!(
+        slice(data, chart.step_type, chart.step_type_len),
+        b"dance-single"
+    );
+    assert_eq!(slice(data, chart.description, chart.description_len), b"JWong");
+    assert_eq!(
+        slice(data, chart.difficulty, chart.difficulty_len),
+        b"Challenge"
+    );
+    assert_eq!(slice(data, chart.meter, chart.meter_len), b"12");
+    assert_eq!(
+        slice(data, chart.note_data, chart.note_data_len),
+        b"\n1000\n0000\n;"
+    );
+}
+
+#[test]
 fn keeps_escaped_colons_in_sm_note_rows() {
     let data = b"#TITLE:X;
 #NOTES:

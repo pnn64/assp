@@ -404,7 +404,7 @@ assp_count_note_stats_4:
     push r13
     push r14
     push r15
-    sub rsp, 64
+    sub rsp, 80
 
     test r8, r8
     jz .fail
@@ -433,9 +433,12 @@ assp_count_note_stats_4:
     mov qword [rsp + 40], 0
     mov qword [rsp + 48], 0
     mov qword [rsp + 56], 0
+    mov [rsp + 64], rcx
+    lea rax, [rcx + rdx]
+    mov [rsp + 72], rax
 
-    mov rsi, rcx
-    lea rdi, [rcx + rdx]
+    mov rsi, [rsp + 64]
+    mov rdi, [rsp + 72]
     xor r12d, r12d
 
 .line_loop:
@@ -709,8 +712,8 @@ assp_count_note_stats_4:
     dec r9d
     jnz .recount_zero
 
-    mov rsi, rcx
-    lea rdi, [rcx + rdx]
+    mov rsi, [rsp + 64]
+    mov rdi, [rsp + 72]
     xor r12d, r12d
 
 .recount_line_loop:
@@ -838,7 +841,7 @@ assp_count_note_stats_4:
     xor eax, eax
 
 .done:
-    add rsp, 64
+    add rsp, 80
     pop r15
     pop r14
     pop r13
@@ -858,7 +861,7 @@ assp_count_note_stats_8:
     push r13
     push r14
     push r15
-    sub rsp, 96
+    sub rsp, 112
 
     test r8, r8
     jz .fail
@@ -891,9 +894,12 @@ assp_count_note_stats_8:
     mov qword [rsp + 72], 0
     mov qword [rsp + 80], 0
     mov qword [rsp + 88], 0
+    mov [rsp + 96], rcx
+    lea rax, [rcx + rdx]
+    mov [rsp + 104], rax
 
-    mov rsi, rcx
-    lea rdi, [rcx + rdx]
+    mov rsi, [rsp + 96]
+    mov rdi, [rsp + 104]
     xor r12d, r12d
 
 .line_loop:
@@ -1218,8 +1224,8 @@ assp_count_note_stats_8:
     dec r9d
     jnz .recount_zero
 
-    mov rsi, rcx
-    lea rdi, [rcx + rdx]
+    mov rsi, [rsp + 96]
+    mov rdi, [rsp + 104]
     xor r12d, r12d
 
 .recount_line_loop:
@@ -1358,7 +1364,7 @@ assp_count_note_stats_8:
     xor eax, eax
 
 .done:
-    add rsp, 96
+    add rsp, 112
     pop r15
     pop r14
     pop r13
