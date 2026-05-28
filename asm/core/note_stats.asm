@@ -3433,6 +3433,7 @@ row_fake_object_count_8:
 ; rcx = note-data bytes, rdx = byte length, r8 = warp segments, r9 = warp count,
 ; stack arg 5 = fake segments, arg 6 = fake count, arg 7 = out stats,
 ; arg 8 = byte scratch, arg 9 = scratch byte cap. eax = 1 on success.
+align 32
 assp_count_timing_note_stats_4:
     push rbx
     push rsi
@@ -3519,6 +3520,25 @@ assp_count_timing_note_stats_4:
     cmp rsi, rdi
     jae .eof
 
+    mov al, [rsi]
+    cmp al, '/'
+    je .slow_line
+    cmp al, ' '
+    jbe .slow_line
+    cmp al, ','
+    je .slow_line
+    cmp al, ';'
+    je .slow_line
+
+    lea rbx, [rsi + 4]
+    cmp rbx, rdi
+    ja .slow_line
+    cmp byte [rbx], 10
+    je .fast_row_lf
+    cmp byte [rbx], 13
+    je .fast_row_cr
+
+.slow_line:
     mov rbx, rsi
 .find_line_end:
     cmp rbx, rdi
@@ -3563,6 +3583,28 @@ assp_count_timing_note_stats_4:
     cmp rax, rbx
     ja .line_done
 
+    mov rax, [rsp + TS4_RAW_COUNT]
+    cmp rax, [rsp + TS4_ROW_CAP]
+    jae .invalid
+    mov r10, [rsp + TS4_RAW_BASE]
+    mov ecx, [rsi]
+    mov [r10 + rax * 4], ecx
+    inc qword [rsp + TS4_RAW_COUNT]
+    jmp .line_done
+
+.fast_row_lf:
+    lea r14, [rbx + 1]
+    jmp .store_fast_row
+
+.fast_row_cr:
+    lea r14, [rbx + 1]
+    cmp r14, rdi
+    jae .slow_line
+    cmp byte [r14], 10
+    jne .slow_line
+    lea r14, [rbx + 2]
+
+.store_fast_row:
     mov rax, [rsp + TS4_RAW_COUNT]
     cmp rax, [rsp + TS4_ROW_CAP]
     jae .invalid
@@ -3924,6 +3966,7 @@ timing_hold_start_has_end_4:
 ; rcx = note-data bytes, rdx = byte length, r8 = warp segments, r9 = warp count,
 ; stack arg 5 = fake segments, arg 6 = fake count, arg 7 = out stats,
 ; arg 8 = byte scratch, arg 9 = scratch byte cap. eax = 1 on success.
+align 32
 assp_count_timing_note_stats_8:
     push rbx
     push rsi
@@ -4010,6 +4053,25 @@ assp_count_timing_note_stats_8:
     cmp rsi, rdi
     jae .eof
 
+    mov al, [rsi]
+    cmp al, '/'
+    je .slow_line
+    cmp al, ' '
+    jbe .slow_line
+    cmp al, ','
+    je .slow_line
+    cmp al, ';'
+    je .slow_line
+
+    lea rbx, [rsi + 8]
+    cmp rbx, rdi
+    ja .slow_line
+    cmp byte [rbx], 10
+    je .fast_row_lf
+    cmp byte [rbx], 13
+    je .fast_row_cr
+
+.slow_line:
     mov rbx, rsi
 .find_line_end:
     cmp rbx, rdi
@@ -4054,6 +4116,28 @@ assp_count_timing_note_stats_8:
     cmp rax, rbx
     ja .line_done
 
+    mov rax, [rsp + TS8_RAW_COUNT]
+    cmp rax, [rsp + TS8_ROW_CAP]
+    jae .invalid
+    mov r10, [rsp + TS8_RAW_BASE]
+    mov rcx, [rsi]
+    mov [r10 + rax * 8], rcx
+    inc qword [rsp + TS8_RAW_COUNT]
+    jmp .line_done
+
+.fast_row_lf:
+    lea r14, [rbx + 1]
+    jmp .store_fast_row
+
+.fast_row_cr:
+    lea r14, [rbx + 1]
+    cmp r14, rdi
+    jae .slow_line
+    cmp byte [r14], 10
+    jne .slow_line
+    lea r14, [rbx + 2]
+
+.store_fast_row:
     mov rax, [rsp + TS8_RAW_COUNT]
     cmp rax, [rsp + TS8_ROW_CAP]
     jae .invalid
@@ -4451,6 +4535,7 @@ assp_count_timing_note_stats_no_holds_4:
     pop rbx
     ret
 
+align 32
 timing_stats_no_holds_finalize_measure:
     sub rsp, 40
     cmp qword [rsp + 48], 0
@@ -4606,6 +4691,7 @@ row_no_hold_fake_object_count:
 ; rcx = note-data bytes, rdx = byte length, r8 = warp segments, r9 = warp count,
 ; stack arg 5 = fake segments, arg 6 = fake count, arg 7 = out stats,
 ; arg 8 = row scratch, arg 9 = scratch row cap. eax = 1 on success.
+align 32
 assp_count_timing_note_stats_no_holds_8:
     push rbx
     push rsi
@@ -4811,6 +4897,7 @@ assp_count_timing_note_stats_no_holds_8:
     pop rbx
     ret
 
+align 32
 timing_stats_no_holds_finalize_measure_8:
     sub rsp, 40
     cmp qword [rsp + 48], 0
