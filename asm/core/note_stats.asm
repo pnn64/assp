@@ -4319,6 +4319,25 @@ assp_count_timing_note_stats_no_holds_4:
     cmp rsi, rdi
     jae .eof
 
+    mov al, [rsi]
+    cmp al, '/'
+    je .slow_line
+    cmp al, ' '
+    jbe .slow_line
+    cmp al, ','
+    je .slow_line
+    cmp al, ';'
+    je .slow_line
+
+    lea rbx, [rsi + 4]
+    cmp rbx, rdi
+    ja .slow_line
+    cmp byte [rbx], 10
+    je .fast_row_lf
+    cmp byte [rbx], 13
+    je .fast_row_cr
+
+.slow_line:
     mov rbx, rsi
 .find_line_end:
     cmp rbx, rdi
@@ -4363,6 +4382,27 @@ assp_count_timing_note_stats_no_holds_4:
     cmp rax, rbx
     ja .line_done
 
+    mov rax, [rsp]
+    cmp rax, r12
+    jae .invalid
+    mov ecx, [rsi]
+    mov [r15 + rax * 4], ecx
+    inc qword [rsp]
+    jmp .line_done
+
+.fast_row_lf:
+    lea r14, [rbx + 1]
+    jmp .store_fast_row
+
+.fast_row_cr:
+    lea r14, [rbx + 1]
+    cmp r14, rdi
+    jae .slow_line
+    cmp byte [r14], 10
+    jne .slow_line
+    lea r14, [rbx + 2]
+
+.store_fast_row:
     mov rax, [rsp]
     cmp rax, r12
     jae .invalid
@@ -4639,6 +4679,25 @@ assp_count_timing_note_stats_no_holds_8:
     cmp rsi, rdi
     jae .eof
 
+    mov al, [rsi]
+    cmp al, '/'
+    je .slow_line
+    cmp al, ' '
+    jbe .slow_line
+    cmp al, ','
+    je .slow_line
+    cmp al, ';'
+    je .slow_line
+
+    lea rbx, [rsi + 8]
+    cmp rbx, rdi
+    ja .slow_line
+    cmp byte [rbx], 10
+    je .fast_row_lf
+    cmp byte [rbx], 13
+    je .fast_row_cr
+
+.slow_line:
     mov rbx, rsi
 .find_line_end:
     cmp rbx, rdi
@@ -4683,6 +4742,27 @@ assp_count_timing_note_stats_no_holds_8:
     cmp rax, rbx
     ja .line_done
 
+    mov rax, [rsp]
+    cmp rax, r12
+    jae .invalid
+    mov rcx, [rsi]
+    mov [r15 + rax * 8], rcx
+    inc qword [rsp]
+    jmp .line_done
+
+.fast_row_lf:
+    lea r14, [rbx + 1]
+    jmp .store_fast_row
+
+.fast_row_cr:
+    lea r14, [rbx + 1]
+    cmp r14, rdi
+    jae .slow_line
+    cmp byte [r14], 10
+    jne .slow_line
+    lea r14, [rbx + 2]
+
+.store_fast_row:
     mov rax, [rsp]
     cmp rax, r12
     jae .invalid
