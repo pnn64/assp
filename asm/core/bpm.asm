@@ -3629,6 +3629,94 @@ assp_measure_nps_milli_with_events:
     inc rax
     imul rax, rax, 4000
     mov [rbp + NPS_EVT_TARGET], rax
+    mov rax, [rbp + NPS_EVT_I_BPM]
+    cmp rax, [rbp + NPS_BPM_LEN]
+    jne .event_select_loop
+    mov rax, [rbp + NPS_EVT_I_STOP]
+    cmp rax, [rbp + NPS_STOP_LEN]
+    jne .event_select_loop
+    mov rax, [rbp + NPS_EVT_I_DELAY]
+    cmp rax, [rbp + NPS_DELAY_LEN]
+    jne .event_select_loop
+    mov rax, [rbp + NPS_EVT_I_WARP]
+    cmp rax, [rbp + NPS_WARP_LEN]
+    jne .event_select_loop
+    mov rax, [rbp + NPS_EVT_BEAT]
+    cmp rax, [rbp + NPS_EVT_WARP_END]
+    jl .event_select_loop
+    mov r11, [rbp + NPS_EVT_BPM]
+    test r11, r11
+    jle .event_exhausted_zero_loop_init
+    mov rax, 240000000000
+    xor edx, edx
+    div r11
+    mov r12, rax
+    mov rsi, [rbp + NPS_DENSITIES]
+    mov rbx, [rbp + NPS_OUT]
+    jmp .event_exhausted_loop
+
+.event_exhausted_zero_loop_init:
+    mov rbx, [rbp + NPS_OUT]
+    xor eax, eax
+.event_exhausted_zero_loop:
+    cmp r15, [rbp + NPS_DENSITY_LEN]
+    jae .done
+    cmp r15, [rbp + NPS_OUT_CAP]
+    jae .event_exhausted_zero_next
+    mov [rbx + r15 * 4], eax
+.event_exhausted_zero_next:
+    inc r15
+    jmp .event_exhausted_zero_loop
+
+.event_exhausted_loop:
+    cmp r15, [rbp + NPS_DENSITY_LEN]
+    jae .done
+
+    mov r13, [rbp + NPS_EVT_TIME]
+    add r13, r12
+    mov [rbp + NPS_EVT_TIME], r13
+    add qword [rbp + NPS_EVT_BEAT], 4000
+    mov rax, r13
+    test rax, rax
+    jle .event_exhausted_elapsed_zero
+    add rax, 500
+    xor edx, edx
+    mov r9d, 1000
+    div r9
+    jmp .event_exhausted_elapsed_done
+.event_exhausted_elapsed_zero:
+    xor eax, eax
+.event_exhausted_elapsed_done:
+    mov r13, rax
+
+    xor eax, eax
+    mov r11d, [rsi + r15 * 4]
+    test r11d, r11d
+    jz .event_exhausted_store
+
+    mov r10, r13
+    sub r10, r14
+    cmp r10, 120
+    jle .event_exhausted_store
+
+    mov rax, r11
+    imul rax, rax, 1000000
+    mov r9, r10
+    shr r9, 1
+    add rax, r9
+    xor edx, edx
+    div r10
+
+.event_exhausted_store:
+    cmp r15, [rbp + NPS_OUT_CAP]
+    jae .event_exhausted_next
+    mov [rbx + r15 * 4], eax
+
+.event_exhausted_next:
+    mov r14, r13
+    inc r15
+    jmp .event_exhausted_loop
+
     jmp .event_select_loop
 
 .event_select_loop:
