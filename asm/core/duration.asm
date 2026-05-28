@@ -41,6 +41,18 @@ section .text
 %endif
 %endmacro
 
+%macro ASSP_JMP_IF_ZERO_ROW_AT 3
+    cmp dword [%1], 30303030h
+%if %2 = 4
+    je %3
+%else
+    jne %%not_zero
+    cmp dword [%1 + 4], 30303030h
+    je %3
+%%not_zero:
+%endif
+%endmacro
+
 ; Load packed lane masks for a row:
 ;   bits 0..7   = tap/object lane mask
 ;   bits 8..15  = hold-start lane mask
@@ -204,10 +216,10 @@ section .text
     lea r15, [r10 + 1]
 %if %2 = 4
     ASSP_REJECT_ZERO_ROW %2, .count_row
-    jmp .scan_row_nonzero
 %else
-    jmp .scan_row
+    ASSP_REJECT_ZERO_ROW %2, .zero_run_lf
 %endif
+    jmp .scan_row_nonzero
 
 .fast_row_cr:
     lea r11, [r10 + 1]
@@ -216,12 +228,53 @@ section .text
     cmp byte [r11], 10
     jne .find_line_end_slow
     lea r15, [r10 + 2]
-%if %2 = 4
-    ASSP_REJECT_ZERO_ROW %2, .count_row
+    ASSP_REJECT_ZERO_ROW %2, .zero_run_cr
     jmp .scan_row_nonzero
-%else
-    jmp .scan_row
+
+%if %2 = 8
+.zero_run_lf:
+    xor r11d, r11d
+.zero_run_lf_loop:
+    inc r11
+    cmp r15, rdi
+    jae .zero_run_done
+    lea rax, [r15 + %2]
+    cmp rax, rdi
+    jae .zero_run_done
+    ASSP_JMP_IF_ZERO_ROW_AT r15, %2, .zero_run_lf_row_zero
+    jmp .zero_run_done
+.zero_run_lf_row_zero:
+    cmp byte [rax], 10
+    jne .zero_run_done
+    lea r15, [rax + 1]
+    jmp .zero_run_lf_loop
 %endif
+
+.zero_run_cr:
+    xor r11d, r11d
+.zero_run_cr_loop:
+    inc r11
+    cmp r15, rdi
+    jae .zero_run_done
+    lea rax, [r15 + %2]
+    cmp rax, rdi
+    jae .zero_run_done
+    ASSP_JMP_IF_ZERO_ROW_AT r15, %2, .zero_run_cr_row_zero
+    jmp .zero_run_done
+.zero_run_cr_row_zero:
+    cmp byte [rax], 13
+    jne .zero_run_done
+    lea r10, [rax + 1]
+    cmp r10, rdi
+    jae .zero_run_done
+    cmp byte [r10], 10
+    jne .zero_run_done
+    lea r15, [rax + 2]
+    jmp .zero_run_cr_loop
+
+.zero_run_done:
+    add [rbx + CUR_ROWS], r11
+    jmp .line_done
 
 .fast_comma:
     lea r10, [rsi + 1]
@@ -290,15 +343,11 @@ section .text
     ja .line_done
 
 .scan_row:
-%if %2 = 4
     ASSP_SCAN_ROW_OBJECT %2
     jmp .row_scanned
 .scan_row_nonzero:
     ASSP_SCAN_ROW_OBJECT_NONZERO %2
 .row_scanned:
-%else
-    ASSP_SCAN_ROW_OBJECT %2
-%endif
     test eax, eax
     jz .count_row
     mov qword [rbx + CUR_HAS], 1
