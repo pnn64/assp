@@ -1594,6 +1594,15 @@ assp_bpm_median_centi:
 
     xor r9d, r9d
 .hist_odd_loop:
+    mov r10, r12
+    sub r10, r9
+    cmp r10, 4
+    jb .hist_odd_scalar
+    cmp qword [rsp + r9 * 2], 0
+    jne .hist_odd_scalar
+    add r9, 4
+    jmp .hist_odd_loop
+.hist_odd_scalar:
     movzx ecx, word [rsp + r9 * 2]
     cmp r8, rcx
     jb .hist_odd_found
@@ -1620,6 +1629,18 @@ assp_bpm_median_centi:
     mov r15, -1
     xor r10d, r10d
 .hist_even_loop:
+    mov r11, r12
+    sub r11, r10
+    cmp r11, 4
+    jb .hist_even_scalar
+    cmp qword [rsp + r10 * 2], 0
+    jne .hist_even_scalar
+    add r10, 4
+    cmp r10, r12
+    jb .hist_even_loop
+    xor eax, eax
+    jmp .hist_even_done
+.hist_even_scalar:
     movzx ecx, word [rsp + r10 * 2]
     test ecx, ecx
     jz .hist_even_next
@@ -2052,6 +2073,15 @@ assp_nps_median_centi:
 
     xor r9d, r9d
 .hist_odd_loop:
+    mov r10, r12
+    sub r10, r9
+    cmp r10, 4
+    jb .hist_odd_scalar
+    cmp qword [rsp + r9 * 2], 0
+    jne .hist_odd_scalar
+    add r9, 4
+    jmp .hist_odd_loop
+.hist_odd_scalar:
     movzx ecx, word [rsp + r9 * 2]
     cmp r8, rcx
     jb .hist_odd_found
@@ -2078,6 +2108,18 @@ assp_nps_median_centi:
     mov r13, -1
     xor r10d, r10d
 .hist_even_loop:
+    mov r11, r12
+    sub r11, r10
+    cmp r11, 4
+    jb .hist_even_scalar
+    cmp qword [rsp + r10 * 2], 0
+    jne .hist_even_scalar
+    add r10, 4
+    cmp r10, r12
+    jb .hist_even_loop
+    xor eax, eax
+    jmp .hist_even_done
+.hist_even_scalar:
     movzx ecx, word [rsp + r10 * 2]
     test ecx, ecx
     jz .hist_even_next
