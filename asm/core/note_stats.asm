@@ -546,7 +546,36 @@ assp_count_note_stats_4:
     cmp rax, rdi
     jae .zero_row_single
     cmp byte [rax], 10
+    je .zero_run_lf_start
+    cmp byte [rax], 13
     jne .zero_row_single
+    lea r10, [rax + 1]
+    cmp r10, rdi
+    jae .zero_row_single
+    cmp byte [r10], 10
+    jne .zero_row_single
+    xor r11d, r11d
+
+.zero_run_crlf_loop:
+    inc r11
+    lea rsi, [rsi + 6]
+    cmp rsi, rdi
+    jae .zero_run_done
+    lea rax, [rsi + 4]
+    cmp rax, rdi
+    jae .zero_run_done
+    cmp dword [rsi], 30303030h
+    jne .zero_run_done
+    cmp byte [rax], 13
+    jne .zero_run_done
+    lea r10, [rax + 1]
+    cmp r10, rdi
+    jae .zero_run_done
+    cmp byte [r10], 10
+    je .zero_run_crlf_loop
+    jmp .zero_run_done
+
+.zero_run_lf_start:
     xor r11d, r11d
 
 .zero_run_loop:
@@ -991,7 +1020,38 @@ assp_count_note_stats_8:
     cmp rax, rdi
     jae .zero_row_single
     cmp byte [rax], 10
+    je .zero_run_lf_start
+    cmp byte [rax], 13
     jne .zero_row_single
+    lea r10, [rax + 1]
+    cmp r10, rdi
+    jae .zero_row_single
+    cmp byte [r10], 10
+    jne .zero_row_single
+    xor r11d, r11d
+
+.zero_run_crlf_loop:
+    inc r11
+    lea rsi, [rsi + 10]
+    cmp rsi, rdi
+    jae .zero_run_done
+    lea rax, [rsi + 8]
+    cmp rax, rdi
+    jae .zero_run_done
+    cmp dword [rsi], 30303030h
+    jne .zero_run_done
+    cmp dword [rsi + 4], 30303030h
+    jne .zero_run_done
+    cmp byte [rax], 13
+    jne .zero_run_done
+    lea r10, [rax + 1]
+    cmp r10, rdi
+    jae .zero_run_done
+    cmp byte [r10], 10
+    je .zero_run_crlf_loop
+    jmp .zero_run_done
+
+.zero_run_lf_start:
     xor r11d, r11d
 
 .zero_run_loop:
