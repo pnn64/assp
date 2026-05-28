@@ -133,6 +133,7 @@ global profile_step_dp_skip_count
 %define DENSITY_CAP 131072
 %define TEXT_BUFFER_CAP 1048576
 %define PRINT_BUFFER_CAP 2097152
+%define BATCH_LIST_CAP 16777216
 %define BPM_BUFFER_CAP 131072
 %define BPM_SEGMENT_CAP 8192
 %define MINIMIZED_BUFFER_CAP 4194304
@@ -244,7 +245,16 @@ start:
     cmp qword [input_path], 0
     je show_usage_fail
     profile_init_call
+    cmp qword [batch_json_mode], 0
+    je .single_file
+    call run_json_batch
+    test eax, eax
+    jz fail_batch
+    call print_flush
+    xor ecx, ecx
+    call exit_app
 
+.single_file:
     app_trace trace_app_read
     profile_begin_call
     call read_file
@@ -589,6 +599,12 @@ fail_read:
     mov ecx, 1
     call exit_app
 
+fail_batch:
+    lea rcx, [msg_batch_fail]
+    call print_z
+    mov ecx, 1
+    call exit_app
+
 fail_notes:
     lea rcx, [msg_notes_fail]
     call print_z
@@ -642,6 +658,147 @@ fail_tech:
     call print_z
     mov ecx, 1
     call exit_app
+
+run_json_batch:
+    push r12
+    push r13
+    push r14
+    sub rsp, 32
+
+    call read_batch_list
+    test eax, eax
+    jz .fail
+
+    lea rax, [batch_list_buffer]
+    mov [batch_cursor], rax
+    add rax, [batch_list_len]
+    mov [batch_list_end], rax
+
+.line_start:
+    mov r12, [batch_cursor]
+    mov r13, [batch_list_end]
+    cmp r12, r13
+    jae .success
+    mov al, [r12]
+    cmp al, 13
+    je .skip_byte
+    cmp al, 10
+    je .skip_byte
+
+    mov r14, r12
+
+.line_scan:
+    cmp r12, r13
+    jae .line_ready
+    mov al, [r12]
+    cmp al, 13
+    je .terminate_line
+    cmp al, 10
+    je .terminate_line
+    inc r12
+    jmp .line_scan
+
+.terminate_line:
+    mov byte [r12], 0
+    inc r12
+
+.line_ready:
+    mov [batch_cursor], r12
+    mov [input_path], r14
+    mov qword [globals_prepared], 0
+    mov qword [global_timing_prepared], 0
+
+    call read_file
+    test eax, eax
+    jz .fail
+    call prepare_file_md5
+    test eax, eax
+    jz .fail
+    call print_json_all_charts
+    test eax, eax
+    jz .fail
+    lea rcx, [newline]
+    call print_z
+    jmp .line_start
+
+.skip_byte:
+    inc r12
+    mov [batch_cursor], r12
+    jmp .line_start
+
+.success:
+    mov eax, ASSP_TRUE
+    jmp .done
+
+.fail:
+    xor eax, eax
+
+.done:
+    add rsp, 32
+    pop r14
+    pop r13
+    pop r12
+    ret
+
+read_batch_list:
+    sub rsp, 72
+
+    mov qword [file_handle], 0
+    mov qword [file_size], 0
+    mov dword [file_bytes_read], 0
+
+    mov rcx, [input_path]
+    call assp_os_open_readonly
+    cmp rax, ASSP_OS_INVALID_HANDLE
+    je .fail
+    mov [file_handle], rax
+
+    mov rcx, rax
+    lea rdx, [file_size]
+    call assp_os_file_size
+    test eax, eax
+    jz .close_fail
+
+    mov rax, [file_size]
+    cmp rax, BATCH_LIST_CAP - 1
+    ja .close_fail
+
+    mov rcx, [file_handle]
+    lea rdx, [batch_list_buffer]
+    mov r8d, eax
+    lea r9, [file_bytes_read]
+    mov qword [rsp + 32], 0
+    call assp_os_read
+    test eax, eax
+    jz .close_fail
+
+    mov rcx, [file_handle]
+    call assp_os_close
+    mov qword [file_handle], 0
+
+    mov eax, [file_bytes_read]
+    cmp rax, [file_size]
+    jne .fail
+
+    mov [batch_list_len], rax
+    lea rdx, [batch_list_buffer]
+    mov byte [rdx + rax], 0
+    mov eax, ASSP_TRUE
+    jmp .done
+
+.close_fail:
+    mov rcx, [file_handle]
+    test rcx, rcx
+    jz .fail
+    call assp_os_close
+    mov qword [file_handle], 0
+
+.fail:
+    xor eax, eax
+
+.done:
+    add rsp, 72
+    ret
 
 prepare_file_md5:
     sub rsp, 40
@@ -902,6 +1059,7 @@ parse_args:
     mov qword [all_mode], 1
     mov qword [quiet_mode], 0
     mov qword [json_mode], 0
+    mov qword [batch_json_mode], 0
     mov qword [profile_mode], 0
     mov qword [usage_mode], 0
     mov qword [globals_prepared], 0
@@ -1053,9 +1211,9 @@ parse_args:
     cmp byte [rsi], 'L'
     je .store_list
     cmp byte [rsi], 'j'
-    je .store_json
+    je .check_json_batch
     cmp byte [rsi], 'J'
-    je .store_json
+    je .check_json_batch
     cmp byte [rsi], 'p'
     je .store_profile
     cmp byte [rsi], 'P'
@@ -1073,9 +1231,9 @@ parse_args:
     cmp byte [rsi + 2], 'L'
     je .store_list
     cmp byte [rsi + 2], 'j'
-    je .store_json
+    je .check_dash_json_batch
     cmp byte [rsi + 2], 'J'
-    je .store_json
+    je .check_dash_json_batch
     cmp byte [rsi + 2], 'a'
     je .store_all
     cmp byte [rsi + 2], 'A'
@@ -1112,6 +1270,94 @@ parse_args:
     inc rsi
     jmp .chart_loop
 
+.check_json_batch:
+    cmp byte [rsi + 1], 's'
+    je .json_batch_s
+    cmp byte [rsi + 1], 'S'
+    jne .store_json
+.json_batch_s:
+    cmp byte [rsi + 2], 'o'
+    je .json_batch_o
+    cmp byte [rsi + 2], 'O'
+    jne .store_json
+.json_batch_o:
+    cmp byte [rsi + 3], 'n'
+    je .json_batch_n
+    cmp byte [rsi + 3], 'N'
+    jne .store_json
+.json_batch_n:
+    cmp byte [rsi + 4], '-'
+    jne .store_json
+    cmp byte [rsi + 5], 'b'
+    je .json_batch_b
+    cmp byte [rsi + 5], 'B'
+    jne .store_json
+.json_batch_b:
+    cmp byte [rsi + 6], 'a'
+    je .json_batch_a
+    cmp byte [rsi + 6], 'A'
+    jne .store_json
+.json_batch_a:
+    cmp byte [rsi + 7], 't'
+    je .json_batch_t
+    cmp byte [rsi + 7], 'T'
+    jne .store_json
+.json_batch_t:
+    cmp byte [rsi + 8], 'c'
+    je .json_batch_c
+    cmp byte [rsi + 8], 'C'
+    jne .store_json
+.json_batch_c:
+    cmp byte [rsi + 9], 'h'
+    je .store_json_batch
+    cmp byte [rsi + 9], 'H'
+    je .store_json_batch
+    jmp .store_json
+
+.check_dash_json_batch:
+    cmp byte [rsi + 3], 's'
+    je .dash_json_batch_s
+    cmp byte [rsi + 3], 'S'
+    jne .store_json
+.dash_json_batch_s:
+    cmp byte [rsi + 4], 'o'
+    je .dash_json_batch_o
+    cmp byte [rsi + 4], 'O'
+    jne .store_json
+.dash_json_batch_o:
+    cmp byte [rsi + 5], 'n'
+    je .dash_json_batch_n
+    cmp byte [rsi + 5], 'N'
+    jne .store_json
+.dash_json_batch_n:
+    cmp byte [rsi + 6], '-'
+    jne .store_json
+    cmp byte [rsi + 7], 'b'
+    je .dash_json_batch_b
+    cmp byte [rsi + 7], 'B'
+    jne .store_json
+.dash_json_batch_b:
+    cmp byte [rsi + 8], 'a'
+    je .dash_json_batch_a
+    cmp byte [rsi + 8], 'A'
+    jne .store_json
+.dash_json_batch_a:
+    cmp byte [rsi + 9], 't'
+    je .dash_json_batch_t
+    cmp byte [rsi + 9], 'T'
+    jne .store_json
+.dash_json_batch_t:
+    cmp byte [rsi + 10], 'c'
+    je .dash_json_batch_c
+    cmp byte [rsi + 10], 'C'
+    jne .store_json
+.dash_json_batch_c:
+    cmp byte [rsi + 11], 'h'
+    je .store_json_batch
+    cmp byte [rsi + 11], 'H'
+    je .store_json_batch
+    jmp .store_json
+
 .store_chart:
     mov qword [all_mode], 0
     mov [chart_index], rax
@@ -1134,6 +1380,13 @@ parse_args:
     mov qword [all_mode], 1
     mov qword [quiet_mode], 1
     mov qword [json_mode], 1
+    jmp .done
+
+.store_json_batch:
+    mov qword [all_mode], 1
+    mov qword [quiet_mode], 1
+    mov qword [json_mode], 1
+    mov qword [batch_json_mode], 1
     jmp .done
 
 .store_profile:
@@ -11863,10 +12116,12 @@ tag_display_bpm_end:
 tag_credit db "#CREDIT:"
 tag_credit_end:
 msg_header db "assp standalone", 13, 10, 0
-msg_usage db "Usage: assp <simfile_path> [chart_index|all|list|quiet|bench|profile]", 13, 10
+msg_usage db "Usage: assp <simfile_path> [chart_index|all|list|quiet|bench|profile|json-batch]", 13, 10
           db "       assp <simfile_path> --json", 13, 10
+          db "       assp <path-list-file> json-batch", 13, 10
           db "       assp --help", 13, 10
           db "Default: analyze every chart in the file.", 13, 10, 0
+msg_batch_fail db "batch json processing failed", 13, 10, 0
 msg_read_fail db "failed to read input file", 13, 10, 0
 msg_notes_fail db "failed to find selected #NOTES chart", 13, 10, 0
 msg_lanes_fail db "unsupported step type; standalone currently supports dance-single and dance-double", 13, 10, 0
@@ -12565,6 +12820,7 @@ list_mode resq 1
 all_mode resq 1
 quiet_mode resq 1
 json_mode resq 1
+batch_json_mode resq 1
 profile_mode resq 1
 usage_mode resq 1
 globals_prepared resq 1
@@ -12578,6 +12834,9 @@ equally_spaced_count resq 1
 file_handle resq 1
 file_size resq 1
 file_len resq 1
+batch_list_len resq 1
+batch_cursor resq 1
+batch_list_end resq 1
 file_bytes_read resd 1
 print_buffer_len resq 1
 print_raw_ptr resq 1
@@ -12832,6 +13091,7 @@ density_buffer resd DENSITY_CAP
 stream_segment_buffer resb DENSITY_CAP * ASSP_STREAM_SEGMENT_SIZE
 stream_token_buffer resb DENSITY_CAP * ASSP_STREAM_TOKEN_SIZE
 text_buffer resb TEXT_BUFFER_CAP
+batch_list_buffer resb BATCH_LIST_CAP
 file_buffer resb FILE_BUFFER_CAP
 print_buffer resb PRINT_BUFFER_CAP
 alignb 16

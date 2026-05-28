@@ -4,10 +4,9 @@ use std::collections::HashMap;
 use std::env;
 use std::ffi::OsStr;
 use std::fs;
-use std::io::{self, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{self, Command};
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc;
 use std::thread;
 use walkdir::WalkDir;
@@ -77,9 +76,16 @@ const KNOWN_BAD_BASELINES: &[&str] = &[
     r"The Classics Pack Vol 1\Cooking by the Book [jAAAmes]\Cooking by the Book.ssc.zst",
 ];
 
+const ASSP_BATCH_SIZE: usize = 128;
+
 struct PreparedInput {
     path: PathBuf,
     md5: String,
+}
+
+struct BatchInput {
+    index: usize,
+    input: PreparedInput,
 }
 
 fn main() {
@@ -336,11 +342,7 @@ fn run(config: &mut Config) -> Result<i32, String> {
         );
     }
 
-    let (failures, updated) = if active_jobs > 1 {
-        run_tests_parallel(config, &tests)
-    } else {
-        run_tests_sequential(config, &tests)
-    };
+    let (failures, updated) = run_tests_batched(config, &tests, active_jobs);
 
     if failures.is_empty() {
         if config.update {
@@ -385,16 +387,83 @@ fn run(config: &mut Config) -> Result<i32, String> {
     }
 }
 
-fn run_tests_sequential(config: &Config, tests: &[TestCase]) -> (Vec<Failure>, usize) {
+fn run_tests_batched(
+    config: &Config,
+    tests: &[TestCase],
+    active_jobs: usize,
+) -> (Vec<Failure>, usize) {
+    let jobs = active_jobs.min(tests.len().max(1));
+    let (tx, rx) = mpsc::channel();
+
+    thread::scope(|scope| {
+        for worker in 0..jobs {
+            let tx = tx.clone();
+            scope.spawn(move || {
+                let mut prepared = Vec::new();
+                let mut results = Vec::new();
+
+                for index in (worker..tests.len()).step_by(jobs) {
+                    match prepare_input(config, &tests[index], index) {
+                        Ok(input) => prepared.push(BatchInput { index, input }),
+                        Err(message) => results.push((index, Err(message))),
+                    }
+                }
+
+                if !prepared.is_empty() {
+                    for (chunk_index, chunk) in prepared.chunks(ASSP_BATCH_SIZE).enumerate() {
+                        match run_assp_json_batch(config, worker, chunk_index, chunk) {
+                            Ok(values) => {
+                                for (batch, actual) in chunk.iter().zip(values.iter()) {
+                                    results.push((
+                                        batch.index,
+                                        check_actual(
+                                            config,
+                                            &tests[batch.index],
+                                            &batch.input,
+                                            actual,
+                                        ),
+                                    ));
+                                }
+                            }
+                            Err(_) => {
+                                for batch in chunk {
+                                    let result = run_assp_json_single(config, &batch.input.path)
+                                        .and_then(|actual| {
+                                            check_actual(
+                                                config,
+                                                &tests[batch.index],
+                                                &batch.input,
+                                                &actual,
+                                            )
+                                        });
+                                    results.push((batch.index, result));
+                                }
+                            }
+                        }
+                    }
+                }
+
+                for result in results {
+                    if tx.send(result).is_err() {
+                        break;
+                    }
+                }
+            });
+        }
+        drop(tx);
+    });
+
+    let mut results = rx.into_iter().collect::<Vec<_>>();
+    results.sort_by_key(|(index, _)| *index);
+
     let mut failures = Vec::new();
     let mut updated = 0usize;
-    for (index, test) in tests.iter().enumerate() {
+    for (index, result) in results {
         if !config.quiet {
-            print!("test {} ... ", test.name);
-            let _ = io::stdout().flush();
+            print!("test {} ... ", tests[index].name);
         }
 
-        match run_test(config, test, index) {
+        match result {
             Ok(TestStatus::Ok) => {
                 if !config.quiet {
                     println!("ok");
@@ -410,10 +479,10 @@ fn run_tests_sequential(config: &Config, tests: &[TestCase]) -> (Vec<Failure>, u
                 if !config.quiet {
                     println!("FAILED");
                 } else {
-                    eprintln!("test {} ... FAILED", test.name);
+                    eprintln!("test {} ... FAILED", tests[index].name);
                 }
                 failures.push(Failure {
-                    name: test.name.clone(),
+                    name: tests[index].name.clone(),
                     message,
                 });
                 if config.max_failures > 0 && failures.len() >= config.max_failures {
@@ -422,65 +491,7 @@ fn run_tests_sequential(config: &Config, tests: &[TestCase]) -> (Vec<Failure>, u
             }
         }
     }
-    (failures, updated)
-}
 
-fn run_tests_parallel(config: &Config, tests: &[TestCase]) -> (Vec<Failure>, usize) {
-    let mut jobs = config.jobs.min(tests.len().max(1));
-    if config.max_failures > 0 {
-        jobs = jobs.min(config.max_failures);
-    }
-    let next = AtomicUsize::new(0);
-    let failed = AtomicUsize::new(0);
-    let (tx, rx) = mpsc::channel();
-
-    thread::scope(|scope| {
-        for _ in 0..jobs {
-            let tx = tx.clone();
-            let next = &next;
-            let failed = &failed;
-            scope.spawn(move || {
-                loop {
-                    if config.max_failures > 0
-                        && failed.load(Ordering::Relaxed) >= config.max_failures
-                    {
-                        break;
-                    }
-                    let index = next.fetch_add(1, Ordering::Relaxed);
-                    if index >= tests.len() {
-                        break;
-                    }
-                    let test = &tests[index];
-                    let result = run_test(config, test, index);
-                    if result.is_err() {
-                        failed.fetch_add(1, Ordering::Relaxed);
-                    }
-                    if tx.send((index, result)).is_err() {
-                        break;
-                    }
-                }
-            });
-        }
-        drop(tx);
-    });
-
-    let mut results = rx.into_iter().collect::<Vec<_>>();
-    results.sort_by_key(|(index, _)| *index);
-
-    let mut failures = Vec::new();
-    let mut updated = 0usize;
-    for (index, result) in results {
-        match result {
-            Ok(TestStatus::Ok) => {}
-            Ok(TestStatus::Updated) => updated += 1,
-            Err(message) => {
-                failures.push(Failure {
-                    name: tests[index].name.clone(),
-                    message,
-                });
-            }
-        }
-    }
     (failures, updated)
 }
 
@@ -607,12 +618,14 @@ fn is_known_bad_baseline(name: &str) -> bool {
     KNOWN_BAD_BASELINES.contains(&name)
 }
 
-fn run_test(config: &Config, test: &TestCase, index: usize) -> Result<TestStatus, String> {
-    let input = prepare_input(config, test, index)?;
-    let actual = run_assp_json(config, &input.path)?;
-
+fn check_actual(
+    config: &Config,
+    test: &TestCase,
+    input: &PreparedInput,
+    actual: &Value,
+) -> Result<TestStatus, String> {
     if !config.update && config.compare_mode == CompareMode::Mixed {
-        compare_mixed_baselines(config, test, &input.md5, &actual)?;
+        compare_mixed_baselines(config, test, &input.md5, actual)?;
         return Ok(TestStatus::Ok);
     }
 
@@ -626,20 +639,20 @@ fn run_test(config: &Config, test: &TestCase, index: usize) -> Result<TestStatus
 
     if config.update {
         let needs_write = read_baseline(&baseline_path)
-            .map(|expected| expected != actual)
+            .map(|expected| expected != *actual)
             .unwrap_or(true);
         if needs_write {
-            write_baseline(&baseline_path, &actual)?;
+            write_baseline(&baseline_path, actual)?;
             Ok(TestStatus::Updated)
         } else {
             Ok(TestStatus::Ok)
         }
     } else {
         let expected = read_baseline(&baseline_path)?;
-        if values_equal(&expected, &actual) {
+        if values_equal(&expected, actual) {
             Ok(TestStatus::Ok)
         } else {
-            let diff = first_diff(&expected, &actual, "$");
+            let diff = first_diff(&expected, actual, "$");
             Err(format!(
                 "mismatch at {}: expected {}, actual {}",
                 diff.path,
@@ -690,7 +703,72 @@ fn prepare_input(config: &Config, test: &TestCase, index: usize) -> Result<Prepa
     })
 }
 
-fn run_assp_json(config: &Config, input_path: &Path) -> Result<Value, String> {
+fn run_assp_json_batch(
+    config: &Config,
+    worker: usize,
+    chunk_index: usize,
+    inputs: &[BatchInput],
+) -> Result<Vec<Value>, String> {
+    fs::create_dir_all(&config.temp_dir).map_err(|err| {
+        format!(
+            "failed to create temp dir {}: {err}",
+            config.temp_dir.display()
+        )
+    })?;
+    let list_path = config
+        .temp_dir
+        .join(format!("assp-batch-{worker}-{chunk_index}.txt"));
+    let mut list = fs::File::create(&list_path)
+        .map_err(|err| format!("failed to create batch list {}: {err}", list_path.display()))?;
+    for input in inputs {
+        writeln!(list, "{}", input.input.path.to_string_lossy())
+            .map_err(|err| format!("failed to write batch list {}: {err}", list_path.display()))?;
+    }
+    drop(list);
+
+    let output = Command::new(&config.assp_exe)
+        .arg(&list_path)
+        .arg("json-batch")
+        .output()
+        .map_err(|err| format!("failed to run {}: {err}", config.assp_exe.display()))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        return Err(format!(
+            "ASSP exited with {}: {}{}",
+            output.status,
+            brief_text(&stderr),
+            brief_text(&stdout)
+        ));
+    }
+
+    let stdout = String::from_utf8(output.stdout)
+        .map_err(|err| format!("ASSP batch output was not valid UTF-8: {err}"))?;
+    let mut values = Vec::with_capacity(inputs.len());
+    for (line_index, line) in stdout.lines().filter(|line| !line.is_empty()).enumerate() {
+        let value = serde_json::from_str(line).map_err(|err| {
+            format!(
+                "ASSP produced invalid batch JSON at result {} from {}: {err}",
+                line_index,
+                list_path.display()
+            )
+        })?;
+        values.push(value);
+    }
+
+    if values.len() != inputs.len() {
+        return Err(format!(
+            "ASSP batch returned {} JSON result(s) for {} input(s)",
+            values.len(),
+            inputs.len()
+        ));
+    }
+
+    Ok(values)
+}
+
+fn run_assp_json_single(config: &Config, input_path: &Path) -> Result<Value, String> {
     let output = Command::new(&config.assp_exe)
         .arg(input_path)
         .arg("--json")
