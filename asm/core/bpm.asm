@@ -2988,7 +2988,7 @@ assp_measure_nps_milli_from_bpms:
 
     mov rbx, [rsp + 96]
     mov r12, [rsp + 104]
-    sub rsp, 64
+    sub rsp, 1088
 
     test rdx, rdx
     jz .empty
@@ -3012,6 +3012,7 @@ assp_measure_nps_milli_from_bpms:
     mov qword [rsp + 16], 0
     mov qword [rsp + 24], 60000
     mov qword [rsp + 32], 0
+    mov qword [rsp + 48], 0
 
     test rbx, rbx
     jz .done
@@ -3097,6 +3098,76 @@ align 16
     jmp .aligned_event_loop
 
 .aligned_have_bpm:
+    cmp qword [rsp + 48], 0
+    jne .aligned_calc_row
+    cmp r8, r14
+    jb .aligned_calc_row
+    cmp r15, r12
+    jae .done
+    mov r10, [rsp + 40]
+    cmp r10, 120000
+    jbe .aligned_tail_zero
+
+    xor ecx, ecx
+    mov r11, r15
+.aligned_tail_scan:
+    cmp r11, rdi
+    jae .aligned_tail_build
+    cmp r11, r12
+    jae .aligned_tail_build
+    mov eax, [rsi + r11 * 4]
+    cmp eax, 255
+    ja .aligned_tail_disable
+    cmp eax, ecx
+    cmova ecx, eax
+    inc r11
+    jmp .aligned_tail_scan
+
+.aligned_tail_disable:
+    mov qword [rsp + 48], 1
+    jmp .aligned_calc_row
+
+.aligned_tail_build:
+    xor r11d, r11d
+.aligned_tail_build_loop:
+    cmp r11, rcx
+    ja .aligned_tail_lookup
+    xor eax, eax
+    test r11d, r11d
+    jz .aligned_tail_table_store
+    mov rax, r11
+    imul rax, rax, 1000000000
+    mov r9, r10
+    shr r9, 1
+    add rax, r9
+    xor edx, edx
+    div r10
+.aligned_tail_table_store:
+    mov [rsp + 64 + r11 * 4], eax
+    inc r11
+    jmp .aligned_tail_build_loop
+
+.aligned_tail_lookup:
+    cmp r15, rdi
+    jae .done
+    cmp r15, r12
+    jae .done
+    mov eax, [rsi + r15 * 4]
+    mov eax, [rsp + 64 + rax * 4]
+    mov [rbx + r15 * 4], eax
+    inc r15
+    jmp .aligned_tail_lookup
+
+.aligned_tail_zero:
+    cmp r15, rdi
+    jae .done
+    cmp r15, r12
+    jae .done
+    mov dword [rbx + r15 * 4], 0
+    inc r15
+    jmp .aligned_tail_zero
+
+.aligned_calc_row:
     xor eax, eax
     mov r10, [rsp + 40]
     cmp r10, 120000
@@ -3363,7 +3434,7 @@ align 16
     mov rax, ASSP_NOT_FOUND
 
 .pop_done:
-    add rsp, 64
+    add rsp, 1088
     pop r15
     pop r14
     pop r13
