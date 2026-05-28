@@ -407,9 +407,26 @@ assp_measure_densities_4:
     jae .slow_line
     cmp byte [rsi + 5], 10
     jne .slow_line
+    cmp dword [rsi], 30303030h
+    je .zero_run_cr
     ASSP_ROW_STEP_FLAG rsi, 4, r8
     add r14d, eax
     lea rsi, [rsi + 6]
+    jmp .line_loop
+
+.zero_run_cr:
+    lea rsi, [rsi + 6]
+    cmp rsi, rdi
+    jae .line_loop
+    lea rax, [rsi + 4]
+    cmp rax, rdi
+    jae .line_loop
+    cmp dword [rsi], 30303030h
+    jne .line_loop
+    cmp byte [rax], 13
+    jne .line_loop
+    cmp byte [rax + 1], 10
+    je .zero_run_cr
     jmp .line_loop
 
 .slow_line:
@@ -624,9 +641,26 @@ assp_measure_densities_8:
     jae .slow_line
     cmp byte [rsi + 9], 10
     jne .slow_line
+    cmp qword [rsi], 3030303030303030h
+    je .zero_run_cr
     ASSP_ROW_STEP_FLAG rsi, 8, r8
     add r14d, eax
     lea rsi, [rsi + 10]
+    jmp .line_loop
+
+.zero_run_cr:
+    lea rsi, [rsi + 10]
+    cmp rsi, rdi
+    jae .line_loop
+    lea rax, [rsi + 8]
+    cmp rax, rdi
+    jae .line_loop
+    cmp qword [rsi], 3030303030303030h
+    jne .line_loop
+    cmp byte [rax], 13
+    jne .line_loop
+    cmp byte [rax + 1], 10
+    je .zero_run_cr
     jmp .line_loop
 
 .slow_line:
