@@ -4393,7 +4393,8 @@ emit_scaled3:
     jc .done
 
 .split:
-    cmp rbx, 0ffffffffh
+    mov r11d, 0ffffffffh
+    cmp rbx, r11
     ja .split_slow
     mov r11d, ebx
     mov eax, r11d
