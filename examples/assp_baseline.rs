@@ -4,9 +4,9 @@ use std::collections::HashMap;
 use std::env;
 use std::ffi::OsStr;
 use std::fs;
-use std::io::Write;
+use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
-use std::process::{self, Command};
+use std::process::{self, Command, Stdio};
 use std::sync::mpsc;
 use std::thread;
 use walkdir::WalkDir;
@@ -79,16 +79,13 @@ const KNOWN_BAD_BASELINES: &[&str] = &[
     r"The Classics Pack Vol 1\Cooking by the Book [jAAAmes]\Cooking by the Book.ssc.zst",
 ];
 
-const ASSP_BATCH_SIZE: usize = 128;
-
 struct PreparedInput {
-    path: PathBuf,
     md5: String,
 }
 
-struct BatchInput {
+struct StreamInput {
     index: usize,
-    input: PreparedInput,
+    path: PathBuf,
 }
 
 fn main() {
@@ -356,14 +353,14 @@ fn run(config: &mut Config) -> Result<i32, String> {
     }
     if !config.quiet {
         println!(
-            "running {} selected simfiles with {} using {} job(s)",
+            "streaming {} selected simfiles with {} using {} job(s)",
             tests.len(),
             config.assp_exe.display(),
             active_jobs
         );
     }
 
-    let (failures, updated) = run_tests_batched(config, &tests, active_jobs);
+    let (failures, updated) = run_tests_streamed(config, &tests, active_jobs);
 
     if failures.is_empty() {
         if config.update {
@@ -515,7 +512,7 @@ fn unpack_test(config: &Config, test: &TestCase) -> Result<bool, String> {
     Ok(true)
 }
 
-fn run_tests_batched(
+fn run_tests_streamed(
     config: &Config,
     tests: &[TestCase],
     active_jobs: usize,
@@ -529,30 +526,22 @@ fn run_tests_batched(
         for worker in 0..jobs {
             let tx = tx.clone();
             scope.spawn(move || {
-                let mut chunk = Vec::with_capacity(ASSP_BATCH_SIZE);
-                let mut chunk_index = 0usize;
+                let mut inputs = Vec::new();
 
                 for index in (worker..tests.len()).step_by(jobs) {
-                    match prepare_input(config, &tests[index], index) {
-                        Ok(input) => {
-                            chunk.push(BatchInput { index, input });
-                            if chunk.len() == ASSP_BATCH_SIZE {
-                                run_prepared_chunk(config, tests, worker, chunk_index, &chunk, &tx);
-                                chunk_index += 1;
-                                chunk.clear();
-                            }
+                    match resolve_input_path(config, &tests[index], index) {
+                        Ok(path) => {
+                            inputs.push(StreamInput { index, path });
                         }
                         Err(message) => {
                             if tx.send((index, Err(message))).is_err() {
-                                break;
+                                return;
                             }
                         }
                     }
                 }
 
-                if !chunk.is_empty() {
-                    run_prepared_chunk(config, tests, worker, chunk_index, &chunk, &tx);
-                }
+                run_streamed_worker(config, tests, worker, &inputs, &tx);
             });
         }
         drop(tx);
@@ -596,31 +585,22 @@ fn run_tests_batched(
     (failures, updated)
 }
 
-fn run_prepared_chunk(
+fn run_streamed_worker(
     config: &Config,
     tests: &[TestCase],
     worker: usize,
-    chunk_index: usize,
-    chunk: &[BatchInput],
+    inputs: &[StreamInput],
     tx: &mpsc::Sender<(usize, Result<TestStatus, String>)>,
 ) {
-    match run_assp_json_batch(config, worker, chunk_index, chunk) {
-        Ok(values) => {
-            for (batch, actual) in chunk.iter().zip(values.iter()) {
-                let result = check_actual(config, &tests[batch.index], &batch.input, actual);
-                if tx.send((batch.index, result)).is_err() {
-                    return;
-                }
-            }
-        }
-        Err(_) => {
-            for batch in chunk {
-                let result = run_assp_json_single(config, &batch.input.path).and_then(|actual| {
-                    check_actual(config, &tests[batch.index], &batch.input, &actual)
-                });
-                if tx.send((batch.index, result)).is_err() {
-                    return;
-                }
+    if inputs.is_empty() {
+        return;
+    }
+
+    let result = run_assp_json_stream(config, tests, worker, inputs, tx);
+    if let Err(message) = result {
+        for input in inputs {
+            if tx.send((input.index, Err(message.clone()))).is_err() {
+                return;
             }
         }
     }
@@ -810,28 +790,14 @@ fn check_actual(
     }
 }
 
-fn prepare_input(config: &Config, test: &TestCase, index: usize) -> Result<PreparedInput, String> {
+fn resolve_input_path(config: &Config, test: &TestCase, index: usize) -> Result<PathBuf, String> {
     if !test.compressed {
-        let bytes = fs::read(&test.source_path)
-            .map_err(|err| format!("failed to read {}: {err}", test.source_path.display()))?;
-        return Ok(PreparedInput {
-            path: test.source_path.clone(),
-            md5: format!("{:x}", md5::compute(&bytes)),
-        });
+        return Ok(test.source_path.clone());
     }
 
     if let Some(unpacked_path) = unpacked_input_path(config, test) {
         if unpacked_cache_fresh(&test.source_path, &unpacked_path)? {
-            let decoded = fs::read(&unpacked_path).map_err(|err| {
-                format!(
-                    "failed to read unpacked simfile {}: {err}",
-                    unpacked_path.display()
-                )
-            })?;
-            return Ok(PreparedInput {
-                path: unpacked_path,
-                md5: format!("{:x}", md5::compute(&decoded)),
-            });
+            return Ok(unpacked_path);
         }
 
         let decoded = read_zst_simfile(&test.source_path)?;
@@ -846,10 +812,7 @@ fn prepare_input(config: &Config, test: &TestCase, index: usize) -> Result<Prepa
                 unpacked_path.display()
             )
         })?;
-        return Ok(PreparedInput {
-            path: unpacked_path,
-            md5: format!("{:x}", md5::compute(&decoded)),
-        });
+        return Ok(unpacked_path);
     }
 
     fs::create_dir_all(&config.temp_dir).map_err(|err| {
@@ -859,7 +822,6 @@ fn prepare_input(config: &Config, test: &TestCase, index: usize) -> Result<Prepa
         )
     })?;
     let decoded = read_zst_simfile(&test.source_path)?;
-    let md5 = format!("{:x}", md5::compute(&decoded));
     let inner_ext = test
         .source_path
         .file_stem()
@@ -873,10 +835,13 @@ fn prepare_input(config: &Config, test: &TestCase, index: usize) -> Result<Prepa
             temp_path.display()
         )
     })?;
-    Ok(PreparedInput {
-        path: temp_path,
-        md5,
-    })
+    Ok(temp_path)
+}
+
+fn file_md5(path: &Path) -> Result<String, String> {
+    let bytes =
+        fs::read(path).map_err(|err| format!("failed to read {}: {err}", path.display()))?;
+    Ok(format!("{:x}", md5::compute(&bytes)))
 }
 
 fn unpacked_input_path(config: &Config, test: &TestCase) -> Option<PathBuf> {
@@ -907,95 +872,118 @@ fn read_zst_simfile(path: &Path) -> Result<Vec<u8>, String> {
     decode_all(&bytes[..]).map_err(|err| format!("failed to decompress {}: {err}", path.display()))
 }
 
-fn run_assp_json_batch(
+fn run_assp_json_stream(
     config: &Config,
+    tests: &[TestCase],
     worker: usize,
-    chunk_index: usize,
-    inputs: &[BatchInput],
-) -> Result<Vec<Value>, String> {
+    inputs: &[StreamInput],
+    tx: &mpsc::Sender<(usize, Result<TestStatus, String>)>,
+) -> Result<(), String> {
     fs::create_dir_all(&config.temp_dir).map_err(|err| {
         format!(
             "failed to create temp dir {}: {err}",
             config.temp_dir.display()
         )
     })?;
-    let list_path = config
-        .temp_dir
-        .join(format!("assp-batch-{worker}-{chunk_index}.txt"));
+    let list_path = config.temp_dir.join(format!("assp-stream-{worker}.txt"));
     let mut list = fs::File::create(&list_path)
         .map_err(|err| format!("failed to create batch list {}: {err}", list_path.display()))?;
     for input in inputs {
-        writeln!(list, "{}", input.input.path.to_string_lossy())
+        writeln!(list, "{}", input.path.to_string_lossy())
             .map_err(|err| format!("failed to write batch list {}: {err}", list_path.display()))?;
     }
     drop(list);
 
-    let output = Command::new(&config.assp_exe)
+    let mut child = Command::new(&config.assp_exe)
         .arg(&list_path)
         .arg("json-batch")
-        .output()
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
         .map_err(|err| format!("failed to run {}: {err}", config.assp_exe.display()))?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| "failed to capture ASSP stdout".to_owned())?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| "failed to capture ASSP stderr".to_owned())?;
+    let stderr_reader = thread::spawn(move || {
+        let mut stderr_text = String::new();
+        let _ = BufReader::new(stderr).read_to_string(&mut stderr_text);
+        stderr_text
+    });
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        return Err(format!(
-            "ASSP exited with {}: {}{}",
-            output.status,
-            brief_text(&stderr),
-            brief_text(&stdout)
-        ));
-    }
+    let mut reader = BufReader::new(stdout);
+    let mut line = String::new();
+    let mut result_index = 0usize;
 
-    let stdout = String::from_utf8(output.stdout)
-        .map_err(|err| format!("ASSP batch output was not valid UTF-8: {err}"))?;
-    let mut values = Vec::with_capacity(inputs.len());
-    for (line_index, line) in stdout.lines().filter(|line| !line.is_empty()).enumerate() {
-        let value = serde_json::from_str(line).map_err(|err| {
+    loop {
+        line.clear();
+        let read = reader
+            .read_line(&mut line)
+            .map_err(|err| format!("failed to read ASSP batch output: {err}"))?;
+        if read == 0 {
+            break;
+        }
+        let trimmed = line.trim_end_matches(&['\r', '\n'][..]);
+        if trimmed.is_empty() {
+            continue;
+        }
+        let Some(input) = inputs.get(result_index) else {
+            return Err(format!(
+                "ASSP batch returned more JSON results than {} input(s)",
+                inputs.len()
+            ));
+        };
+        let actual = serde_json::from_str(trimmed).map_err(|err| {
             format!(
                 "ASSP produced invalid batch JSON at result {} from {}: {err}",
-                line_index,
+                result_index,
                 list_path.display()
             )
-        })?;
-        values.push(value);
+        });
+        let result = actual.and_then(|actual| {
+            let prepared = PreparedInput {
+                md5: file_md5(&input.path)?,
+            };
+            check_actual(config, &tests[input.index], &prepared, &actual)
+        });
+        if tx.send((input.index, result)).is_err() {
+            return Ok(());
+        }
+        result_index += 1;
     }
 
-    if values.len() != inputs.len() {
-        return Err(format!(
+    let status = child
+        .wait()
+        .map_err(|err| format!("failed to wait for ASSP: {err}"))?;
+    let stderr = stderr_reader.join().unwrap_or_default();
+
+    if !status.success() {
+        let message = format!("ASSP exited with {}: {}", status, brief_text(&stderr));
+        for input in &inputs[result_index..] {
+            if tx.send((input.index, Err(message.clone()))).is_err() {
+                return Ok(());
+            }
+        }
+        return Ok(());
+    }
+    if result_index != inputs.len() {
+        let message = format!(
             "ASSP batch returned {} JSON result(s) for {} input(s)",
-            values.len(),
+            result_index,
             inputs.len()
-        ));
+        );
+        for input in &inputs[result_index..] {
+            if tx.send((input.index, Err(message.clone()))).is_err() {
+                return Ok(());
+            }
+        }
     }
 
-    Ok(values)
-}
-
-fn run_assp_json_single(config: &Config, input_path: &Path) -> Result<Value, String> {
-    let output = Command::new(&config.assp_exe)
-        .arg(input_path)
-        .arg("--json")
-        .output()
-        .map_err(|err| format!("failed to run {}: {err}", config.assp_exe.display()))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        return Err(format!(
-            "ASSP exited with {}: {}{}",
-            output.status,
-            brief_text(&stderr),
-            brief_text(&stdout)
-        ));
-    }
-
-    serde_json::from_slice(&output.stdout).map_err(|err| {
-        format!(
-            "ASSP produced invalid JSON for {}: {err}",
-            input_path.display()
-        )
-    })
+    Ok(())
 }
 
 type ChartKey = (String, String);
