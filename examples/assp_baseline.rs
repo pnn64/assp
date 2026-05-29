@@ -28,8 +28,10 @@ struct Config {
     exact: bool,
     update: bool,
     list: bool,
+    unpack_only: bool,
     quiet: bool,
     keep_temp: bool,
+    prefer_raw: bool,
     include_raw: bool,
     include_known_bad: bool,
 }
@@ -132,8 +134,10 @@ fn parse_config() -> Result<Config, String> {
         exact: false,
         update: false,
         list: false,
+        unpack_only: false,
         quiet: false,
         keep_temp: false,
+        prefer_raw: false,
         include_raw: false,
         include_known_bad: false,
     };
@@ -162,8 +166,10 @@ fn parse_config() -> Result<Config, String> {
             "--exact" => config.exact = true,
             "--update" => config.update = true,
             "--list" => config.list = true,
+            "--unpack-only" => config.unpack_only = true,
             "--quiet" => config.quiet = true,
             "--keep-temp" => config.keep_temp = true,
+            "--prefer-raw" => config.prefer_raw = true,
             "--include-raw" => config.include_raw = true,
             "--include-known-bad" => config.include_known_bad = true,
             "--" => {}
@@ -174,7 +180,10 @@ fn parse_config() -> Result<Config, String> {
     }
 
     config.packs_dir = require_existing_dir(&config.packs_dir, "packs dir")?;
-    if !config.list {
+    if config.unpack_only && config.unpacked_dir.is_none() {
+        config.unpacked_dir = Some(config.packs_dir.clone());
+    }
+    if !config.list && !config.unpack_only {
         config.assp_exe = require_existing_file(&config.assp_exe, "ASSP executable")?;
         config.baseline_dir = absolute_path(&config.baseline_dir, "baseline dir")?;
     } else if !config.baseline_dir.as_os_str().is_empty() {
@@ -262,9 +271,11 @@ Options:\n\
   --compare-mode <mixed|json>\n\
                         mixed follows RSSP all_parity baseline sourcing\n\
   --list                list selected simfiles without running ASSP\n\
+  --unpack-only         decompress selected .zst simfiles and exit\n\
   --quiet               suppress per-test ok lines\n\
   --temp-dir <dir>      temp directory for decompressed .zst simfiles\n\
   --unpacked-dir <dir>  persistent cache for decompressed .zst simfiles\n\
+  --prefer-raw          use sibling .sm/.ssc files instead of .zst when present\n\
   --keep-temp           leave decompressed .zst temp files on disk\n\
   --include-known-bad   include files with known-bad harness baselines\n\
   --include-raw         include loose .sm/.ssc files; default matches RSSP .zst tests"
@@ -316,6 +327,9 @@ fn run(config: &mut Config) -> Result<i32, String> {
             println!("listed {} selected simfiles", tests.len());
         }
         return Ok(0);
+    }
+    if config.unpack_only {
+        return unpack_tests(config, &tests);
     }
 
     if config.update {
@@ -392,6 +406,113 @@ fn run(config: &mut Config) -> Result<i32, String> {
         }
         Ok(101)
     }
+}
+
+fn unpack_tests(config: &Config, tests: &[TestCase]) -> Result<i32, String> {
+    let unpacked_dir = config
+        .unpacked_dir
+        .as_ref()
+        .ok_or_else(|| "--unpack-only requires --unpacked-dir".to_owned())?;
+    fs::create_dir_all(unpacked_dir).map_err(|err| {
+        format!(
+            "failed to create unpacked dir {}: {err}",
+            unpacked_dir.display()
+        )
+    })?;
+
+    let jobs = config.jobs.min(tests.len().max(1));
+    if !config.quiet {
+        println!(
+            "unpacking {} selected simfiles into {} using {} job(s)",
+            tests.len(),
+            unpacked_dir.display(),
+            jobs
+        );
+    }
+
+    let (tx, rx) = mpsc::channel();
+    thread::scope(|scope| {
+        for worker in 0..jobs {
+            let tx = tx.clone();
+            scope.spawn(move || {
+                for index in (worker..tests.len()).step_by(jobs) {
+                    let result = unpack_test(config, &tests[index]);
+                    if tx.send((index, result)).is_err() {
+                        break;
+                    }
+                }
+            });
+        }
+        drop(tx);
+
+        let mut done = 0usize;
+        let mut unpacked = 0usize;
+        let mut reused = 0usize;
+        let mut failures = Vec::new();
+
+        for (index, result) in rx {
+            done += 1;
+            match result {
+                Ok(true) => unpacked += 1,
+                Ok(false) => reused += 1,
+                Err(message) => failures.push(Failure {
+                    name: tests[index].name.clone(),
+                    message,
+                }),
+            }
+
+            if !config.quiet && (done == tests.len() || done % 1000 == 0) {
+                println!("unpacked progress: {done}/{}", tests.len());
+            }
+        }
+
+        if failures.is_empty() {
+            println!(
+                "ok: {} selected simfiles checked, {} unpacked, {} reused",
+                tests.len(),
+                unpacked,
+                reused
+            );
+            Ok(0)
+        } else {
+            eprintln!();
+            eprintln!("{} unpack failures:", failures.len());
+            let shown = if config.max_failures == 0 {
+                failures.len()
+            } else {
+                failures.len().min(config.max_failures)
+            };
+            for failure in failures.iter().take(shown) {
+                eprintln!("{}:", failure.name);
+                eprintln!("  {}", failure.message);
+            }
+            Ok(101)
+        }
+    })
+}
+
+fn unpack_test(config: &Config, test: &TestCase) -> Result<bool, String> {
+    if !test.compressed {
+        return Ok(false);
+    }
+    let unpacked_path = unpacked_input_path(config, test)
+        .ok_or_else(|| "unpacked dir was not configured".to_owned())?;
+    if unpacked_path.is_file() {
+        return Ok(false);
+    }
+
+    let decoded = read_zst_simfile(&test.source_path)?;
+    if let Some(parent) = unpacked_path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|err| format!("failed to create unpacked dir {}: {err}", parent.display()))?;
+    }
+    fs::write(&unpacked_path, &decoded).map_err(|err| {
+        format!(
+            "failed to write unpacked simfile {}: {err}",
+            unpacked_path.display()
+        )
+    })?;
+    Ok(true)
 }
 
 fn run_tests_batched(
@@ -534,6 +655,7 @@ fn discover_tests(config: &Config) -> Result<Vec<TestCase>, String> {
         if !selected(config, &name) {
             continue;
         }
+        let (source_path, compressed) = preferred_source(config, source_path, compressed);
 
         tests.push(TestCase {
             name,
@@ -566,6 +688,7 @@ fn discover_exact_test(config: &Config, filter: &str) -> Result<Vec<TestCase>, S
     if !compressed && !config.include_raw {
         return Ok(Vec::new());
     }
+    let (source_path, compressed) = preferred_source(config, source_path, compressed);
 
     Ok(vec![TestCase {
         name: display_relative(&relative_path),
@@ -573,6 +696,20 @@ fn discover_exact_test(config: &Config, filter: &str) -> Result<Vec<TestCase>, S
         source_path,
         compressed,
     }])
+}
+
+fn preferred_source(config: &Config, source_path: PathBuf, compressed: bool) -> (PathBuf, bool) {
+    if !config.prefer_raw || !compressed {
+        return (source_path, compressed);
+    }
+
+    let mut raw_path = source_path.clone();
+    raw_path.set_extension("");
+    if raw_path.is_file() {
+        (raw_path, false)
+    } else {
+        (source_path, compressed)
+    }
 }
 
 fn path_from_name(name: &str) -> PathBuf {

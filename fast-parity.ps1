@@ -18,7 +18,9 @@ param(
     [switch]$Quiet,
     [switch]$NoBuild,
     [switch]$KeepTemp,
+    [switch]$UnpackOnly,
     [switch]$NoUnpackCache,
+    [switch]$NoPreferRaw,
     [switch]$IncludeRaw,
     [switch]$IncludeKnownBad,
     [int]$Jobs,
@@ -80,6 +82,9 @@ if (!$AsspExe) {
 if (!$RunnerExe) {
     $RunnerExe = Join-Path $root "target\debug\examples\assp_baseline.exe"
 }
+if (!$UnpackedDir -and $UnpackOnly) {
+    $UnpackedDir = $PacksDir
+}
 if (!$UnpackedDir) {
     $UnpackedDir = Join-Path $root "target\fast-parity-unpacked"
 }
@@ -89,9 +94,11 @@ $resolvedBaseline = Resolve-OutputPath $BaselineDir "Baseline"
 $resolvedUnpacked = Resolve-OutputPath $UnpackedDir "Unpacked"
 
 if (!$NoBuild) {
-    & (Join-Path $root "build.ps1")
-    if ($LASTEXITCODE -ne 0) {
-        exit $LASTEXITCODE
+    if (!$UnpackOnly) {
+        & (Join-Path $root "build.ps1")
+        if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+        }
     }
 
     $cargoArgs = @("build", "--manifest-path", (Join-Path $root "Cargo.toml"), "--example", "assp_baseline")
@@ -104,17 +111,20 @@ if (!$NoBuild) {
     }
 }
 
-$resolvedAssp = Resolve-InputPath $AsspExe "ASSP executable"
 $resolvedRunner = Resolve-InputPath $RunnerExe "ASSP baseline runner"
 
 $runnerArgs = @(
     "--packs-dir", $resolvedPacks,
     "--baseline-dir", $resolvedBaseline,
-    "--assp-exe", $resolvedAssp,
     "--baseline-layout", $BaselineLayout,
     "--compare-mode", $CompareMode
 )
 
+if (!$UnpackOnly) {
+    $resolvedAssp = Resolve-InputPath $AsspExe "ASSP executable"
+    $runnerArgs += "--assp-exe"
+    $runnerArgs += $resolvedAssp
+}
 if ($Quiet) {
     $runnerArgs += "--quiet"
 }
@@ -130,9 +140,15 @@ if ($Update) {
 if ($KeepTemp) {
     $runnerArgs += "--keep-temp"
 }
+if ($UnpackOnly) {
+    $runnerArgs += "--unpack-only"
+}
 if (!$NoUnpackCache) {
     $runnerArgs += "--unpacked-dir"
     $runnerArgs += $resolvedUnpacked
+}
+if (!$NoPreferRaw) {
+    $runnerArgs += "--prefer-raw"
 }
 if ($IncludeRaw) {
     $runnerArgs += "--include-raw"
