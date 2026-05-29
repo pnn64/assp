@@ -4,6 +4,7 @@ param(
     [string]$BaselineDir,
     [string]$AsspExe,
     [string]$RunnerExe,
+    [string]$UnpackedDir,
     [ValidateSet("auto", "hash", "path")]
     [string]$BaselineLayout = "auto",
     [string]$BaselineSuffix,
@@ -17,6 +18,7 @@ param(
     [switch]$Quiet,
     [switch]$NoBuild,
     [switch]$KeepTemp,
+    [switch]$NoUnpackCache,
     [switch]$IncludeRaw,
     [switch]$IncludeKnownBad,
     [int]$Jobs,
@@ -78,9 +80,13 @@ if (!$AsspExe) {
 if (!$RunnerExe) {
     $RunnerExe = Join-Path $root "target\debug\examples\assp_baseline.exe"
 }
+if (!$UnpackedDir) {
+    $UnpackedDir = Join-Path $root "target\fast-parity-unpacked"
+}
 
 $resolvedPacks = Resolve-InputPath $PacksDir "Packs"
 $resolvedBaseline = Resolve-OutputPath $BaselineDir "Baseline"
+$resolvedUnpacked = Resolve-OutputPath $UnpackedDir "Unpacked"
 
 if (!$NoBuild) {
     & (Join-Path $root "build.ps1")
@@ -123,6 +129,10 @@ if ($Update) {
 }
 if ($KeepTemp) {
     $runnerArgs += "--keep-temp"
+}
+if (!$NoUnpackCache) {
+    $runnerArgs += "--unpacked-dir"
+    $runnerArgs += $resolvedUnpacked
 }
 if ($IncludeRaw) {
     $runnerArgs += "--include-raw"

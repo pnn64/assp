@@ -17,6 +17,7 @@ struct Config {
     baseline_dir: PathBuf,
     assp_exe: PathBuf,
     temp_dir: PathBuf,
+    unpacked_dir: Option<PathBuf>,
     baseline_layout: BaselineLayout,
     baseline_suffix: Option<String>,
     compare_mode: CompareMode,
@@ -120,6 +121,7 @@ fn parse_config() -> Result<Config, String> {
         baseline_dir: PathBuf::new(),
         assp_exe: PathBuf::new(),
         temp_dir: env::temp_dir().join(format!("assp-baseline-{}", process::id())),
+        unpacked_dir: None,
         baseline_layout: BaselineLayout::Auto,
         baseline_suffix: None,
         compare_mode: CompareMode::Mixed,
@@ -147,6 +149,7 @@ fn parse_config() -> Result<Config, String> {
             "--baseline-dir" => config.baseline_dir = take_path(&mut args, "--baseline-dir")?,
             "--assp-exe" => config.assp_exe = take_path(&mut args, "--assp-exe")?,
             "--temp-dir" => config.temp_dir = take_path(&mut args, "--temp-dir")?,
+            "--unpacked-dir" => config.unpacked_dir = Some(take_path(&mut args, "--unpacked-dir")?),
             "--baseline-layout" => config.baseline_layout = take_baseline_layout(&mut args)?,
             "--baseline-suffix" => {
                 config.baseline_suffix = Some(take_string(&mut args, "--baseline-suffix")?)
@@ -178,6 +181,9 @@ fn parse_config() -> Result<Config, String> {
         config.baseline_dir = absolute_path(&config.baseline_dir, "baseline dir")?;
     }
     config.temp_dir = absolute_path(&config.temp_dir, "temp dir")?;
+    if let Some(path) = &mut config.unpacked_dir {
+        *path = absolute_path(path, "unpacked dir")?;
+    }
     if let Some(filter) = &mut config.filter {
         *filter = filter.replace('/', "\\");
     }
@@ -258,6 +264,7 @@ Options:\n\
   --list                list selected simfiles without running ASSP\n\
   --quiet               suppress per-test ok lines\n\
   --temp-dir <dir>      temp directory for decompressed .zst simfiles\n\
+  --unpacked-dir <dir>  persistent cache for decompressed .zst simfiles\n\
   --keep-temp           leave decompressed .zst temp files on disk\n\
   --include-known-bad   include files with known-bad harness baselines\n\
   --include-raw         include loose .sm/.ssc files; default matches RSSP .zst tests"
@@ -394,105 +401,108 @@ fn run_tests_batched(
 ) -> (Vec<Failure>, usize) {
     let jobs = active_jobs.min(tests.len().max(1));
     let (tx, rx) = mpsc::channel();
+    let mut failures = Vec::new();
+    let mut updated = 0usize;
 
     thread::scope(|scope| {
         for worker in 0..jobs {
             let tx = tx.clone();
             scope.spawn(move || {
-                let mut prepared = Vec::new();
-                let mut results = Vec::new();
+                let mut chunk = Vec::with_capacity(ASSP_BATCH_SIZE);
+                let mut chunk_index = 0usize;
 
                 for index in (worker..tests.len()).step_by(jobs) {
                     match prepare_input(config, &tests[index], index) {
-                        Ok(input) => prepared.push(BatchInput { index, input }),
-                        Err(message) => results.push((index, Err(message))),
-                    }
-                }
-
-                if !prepared.is_empty() {
-                    for (chunk_index, chunk) in prepared.chunks(ASSP_BATCH_SIZE).enumerate() {
-                        match run_assp_json_batch(config, worker, chunk_index, chunk) {
-                            Ok(values) => {
-                                for (batch, actual) in chunk.iter().zip(values.iter()) {
-                                    results.push((
-                                        batch.index,
-                                        check_actual(
-                                            config,
-                                            &tests[batch.index],
-                                            &batch.input,
-                                            actual,
-                                        ),
-                                    ));
-                                }
+                        Ok(input) => {
+                            chunk.push(BatchInput { index, input });
+                            if chunk.len() == ASSP_BATCH_SIZE {
+                                run_prepared_chunk(config, tests, worker, chunk_index, &chunk, &tx);
+                                chunk_index += 1;
+                                chunk.clear();
                             }
-                            Err(_) => {
-                                for batch in chunk {
-                                    let result = run_assp_json_single(config, &batch.input.path)
-                                        .and_then(|actual| {
-                                            check_actual(
-                                                config,
-                                                &tests[batch.index],
-                                                &batch.input,
-                                                &actual,
-                                            )
-                                        });
-                                    results.push((batch.index, result));
-                                }
+                        }
+                        Err(message) => {
+                            if tx.send((index, Err(message))).is_err() {
+                                break;
                             }
                         }
                     }
                 }
 
-                for result in results {
-                    if tx.send(result).is_err() {
-                        break;
-                    }
+                if !chunk.is_empty() {
+                    run_prepared_chunk(config, tests, worker, chunk_index, &chunk, &tx);
                 }
             });
         }
         drop(tx);
+
+        for (index, result) in rx {
+            if config.max_failures > 0 && failures.len() >= config.max_failures {
+                continue;
+            }
+
+            if !config.quiet {
+                print!("test {} ... ", tests[index].name);
+            }
+
+            match result {
+                Ok(TestStatus::Ok) => {
+                    if !config.quiet {
+                        println!("ok");
+                    }
+                }
+                Ok(TestStatus::Updated) => {
+                    updated += 1;
+                    if !config.quiet {
+                        println!("updated");
+                    }
+                }
+                Err(message) => {
+                    if !config.quiet {
+                        println!("FAILED");
+                    } else {
+                        eprintln!("test {} ... FAILED", tests[index].name);
+                    }
+                    failures.push(Failure {
+                        name: tests[index].name.clone(),
+                        message,
+                    });
+                }
+            }
+        }
     });
 
-    let mut results = rx.into_iter().collect::<Vec<_>>();
-    results.sort_by_key(|(index, _)| *index);
+    (failures, updated)
+}
 
-    let mut failures = Vec::new();
-    let mut updated = 0usize;
-    for (index, result) in results {
-        if !config.quiet {
-            print!("test {} ... ", tests[index].name);
+fn run_prepared_chunk(
+    config: &Config,
+    tests: &[TestCase],
+    worker: usize,
+    chunk_index: usize,
+    chunk: &[BatchInput],
+    tx: &mpsc::Sender<(usize, Result<TestStatus, String>)>,
+) {
+    match run_assp_json_batch(config, worker, chunk_index, chunk) {
+        Ok(values) => {
+            for (batch, actual) in chunk.iter().zip(values.iter()) {
+                let result = check_actual(config, &tests[batch.index], &batch.input, actual);
+                if tx.send((batch.index, result)).is_err() {
+                    return;
+                }
+            }
         }
-
-        match result {
-            Ok(TestStatus::Ok) => {
-                if !config.quiet {
-                    println!("ok");
-                }
-            }
-            Ok(TestStatus::Updated) => {
-                updated += 1;
-                if !config.quiet {
-                    println!("updated");
-                }
-            }
-            Err(message) => {
-                if !config.quiet {
-                    println!("FAILED");
-                } else {
-                    eprintln!("test {} ... FAILED", tests[index].name);
-                }
-                failures.push(Failure {
-                    name: tests[index].name.clone(),
-                    message,
+        Err(_) => {
+            for batch in chunk {
+                let result = run_assp_json_single(config, &batch.input.path).and_then(|actual| {
+                    check_actual(config, &tests[batch.index], &batch.input, &actual)
                 });
-                if config.max_failures > 0 && failures.len() >= config.max_failures {
-                    break;
+                if tx.send((batch.index, result)).is_err() {
+                    return;
                 }
             }
         }
     }
-
-    (failures, updated)
 }
 
 fn discover_tests(config: &Config) -> Result<Vec<TestCase>, String> {
@@ -673,16 +683,45 @@ fn prepare_input(config: &Config, test: &TestCase, index: usize) -> Result<Prepa
         });
     }
 
+    if let Some(unpacked_path) = unpacked_input_path(config, test) {
+        if unpacked_cache_fresh(&test.source_path, &unpacked_path)? {
+            let decoded = fs::read(&unpacked_path).map_err(|err| {
+                format!(
+                    "failed to read unpacked simfile {}: {err}",
+                    unpacked_path.display()
+                )
+            })?;
+            return Ok(PreparedInput {
+                path: unpacked_path,
+                md5: format!("{:x}", md5::compute(&decoded)),
+            });
+        }
+
+        let decoded = read_zst_simfile(&test.source_path)?;
+        if let Some(parent) = unpacked_path.parent() {
+            fs::create_dir_all(parent).map_err(|err| {
+                format!("failed to create unpacked dir {}: {err}", parent.display())
+            })?;
+        }
+        fs::write(&unpacked_path, &decoded).map_err(|err| {
+            format!(
+                "failed to write unpacked simfile {}: {err}",
+                unpacked_path.display()
+            )
+        })?;
+        return Ok(PreparedInput {
+            path: unpacked_path,
+            md5: format!("{:x}", md5::compute(&decoded)),
+        });
+    }
+
     fs::create_dir_all(&config.temp_dir).map_err(|err| {
         format!(
             "failed to create temp dir {}: {err}",
             config.temp_dir.display()
         )
     })?;
-    let bytes = fs::read(&test.source_path)
-        .map_err(|err| format!("failed to read {}: {err}", test.source_path.display()))?;
-    let decoded = decode_all(&bytes[..])
-        .map_err(|err| format!("failed to decompress {}: {err}", test.source_path.display()))?;
+    let decoded = read_zst_simfile(&test.source_path)?;
     let md5 = format!("{:x}", md5::compute(&decoded));
     let inner_ext = test
         .source_path
@@ -701,6 +740,34 @@ fn prepare_input(config: &Config, test: &TestCase, index: usize) -> Result<Prepa
         path: temp_path,
         md5,
     })
+}
+
+fn unpacked_input_path(config: &Config, test: &TestCase) -> Option<PathBuf> {
+    let root = config.unpacked_dir.as_ref()?;
+    let mut relative = test.relative_path.clone();
+    relative.set_extension("");
+    Some(root.join(relative))
+}
+
+fn unpacked_cache_fresh(source_path: &Path, unpacked_path: &Path) -> Result<bool, String> {
+    let Ok(unpacked_meta) = fs::metadata(unpacked_path) else {
+        return Ok(false);
+    };
+    let source_meta = fs::metadata(source_path)
+        .map_err(|err| format!("failed to stat {}: {err}", source_path.display()))?;
+    let Ok(source_modified) = source_meta.modified() else {
+        return Ok(true);
+    };
+    let Ok(unpacked_modified) = unpacked_meta.modified() else {
+        return Ok(true);
+    };
+    Ok(unpacked_modified >= source_modified)
+}
+
+fn read_zst_simfile(path: &Path) -> Result<Vec<u8>, String> {
+    let bytes =
+        fs::read(path).map_err(|err| format!("failed to read {}: {err}", path.display()))?;
+    decode_all(&bytes[..]).map_err(|err| format!("failed to decompress {}: {err}", path.display()))
 }
 
 fn run_assp_json_batch(
